@@ -1,0 +1,234 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// --- Enums First (Good Practice) ---
+enum UserRole {
+  REGULAR
+  FACULTY
+  STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING_APPROVAL
+  INACTIVE
+}
+
+enum EquipmentCategory {
+  INSTRUMENTS
+  ACCESSORIES
+  TOOLS
+  CONSUMABLES
+  OTHER
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  RESERVED
+  BORROWED
+  UNDER_MAINTENANCE
+  DEFECTIVE
+  OUT_OF_COMMISSION
+}
+
+enum BorrowStatus {
+  PENDING
+  APPROVED
+  ACTIVE
+  PENDING_RETURN
+  RETURNED
+  COMPLETED
+  REJECTED_FIC
+  REJECTED_STAFF
+  CANCELLED
+  OVERDUE
+}
+
+enum DeficiencyType {
+  LATE_RETURN
+  MISHANDLING
+  DAMAGE
+  LOSS
+  OTHER
+}
+
+enum DeficiencyStatus {
+  UNRESOLVED
+  RESOLVED
+  UNDER_REVIEW
+}
+
+
+// --- Models ---
+
+model User {
+  id                      String                @id @default(auto()) @map("_id") @db.ObjectId
+  name                    String
+  email                   String                @unique
+  studentNumber           String?               // Added - Optional for now
+  contactNumber           String?               // Added - Optional for now
+  sex                     String?               // Added - Optional for now (Consider enum later if needed)
+  password                String                // Stores the hashed password
+  role                    UserRole              @default(REGULAR)
+  status                  UserStatus            @default(PENDING_APPROVAL)
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  // Relations
+  // sessions                Session[] // Relation to Session model for Lucia - REMOVED
+  // keys                    Key[]     // Relation to Key model for Lucia - REMOVED
+  classesTaught           Class[]               @relation("ClassesTaught")
+  classesEnrolled         UserClassEnrollment[] // Link via explicit join table
+  borrowsInitiated        Borrow[]              @relation("BorrowsInitiated")
+  borrowsSupervised       Borrow[]              @relation("BorrowsSupervised")
+  ficApprovals            Borrow[]              @relation("FicApprovals")
+  staffApprovals          Borrow[]              @relation("StaffApprovals")
+  userDeficiencies        Deficiency[]          @relation("UserDeficiencies")
+  taggedDeficiencies      Deficiency[]          @relation("TaggedDeficiencies")
+  notifiedFicDeficiencies Deficiency[]          @relation("NotifiedFicDeficiencies")
+  borrowGroupMemberships  BorrowGroupMate[]     // Relation to group memberships
+}
+
+model Equipment {
+  id               String            @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  equipmentId      String?           @unique // Optional user-defined ID
+  qrCodeValue      String            @unique @default(cuid()) // Value associated with QR code - NOW REQUIRED & AUTO-GENERATED
+  category         EquipmentCategory @default(INSTRUMENTS)
+  condition        String?
+  status           EquipmentStatus   @default(AVAILABLE)
+  stockCount       Int               @default(1)
+  purchaseCost     Float?
+  images           String[]
+  editHistory      Json[]
+  maintenanceLog   Json[]
+  customNotesLog   Json[]
+  borrowRecords    Borrow[]          // Relation to Borrow records
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+}
+
+model Class {
+  id               String                @id @default(auto()) @map("_id") @db.ObjectId
+  courseCode       String
+  section          String
+  semester         String
+  academicYear     String?               // Added Academic Year - Made Optional
+  isActive         Boolean               @default(true)
+  ficId            String                @db.ObjectId
+  fic              User                  @relation("ClassesTaught", fields: [ficId], references: [id])
+  enrollments      UserClassEnrollment[] 
+  borrowRequests   Borrow[]
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  // Explicitly name the unique constraint for easier referencing
+  @@unique([courseCode, section, semester, academicYear], map: "Class_courseCode_section_semester_academicYear_key") 
+}
+
+// Explicit many-to-many relation table for User <-> Class enrollment
+model UserClassEnrollment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  classId   String?  @db.ObjectId // Make classId optional
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade) // If user deleted, remove enrollment
+  // Relation to Class - make optional and set onDelete to Cascade
+  class     Class?   @relation(fields: [classId], references: [id], onDelete: Cascade) 
+  createdAt DateTime @default(now())
+
+  @@unique([userId, classId]) // This unique constraint might need adjustment if classId can be null
+}
+
+model Borrow {
+  id                  String            @id @default(auto()) @map("_id") @db.ObjectId
+  borrowGroupId       String?           // Keep this field for querying
+  requestSubmissionTime DateTime          @default(now()) // Renamed from reservationTime - When the request was made
+  
+  // ---- Requested Times ----
+  requestedStartTime  DateTime          // Renamed from requestedStartDate - Includes Time
+  requestedEndTime    DateTime          // Added - Includes Time
+  // -------------------------
+  
+  borrowerId          String            @db.ObjectId
+  borrower            User              @relation("BorrowsInitiated", fields: [borrowerId], references: [id], onDelete: Cascade) // If borrower deleted, remove borrow?
+  classId             String?           @db.ObjectId // Make classId optional
+  class               Class?            @relation(fields: [classId], references: [id], onDelete: SetNull) 
+  ficId               String?           @db.ObjectId 
+  fic                 User?             @relation("BorrowsSupervised", fields: [ficId], references: [id])
+  equipmentId         String            @db.ObjectId
+  equipment           Equipment         @relation(fields: [equipmentId], references: [id])
+
+  borrowStatus        BorrowStatus      @default(PENDING)
+  
+  // ---- Approved/Actual Times ----
+  approvedByFicId     String?           @db.ObjectId
+  approvedByFic       User?             @relation("FicApprovals", fields: [approvedByFicId], references: [id])
+  approvedByStaffId   String?           @db.ObjectId
+  approvedByStaff     User?             @relation("StaffApprovals", fields: [approvedByStaffId], references: [id])
+  approvedStartTime   DateTime?         // Added - The approved/adjusted start time
+  approvedEndTime     DateTime?         // Added - The approved/adjusted end time (replaces expectedReturnTime?)
+  checkoutTime        DateTime?         // Actual time item was checked out
+  actualReturnTime    DateTime?
+  // -----------------------------
+  
+  returnCondition     String?
+  returnRemarks       String?
+  editHistory         Json[]
+  deficiencies        Deficiency[]
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@index([borrowGroupId]) 
+}
+
+// Explicit many-to-many for Borrow <-> Group Mates
+model BorrowGroupMate {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId // Corrected ID definition for MongoDB
+  borrowGroupId String
+  userId        String   @db.ObjectId // Added ObjectId type
+
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade) // Link to User model
+
+  @@unique([borrowGroupId, userId]) 
+  @@index([borrowGroupId])          
+  @@index([userId])                 
+}
+
+model Deficiency {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  borrowId        String?          @db.ObjectId // Made Optional
+  borrow          Borrow?          @relation(fields: [borrowId], references: [id]) // Made Optional
+  userId          String           @db.ObjectId
+  user            User             @relation("UserDeficiencies", fields: [userId], references: [id])
+  taggedById      String           @db.ObjectId
+  taggedBy        User             @relation("TaggedDeficiencies", fields: [taggedById], references: [id])
+  ficToNotifyId   String?          @db.ObjectId
+  ficToNotify     User?            @relation("NotifiedFicDeficiencies", fields: [ficToNotifyId], references: [id])
+  type            DeficiencyType
+  status          DeficiencyStatus @default(UNRESOLVED)
+  description     String?
+  resolution      String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+// --- Lucia Auth Models --- - REMOVED
+// Remove the entire Session and Key models block completely
+
+
+// enum Role {
+//   ADMIN
+//   STAFF
+// ... existing code ...

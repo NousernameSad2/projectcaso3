@@ -1,0 +1,238 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
+import bcrypt from 'bcryptjs';
+import { prisma } from '@/lib/prisma';
+import { ReservationSchema, AdminUserCreateSchema } from '@/lib/schemas';
+import { UserRole, UserStatus, BorrowStatus } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { getServerSession } from "next-auth/next"; // Import next-auth session
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Import auth options
+import { startOfDay, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns'; // Import date-fns helpers
+import { createId } from '@paralleldrive/cuid2'; // Correct import for cuid2
+
+// GET: Fetch borrow records, optionally filtering by status
+export async function GET(req: NextRequest) {
+    const session = await getServerSession(authOptions);
+    // Optional: Add role checks if needed for fetching all borrows
+    // if (!session?.user?.id || ![UserRole.STAFF, UserRole.FACULTY].includes(session.user.role as UserRole)) {
+    //     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
+    // }
+
+    const url = new URL(req.url);
+    const statusParams = url.searchParams.getAll('status');
+    const statusFilter = statusParams.length > 0 ? statusParams as BorrowStatus[] : undefined;
+
+    try {
+        // --- START: Update Overdue Status for ALL active borrows --- 
+        const now = new Date();
+        await prisma.borrow.updateMany({
+            where: {
+                // No user filter here - check all active borrows
+                borrowStatus: BorrowStatus.ACTIVE,
+                approvedEndTime: { lt: now } // Check against approved end time
+            },
+            data: {
+                borrowStatus: BorrowStatus.OVERDUE,
+            },
+        });
+        // --- END: Update Overdue Status --- 
+
+        // Fetch borrows based on the original filter
+        const borrows = await prisma.borrow.findMany({
+            where: {
+                borrowStatus: statusFilter ? { in: statusFilter } : undefined, // Apply filter if defined
+            },
+            include: {
+                equipment: { 
+                    select: { id: true, name: true, equipmentId: true, images: true, status: true }
+                },
+                borrower: { 
+                    select: { id: true, name: true, email: true }
+                },
+                 // Include class/fic details if needed by the dashboard
+                 class: { select: { courseCode: true, section: true, academicYear: true } },
+                 fic: { select: { name: true } }
+            },
+            orderBy: {
+                // Order appropriately for different views
+                requestSubmissionTime: 'asc',
+            },
+        });
+        return NextResponse.json(borrows);
+    } catch (error) {
+        console.error("API Error - GET /api/borrows:", error);
+        return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+export async function POST(req: NextRequest) {
+  // 1. Authenticate the user
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.id) {
+      return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
+  }
+  const userId = session.user.id;
+
+  try {
+    // 2. Parse and Validate Request Body
+    let body;
+    try {
+      body = await req.json();
+    } catch (error) {
+      return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
+    }
+
+    const parsedData = ReservationSchema.safeParse(body); 
+
+    if (!parsedData.success) {
+      console.error("Validation Errors:", parsedData.error.flatten());
+      return NextResponse.json({ message: 'Invalid input', errors: parsedData.error.flatten().fieldErrors }, { status: 400 });
+    }
+
+    // Destructure data using correct field names from reverted schema
+    const { equipmentIds, requestedStartTime, requestedEndTime, classId, groupMateIds } = parsedData.data;
+
+    // --- START: Check for Equipment Availability (Updated Logic) ---
+    const blockingStatuses: BorrowStatus[] = [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE]; 
+    const unavailableItemsInfo: { name: string; id: string }[] = [];
+
+    for (const eqId of equipmentIds) {
+        const equipment = await prisma.equipment.findUnique({
+            where: { id: eqId },
+            select: { stockCount: true, name: true }
+        });
+
+        if (!equipment) {
+            // Collect all invalid IDs? For now, fail fast.
+            return NextResponse.json({ message: `Equipment with ID ${eqId} not found.` }, { status: 404 });
+        }
+        if (equipment.stockCount <= 0) {
+             unavailableItemsInfo.push({ name: equipment.name, id: eqId });
+             continue;
+        }
+
+        // Find count of CONFIRMED overlapping borrows 
+        // Uses requested times of existing borrows for simplicity - refine later if needed
+        const overlappingBorrowsCount = await prisma.borrow.count({
+            where: {
+                equipmentId: eqId,
+                borrowStatus: { in: blockingStatuses },
+                AND: [
+                    { // Existing borrow starts before requested ends
+                        OR: [
+                           { // @ts-ignore - Ignore potential type error for approvedStartTime
+                            approvedStartTime: { lt: requestedEndTime } },
+                           { // @ts-ignore - Ignore potential type error for approvedStartTime/requestedStartTime
+                            approvedStartTime: null, requestedStartTime: { lt: requestedEndTime } }
+                        ]
+                    },
+                    { // Existing borrow ends after requested starts
+                        OR: [
+                           { // @ts-ignore - Ignore potential type error for approvedEndTime
+                            approvedEndTime: { gt: requestedStartTime } }, 
+                           { // @ts-ignore - Ignore potential type error for approvedEndTime/requestedEndTime
+                            approvedEndTime: null, requestedEndTime: { gt: requestedStartTime } }
+                        ]
+                    }
+                ]
+            }
+        });
+
+        if (overlappingBorrowsCount >= equipment.stockCount) {
+             unavailableItemsInfo.push({ name: equipment.name, id: eqId });
+        }
+    }
+
+    // Handle Unavailable Items
+    if (unavailableItemsInfo.length > 0) {
+        const unavailableNames = unavailableItemsInfo.map(item => `${item.name} (ID: ${item.id})`);
+        const uniqueUnavailableNames = [...new Set(unavailableNames)];
+        return NextResponse.json(
+            { message: `Insufficient stock for the following items for the selected date/time range: ${uniqueUnavailableNames.join(', ')}.` },
+            { status: 409 } 
+        );
+    }
+    // --- END Check for Equipment Availability ---
+
+    // --- Find Group Mate User IDs --- 
+    // No longer needed - Frontend sends IDs directly
+    // let groupMateUserIds: string[] = [];
+    // if (groupMates && groupMates.trim() !== '') { ... }
+    // --- End Find Group Mate User IDs ---
+
+    // 3. Create Borrow Records and Group Links (Transaction)
+    let createdBorrowsResult: { id: string; borrowGroupId?: string | null }[] = [];
+    let generatedBorrowGroupId: string | null = null; // Variable to hold generated group ID
+
+    try {
+        // --- Generate Group ID if Mates Exist --- 
+        if (groupMateIds && groupMateIds.length > 0) {
+            generatedBorrowGroupId = createId(); // Use createId() instead of cuid()
+            console.log(`Generated BorrowGroup ID for linking: ${generatedBorrowGroupId}`);
+        }
+        // --- End Generate Group ID ---
+
+        createdBorrowsResult = await prisma.$transaction(async (tx) => {
+            // Step 1: Create the Borrow records
+            const createBorrowPromises = equipmentIds.map((eqId: string) =>
+                tx.borrow.create({
+                    data: {
+                        borrowerId: userId,
+                        equipmentId: eqId,
+                        requestedStartTime: requestedStartTime,
+                        requestedEndTime: requestedEndTime,
+                        borrowStatus: BorrowStatus.PENDING,
+                        classId: classId,
+                        borrowGroupId: generatedBorrowGroupId, // Use the generated group ID (null if no mates)
+                    },
+                    select: { id: true, borrowGroupId: true } 
+                })
+            );
+            const createdBorrows = await Promise.all(createBorrowPromises);
+            console.log(`Created ${createdBorrows.length} borrow records.`);
+
+            // Step 2: Link Group Mates if a group ID was generated
+            if (generatedBorrowGroupId && groupMateIds && groupMateIds.length > 0) {
+                const allUserIdsInGroup = new Set<string>([userId, ...groupMateIds]); // Include borrower
+                const borrowGroupMateLinks = Array.from(allUserIdsInGroup).map(memberUserId => ({
+                    borrowGroupId: generatedBorrowGroupId!, // Use the generated ID
+                    userId: memberUserId
+                }));
+                
+                if (borrowGroupMateLinks.length > 0) {
+                    // Use the correct model name from schema
+                    await tx.borrowGroupMate.createMany({
+                        data: borrowGroupMateLinks,
+                    });
+                    console.log(`Created ${borrowGroupMateLinks.length} group mate links for group ${generatedBorrowGroupId}.`);
+                }
+            }
+
+            return createdBorrows; 
+        });
+        
+    } catch (transactionError: any) {
+        console.error("Transaction Error creating borrow records or links:", transactionError);
+        return NextResponse.json({ message: 'Database error during reservation creation.' }, { status: 500 });
+    }
+    
+    // 4. Return Success Response
+    return NextResponse.json(
+        { 
+            message: `Reservation request submitted successfully for ${createdBorrowsResult.length} item(s).${generatedBorrowGroupId ? ` Group ID: ${generatedBorrowGroupId}` : ''}`, 
+            borrows: createdBorrowsResult 
+        }, 
+        { status: 201 }
+    );
+
+  } catch (error) {
+    console.error("API Error - POST /api/borrows:", error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ message: 'Invalid input', errors: error.errors }, { status: 400 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        return NextResponse.json({ message: 'A database error occurred.' }, { status: 500 });
+    }
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+  }
+} 
