@@ -19,6 +19,7 @@ import { DateRange } from "react-day-picker"
 import ReservationModal from '@/components/equipment/ReservationModal'; // Keep if used by Card
 import BulkCheckoutModal from '@/components/equipment/BulkCheckoutModal'; // Keep if needed
 // import BulkEditStatusModal from '@/components/equipment/BulkEditStatusModal'; // <<< Removed Import
+import BulkReservationModal from '@/components/equipment/BulkReservationModal'; // Import BulkReservationModal
 import Link from 'next/link'; // Keep Link
 import { toast } from 'sonner'; // Keep toast
 
@@ -182,6 +183,23 @@ export default function EquipmentPage() {
      setIsBulkCheckoutModalOpen(false);
      fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange); // Refetch data
   };
+
+  // Handler for opening bulk reservation modal - RE-ADD
+  // const handleOpenBulkReserve = () => {
+  //   if (selectedEquipmentIds.length < 2) return; 
+  //   setIsBulkReservationModalOpen(true);
+  // };
+
+  // Handler for successful bulk reservation (modal closes itself)
+  const handleBulkReservationSuccess = (borrowGroupId: string) => {
+    console.log("Bulk reservation successful, group ID:", borrowGroupId);
+    clearSelection();
+    toast.success('Bulk reservation request submitted successfully!');
+    // setIsBulkReservationModalOpen(false); // REMOVE state setting
+    // Optionally refetch data or navigate
+    // fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange);
+  };
+
   const handleOpenBulkStatus = () => {
      if (selectedEquipmentIds.length === 0) return;
      setIsBulkStatusModalOpen(true);
@@ -302,9 +320,33 @@ export default function EquipmentPage() {
                 <span className="text-sm text-muted-foreground mr-2">
                   {selectedEquipmentIds.length} item(s) selected
                 </span>
-                <Button size="sm" variant="outline" onClick={handleOpenBulkCheckout}>Bulk Checkout</Button>
+                {/* Bulk Reserve Button (All users) - Now wrapped by Modal Trigger */} 
+                {/* The Modal component will render the trigger button */} 
+
+                {/* Bulk Checkout Button (Staff/Faculty only) */}
+                {canManageEquipment && (
+                   <Button size="sm" variant="outline" onClick={handleOpenBulkCheckout}>Bulk Checkout</Button>
+                )}
+                {/* Bulk Edit Status Button (Staff/Faculty only) */}
                 {canManageEquipment && (
                     <Button size="sm" variant="outline" onClick={handleOpenBulkStatus}>Bulk Edit Status</Button>
+                )}
+                {/* Bulk Reservation Modal & Trigger (shown if >= 2 items selected) */}
+                {selectedEquipmentIds.length >= 2 && (
+                  <BulkReservationModal
+                    selectedEquipmentIds={selectedEquipmentIds}
+                    onReservationSuccess={handleBulkReservationSuccess}
+                    onClose={clearSelection} // Clear selection if modal is closed without success
+                    triggerButton={
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        // No disabled prop needed here as parent condition handles it
+                      >
+                        Bulk Reserve
+                      </Button>
+                    }
+                  />
                 )}
                 <Button size="sm" variant="secondary" onClick={clearSelection}>Clear Selection</Button>
               </>
@@ -395,6 +437,8 @@ export default function EquipmentPage() {
             onSuccess={handleBulkStatusSuccess} 
           />
         )} */}
+
+      {/* BulkReservationModal is now rendered conditionally inline above */}
     </div>
   );
 } 

@@ -11,8 +11,9 @@ export const config = {
      * - favicon.ico (favicon file)
      * - login (the login page itself)
      * - register (the register page)
+     * - images (static image assets)
      * - Any other public pages (e.g., /public/*, /)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|login|register).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|login|register|images).*)',
   ],
 } 

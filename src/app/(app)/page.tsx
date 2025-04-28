@@ -317,12 +317,12 @@ function StaffActionPanel() {
     setProcessingGroupId(borrowGroupId);
     try {
       const response = await fetch(`/api/borrows/bulk/reject`, { // Send to the bulk endpoint
-        method: 'PATCH', // Assuming PATCH is correct based on previous attempt
+        method: 'POST', // Corrected method to POST
         headers: {
           'Authorization': `Bearer ${session.accessToken}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ borrowGroupIds: [borrowGroupId] }), // Send the group ID in the body
+        body: JSON.stringify({ borrowGroupId: borrowGroupId }), // Corrected body structure
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || 'Failed to reject request group');
@@ -583,7 +583,11 @@ function StaffActionPanel() {
                                             size="sm" 
                                             variant="ghost"
                                             className="text-red-500 hover:bg-red-500/10 hover:text-red-600"
-                                            onClick={() => openRejectConfirmation(groupId)}
+                                            onClick={(e: React.MouseEvent) => { // Add event parameter
+                                                e.stopPropagation(); // Stop the event from bubbling to the Link
+                                                e.preventDefault(); // Prevent default link behavior just in case
+                                                openRejectConfirmation(groupId);
+                                            }}
                                             disabled={isProcessingThisGroup || isIndividual}
                                             title={isIndividual ? "Use item actions" : "Reject All in Group"}
                                          >
