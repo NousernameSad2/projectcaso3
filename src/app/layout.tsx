@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     // Re-apply font variable to html className
-    <html lang="en" className={`${inter.variable}`} suppressHydrationWarning> 
+    <html lang="en" className={`${inter.variable}`} suppressHydrationWarning>
       <head>
         {/* Next.js will inject necessary head elements here */}
       </head>

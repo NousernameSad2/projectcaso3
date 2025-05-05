@@ -369,14 +369,12 @@ export default function AdminUsersPage() {
                     )}
                 </div>
             </div>
-
-            {/* Optional: Show loading indicator during search fetch */} 
+            {/* Optional: Show loading indicator during search fetch */}
             {isLoading && hasFetchedInitialData.current && (
                  <div className="text-center py-4 text-muted-foreground">
                     <LoadingSpinner size="sm" className="inline-block mr-2" /> Loading users...
                  </div>
              )}
-
             <div className="border rounded-md overflow-hidden bg-card">
                 <Table>
                     <TableHeader>
@@ -399,7 +397,10 @@ export default function AdminUsersPage() {
                                     <TableRow key={user.id} className={isCurrentUser ? 'bg-muted/20' : ''}>
                                         <TableCell className="font-medium">
                                             {/* Make name clickable - removed text-white */}
-                                            <Link href={`/users/${user.id}/profile`} className="hover:underline">
+                                            <Link
+                                                href={`/users/${user.id}/profile`}
+                                                className="hover:underline"
+                                                legacyBehavior>
                                                 {user.name || '-'}
                                             </Link>
                                         </TableCell>
@@ -457,42 +458,40 @@ export default function AdminUsersPage() {
                     </TableBody>
                 </Table>
             </div>
-
-             {/* Edit User Dialog - Render conditionally */}
-             {editingUser && (
-                 <EditUserDialog
-                     isOpen={isEditDialogOpen}
-                     onOpenChange={setIsEditDialogOpen}
-                     user={editingUser}
-                     onUserUpdated={handleUserUpdated}
-                 />
-             )}
-
-             {/* --- Deletion Confirmation Dialog --- */} 
-             <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-                 <AlertDialogContent>
-                     <AlertDialogHeader>
-                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                         <AlertDialogDescription>
-                             This action will permanently delete the user 
-                             <strong>{deletingUser?.name || deletingUser?.id}</strong>. 
-                             This cannot be undone.
-                         </AlertDialogDescription>
-                     </AlertDialogHeader>
-                     <AlertDialogFooter>
-                         <AlertDialogCancel disabled={isProcessing[`delete_${deletingUser?.id}`]}>Cancel</AlertDialogCancel>
-                         <AlertDialogAction
-                             onClick={performDeleteUser}
-                             disabled={isProcessing[`delete_${deletingUser?.id}`]} // Use existing processing state
-                             className="bg-destructive hover:bg-destructive/90"
-                         >
-                             {isProcessing[`delete_${deletingUser?.id}`] ? <LoadingSpinner size="sm" className="mr-2" /> : null}
-                             Confirm Delete
-                         </AlertDialogAction>
-                     </AlertDialogFooter>
-                 </AlertDialogContent>
-             </AlertDialog>
-             {/* --- End Deletion Dialog --- */}
+            {/* Edit User Dialog - Render conditionally */}
+            {editingUser && (
+                <EditUserDialog
+                    isOpen={isEditDialogOpen}
+                    onOpenChange={setIsEditDialogOpen}
+                    user={editingUser}
+                    onUserUpdated={handleUserUpdated}
+                />
+            )}
+            {/* --- Deletion Confirmation Dialog --- */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This action will permanently delete the user 
+                            <strong>{deletingUser?.name || deletingUser?.id}</strong>. 
+                            This cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isProcessing[`delete_${deletingUser?.id}`]}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={performDeleteUser}
+                            disabled={isProcessing[`delete_${deletingUser?.id}`]} // Use existing processing state
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isProcessing[`delete_${deletingUser?.id}`] ? <LoadingSpinner size="sm" className="mr-2" /> : null}
+                            Confirm Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+            {/* --- End Deletion Dialog --- */}
         </div>
     );
 } 

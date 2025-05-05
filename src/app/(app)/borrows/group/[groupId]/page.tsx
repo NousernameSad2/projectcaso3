@@ -146,8 +146,10 @@ export default function BorrowGroupDetailPage() {
             <div className="text-center py-10">
                 <p className="text-destructive mb-4">Error: {error.message}</p>
                 <Button variant="outline" asChild>
-                    <Link href="/">
-                        <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
+                    <Link href="/" legacyBehavior>
+                        <a>
+                            <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
+                        </a>
                     </Link>
                 </Button>
             </div>
@@ -156,15 +158,17 @@ export default function BorrowGroupDetailPage() {
 
     if (!representativeItem) {
         return (
-             <div className="text-center py-10">
+            <div className="text-center py-10">
                 <p className="text-muted-foreground mb-4">Borrow group not found or has no borrowable items.</p>
                 <Button variant="outline" asChild>
-                    <Link href="/">
-                        <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
+                    <Link href="/" legacyBehavior>
+                        <a>
+                            <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
+                        </a>
                     </Link>
                 </Button>
             </div>
-        )
+        );
     }
 
     return (
@@ -172,9 +176,11 @@ export default function BorrowGroupDetailPage() {
             <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" asChild>
-                        <Link href="/">
-                            <ArrowLeft className="h-4 w-4"/>
-                            <span className="sr-only">Back to Dashboard</span>
+                        <Link href="/" legacyBehavior>
+                            <a>
+                                <ArrowLeft className="h-4 w-4"/>
+                                <span className="sr-only">Back to Dashboard</span>
+                            </a>
                         </Link>
                     </Button>
                     <h1 className="text-2xl font-bold text-white truncate">
@@ -192,7 +198,6 @@ export default function BorrowGroupDetailPage() {
                     </Button>
                 )}
             </div>
-
             <Card className="bg-card/80 border-border">
                 <CardHeader>
                     <CardTitle>Group Details</CardTitle>
@@ -224,7 +229,6 @@ export default function BorrowGroupDetailPage() {
                     )}
                 </CardContent>
             </Card>
-
             <Card className="bg-card/80 border-border">
                 <CardHeader>
                     <CardTitle>Items in this Group ({borrowItems.length})</CardTitle>
@@ -246,7 +250,11 @@ export default function BorrowGroupDetailPage() {
                                         {/* Image Cell: Conditionally Link or Div with onClick */}
                                         <TableCell className="p-0">
                                             {canViewDetails ? (
-                                                <Link href={`/equipment/${item.equipment.id}`} className="flex items-center p-2 h-full" aria-label={`View details for ${item.equipment.name}`}>
+                                                <Link
+                                                    href={`/equipment/${item.equipment.id}`}
+                                                    className="flex items-center p-2 h-full"
+                                                    aria-label={`View details for ${item.equipment.name}`}
+                                                    legacyBehavior>
                                                     <Image 
                                                         src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
                                                         alt={item.equipment.name}
@@ -270,7 +278,11 @@ export default function BorrowGroupDetailPage() {
                                         {/* Name Cell: Conditionally Link or Div with onClick */}
                                         <TableCell className="font-medium p-0">
                                             {canViewDetails ? (
-                                                <Link href={`/equipment/${item.equipment.id}`} className="block p-2 h-full" aria-label={`View details for ${item.equipment.name}`}>
+                                                <Link
+                                                    href={`/equipment/${item.equipment.id}`}
+                                                    className="block p-2 h-full"
+                                                    aria-label={`View details for ${item.equipment.name}`}
+                                                    legacyBehavior>
                                                     {item.equipment.name}
                                                 </Link>
                                             ) : (
@@ -292,7 +304,6 @@ export default function BorrowGroupDetailPage() {
                     </div>
                 </CardContent>
             </Card>
-
             <Card className="bg-card/80 border-border">
                 <CardHeader>
                     <CardTitle className="flex items-center">
@@ -319,7 +330,6 @@ export default function BorrowGroupDetailPage() {
                     )}
                 </CardContent>
             </Card>
-
         </div>
     );
 } 

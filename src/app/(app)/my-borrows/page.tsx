@@ -187,139 +187,135 @@ export default function MyBorrowsPage() {
   const groupIds = Object.keys(groupedBorrows).filter(key => key !== INDIVIDUAL_BORROWS_KEY);
 
   return (
-    <div className="space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-white">My Current Borrows</h1>
-      </div>
-
-      {isLoading && (
-        <div className="flex justify-center items-center py-10"><LoadingSpinner size="lg" /></div>
-      )}
-      {error && (
-        <div className="text-center text-destructive py-10"><p>Error loading borrows: {error}</p></div>
-      )}
-      {!isLoading && !error && borrows.length === 0 && (
-        <div className="text-center text-muted-foreground py-10"><p>You have no active borrows.</p></div>
-      )}
-      
-      {/* Render Grouped Borrows */}
-      {!isLoading && !error && groupIds.length > 0 && (
-        <div className="space-y-6">
-          <h2 className="text-xl font-semibold text-white border-b pb-2">Group Borrows</h2>
-          {groupIds.map((groupId) => {
-            const groupItems = groupedBorrows[groupId];
-            const representativeItem = groupItems[0];
-            // Disable button if submitting this group OR any individual item (simplification)
-            const isSubmittingThisGroup = isSubmittingReturn; 
-
-            return (
-              <Card key={groupId} className="overflow-hidden bg-card/60 border">
-                <CardHeader className="flex flex-row justify-between items-start gap-4">
-                    <div>
-                        <CardTitle className="flex items-center gap-2">
-                           <Users className="h-5 w-5"/> Group: {groupId}
-                        </CardTitle>
-                        <CardDescription className="text-xs mt-1">
-                           Class: {representativeItem.class?.courseCode || 'N/A'} - {representativeItem.class?.section || 'N/A'} ({representativeItem.class?.semester || 'N/A'}) <br/>
-                           Checked out: {formatDateSafe(representativeItem.checkoutTime)} | 
-                           Time Checked Out: {calculateDuration(representativeItem.checkoutTime, currentTime)}
-                        </CardDescription>
-                    </div>
-                    <Link href={`/borrows/group/${groupId}`} passHref>
-                       <Button variant="outline" size="sm" asChild>
-                           <span>View Details</span>
-                       </Button>
-                    </Link>
-                </CardHeader>
-                <CardContent className="p-4 pt-0">
-                    <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
-                    <ul className="space-y-1 list-disc list-inside text-sm">
-                        {groupItems.map(item => (
-                            <li key={item.id}>
-                               {item.equipment.name} {item.equipment.equipmentId ? `(${item.equipment.equipmentId})` : ''}
-                                <Badge variant={getStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90">
-                                   {item.borrowStatus.toLowerCase().replace('_', ' ')}
-                                </Badge>
-                            </li>
-                        ))}
-                    </ul>
-                </CardContent>
-                <CardFooter className="p-4 pt-2">
-                    <Button
-                      onClick={() => handleOpenDeficiencyModalForGroup(groupId)}
-                      // Disable if submitting OR if the group is no longer actionable (e.g., pending return)
-                      disabled={isSubmittingReturn || !groupItems.some(item => item.borrowStatus === BorrowStatus.ACTIVE || item.borrowStatus === BorrowStatus.OVERDUE)}
-                      // Hidden logic remains the same (based on status)
-                      hidden={!groupItems.some(item => item.borrowStatus === BorrowStatus.ACTIVE || item.borrowStatus === BorrowStatus.OVERDUE)}
-                    >
-                      Initiate Group Return / Report Issues
-                    </Button>
-                </CardFooter>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-       {/* Render Individual Borrows (if any) */}
-       {!isLoading && !error && individualBorrows.length > 0 && (
-          <div className="space-y-6 pt-6">
-              <h2 className="text-xl font-semibold text-white border-b pb-2">Individual Borrows</h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-                  {individualBorrows.map((borrow) => {
-                      const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
-                      // Disable button if submitting this item OR any group item (simplification)
-                      const isSubmittingThisItem = isSubmittingReturn; 
-                      return (
-                          <Card key={borrow.id} className="overflow-hidden flex flex-col h-full bg-card/60">
-                              <CardHeader className="p-0 relative aspect-video">
-                                  <Image
-                                      src={imageUrl}
-                                      alt={borrow.equipment.name}
-                                      fill
-                                      className="object-cover"
-                                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                                  />
-                                  <Badge variant={getStatusVariant(borrow.borrowStatus)} className="absolute top-2 right-2 capitalize text-xs">
-                                      {borrow.borrowStatus.toLowerCase().replace('_', ' ')}
-                                  </Badge>
-                              </CardHeader>
-                              <CardContent className="p-4 flex-grow">
-                                  <h3 className="font-semibold text-base mb-1">{borrow.equipment.name}</h3>
-                                  <p className="text-xs text-muted-foreground mb-2">ID: {borrow.equipment.equipmentId || 'N/A'}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                      Class: {borrow.class?.courseCode || 'N/A'} - {borrow.class?.section || 'N/A'} ({borrow.class?.semester || 'N/A'})
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">
-                                      Checked out: {formatDateSafe(borrow.checkoutTime)} | 
-                                      Time Checked Out: {calculateDuration(borrow.checkoutTime, currentTime)}
-                                  </p>
-                              </CardContent>
-                              <CardFooter className="p-4 pt-0 border-t mt-auto">
-                                  <Button
-                                      onClick={() => handleOpenDeficiencyModalForSingle(borrow.id)}
-                                      disabled={isSubmittingThisItem}
-                                      size="sm"
-                                      className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                  >
-                                      {isSubmittingThisItem ? <LoadingSpinner size="sm" className="mr-2"/> : null}
-                                      Request Return
-                                  </Button>
-                              </CardFooter>
-                          </Card>
-                      );
-                  })}
-              </div>
+      <div className="space-y-8">
+          <div className="flex justify-between items-center">
+            <h1 className="text-2xl font-semibold text-white">My Current Borrows</h1>
           </div>
-       )}
+          {isLoading && (
+            <div className="flex justify-center items-center py-10"><LoadingSpinner size="lg" /></div>
+          )}
+          {error && (
+            <div className="text-center text-destructive py-10"><p>Error loading borrows: {error}</p></div>
+          )}
+          {!isLoading && !error && borrows.length === 0 && (
+            <div className="text-center text-muted-foreground py-10"><p>You have no active borrows.</p></div>
+          )}
+          {/* Render Grouped Borrows */}
+          {!isLoading && !error && groupIds.length > 0 && (
+            <div className="space-y-6">
+              <h2 className="text-xl font-semibold text-white border-b pb-2">Group Borrows</h2>
+              {groupIds.map((groupId) => {
+                const groupItems = groupedBorrows[groupId];
+                const representativeItem = groupItems[0];
+                // Disable button if submitting this group OR any individual item (simplification)
+                const isSubmittingThisGroup = isSubmittingReturn; 
 
-       {/* Render the Modal */}
-        <ReportDeficiencyModal 
-            isOpen={isDeficiencyModalOpen}
-            onOpenChange={setIsDeficiencyModalOpen}
-            itemsToReport={itemsToReportForModal}
-            onReturnRequestInitiated={triggerActualReturnRequest}
-        />
-    </div>
+                return (
+                    <Card key={groupId} className="overflow-hidden bg-card/60 border">
+                        <CardHeader className="flex flex-row justify-between items-start gap-4">
+                            <div>
+                                <CardTitle className="flex items-center gap-2">
+                                   <Users className="h-5 w-5"/> Group: {groupId}
+                                </CardTitle>
+                                <CardDescription className="text-xs mt-1">
+                                   Class: {representativeItem.class?.courseCode || 'N/A'} - {representativeItem.class?.section || 'N/A'} ({representativeItem.class?.semester || 'N/A'}) <br/>
+                                   Checked out: {formatDateSafe(representativeItem.checkoutTime)} | 
+                                   Time Checked Out: {calculateDuration(representativeItem.checkoutTime, currentTime)}
+                                </CardDescription>
+                            </div>
+                            <Link href={`/borrows/group/${groupId}`} passHref legacyBehavior>
+                               <Button variant="outline" size="sm" asChild>
+                                   <span>View Details</span>
+                               </Button>
+                            </Link>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
+                            <ul className="space-y-1 list-disc list-inside text-sm">
+                                {groupItems.map(item => (
+                                    <li key={item.id}>
+                                       {item.equipment.name} {item.equipment.equipmentId ? `(${item.equipment.equipmentId})` : ''}
+                                        <Badge variant={getStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90">
+                                           {item.borrowStatus.toLowerCase().replace('_', ' ')}
+                                        </Badge>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                        <CardFooter className="p-4 pt-2">
+                            <Button
+                              onClick={() => handleOpenDeficiencyModalForGroup(groupId)}
+                              // Disable if submitting OR if the group is no longer actionable (e.g., pending return)
+                              disabled={isSubmittingReturn || !groupItems.some(item => item.borrowStatus === BorrowStatus.ACTIVE || item.borrowStatus === BorrowStatus.OVERDUE)}
+                              // Hidden logic remains the same (based on status)
+                              hidden={!groupItems.some(item => item.borrowStatus === BorrowStatus.ACTIVE || item.borrowStatus === BorrowStatus.OVERDUE)}
+                            >
+                              Initiate Group Return / Report Issues
+                            </Button>
+                        </CardFooter>
+                    </Card>
+                );
+              })}
+            </div>
+          )}
+          {/* Render Individual Borrows (if any) */}
+          {!isLoading && !error && individualBorrows.length > 0 && (
+             <div className="space-y-6 pt-6">
+                 <h2 className="text-xl font-semibold text-white border-b pb-2">Individual Borrows</h2>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
+                     {individualBorrows.map((borrow) => {
+                         const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
+                         // Disable button if submitting this item OR any group item (simplification)
+                         const isSubmittingThisItem = isSubmittingReturn; 
+                         return (
+                             <Card key={borrow.id} className="overflow-hidden flex flex-col h-full bg-card/60">
+                                 <CardHeader className="p-0 relative aspect-video">
+                                     <Image
+                                         src={imageUrl}
+                                         alt={borrow.equipment.name}
+                                         fill
+                                         className="object-cover"
+                                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                     />
+                                     <Badge variant={getStatusVariant(borrow.borrowStatus)} className="absolute top-2 right-2 capitalize text-xs">
+                                         {borrow.borrowStatus.toLowerCase().replace('_', ' ')}
+                                     </Badge>
+                                 </CardHeader>
+                                 <CardContent className="p-4 flex-grow">
+                                     <h3 className="font-semibold text-base mb-1">{borrow.equipment.name}</h3>
+                                     <p className="text-xs text-muted-foreground mb-2">ID: {borrow.equipment.equipmentId || 'N/A'}</p>
+                                     <p className="text-xs text-muted-foreground">
+                                         Class: {borrow.class?.courseCode || 'N/A'} - {borrow.class?.section || 'N/A'} ({borrow.class?.semester || 'N/A'})
+                                     </p>
+                                     <p className="text-xs text-muted-foreground">
+                                         Checked out: {formatDateSafe(borrow.checkoutTime)} | 
+                                         Time Checked Out: {calculateDuration(borrow.checkoutTime, currentTime)}
+                                     </p>
+                                 </CardContent>
+                                 <CardFooter className="p-4 pt-0 border-t mt-auto">
+                                     <Button
+                                         onClick={() => handleOpenDeficiencyModalForSingle(borrow.id)}
+                                         disabled={isSubmittingThisItem}
+                                         size="sm"
+                                         className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                     >
+                                         {isSubmittingThisItem ? <LoadingSpinner size="sm" className="mr-2"/> : null}
+                                         Request Return
+                                     </Button>
+                                 </CardFooter>
+                             </Card>
+                         );
+                     })}
+                 </div>
+             </div>
+          )}
+          {/* Render the Modal */}
+          <ReportDeficiencyModal 
+              isOpen={isDeficiencyModalOpen}
+              onOpenChange={setIsDeficiencyModalOpen}
+              itemsToReport={itemsToReportForModal}
+              onReturnRequestInitiated={triggerActualReturnRequest}
+          />
+      </div>
   );
 } 

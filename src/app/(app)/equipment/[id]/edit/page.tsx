@@ -167,18 +167,18 @@ export default function EditEquipmentPage() {
 
   return (
     <div className="space-y-6 max-w-3xl mx-auto">
-      <Link href={initialData ? `/equipment/${id}` : '/equipment'} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4">
+      <Link
+        href={initialData ? `/equipment/${id}` : '/equipment'}
+        className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
+        legacyBehavior>
         <ArrowLeft className="h-4 w-4" />
         {initialData ? 'Back to Details' : 'Back to List'}
       </Link>
-      
       <h1 className="text-2xl font-semibold text-white">Edit Equipment</h1>
       <p className="text-muted-foreground text-sm">Update the details for: {initialData?.name || '...'}</p>
-
       {error && !form.formState.isDirty && (
          <p className="text-sm font-medium text-destructive/90">Error: {error}</p>
       )}
-
       <Form {...form}>
          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
            <FormField

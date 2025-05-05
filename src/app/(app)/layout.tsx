@@ -31,16 +31,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     return (
         // Remove AuthWrapper
         // <AuthWrapper>
-            <QueryClientProvider client={queryClient}>
-                <div className="flex min-h-screen flex-col">
-                    <Header />
-                    <main className="flex-1 p-4 md:p-6 lg:p-8">
-                        {children}
-                    </main>
-                    <Toaster richColors />
-                </div>
-                <ReactQueryDevtools initialIsOpen={false} /> 
-            </QueryClientProvider>
         // </AuthWrapper>
+        <QueryClientProvider client={queryClient}>
+            <div className="flex min-h-screen flex-col">
+                <Header />
+                <main className="flex-1 p-4 md:p-6 lg:p-8">
+                    {children}
+                </main>
+                <Toaster richColors />
+            </div>
+            <ReactQueryDevtools initialIsOpen={false} />
+        </QueryClientProvider>
     );
 } 

@@ -76,11 +76,13 @@ export default function Header() {
             <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
                     {/* Logo and Title */}
-                    <Link href="/" className="mr-6 flex items-center space-x-2">
-                        <Building2 className="h-6 w-6 text-primary" />
-                        <span className="font-bold sm:inline-block">
-                            E-Bridge
-                        </span>
+                    <Link href="/" className="mr-6 flex items-center space-x-2" legacyBehavior>
+                        <a>
+                            <Building2 className="h-6 w-6 text-primary" />
+                            <span className="font-bold sm:inline-block">
+                                E-Bridge
+                            </span>
+                        </a>
                     </Link>
                     <div className="flex items-center space-x-4">
                         {/* Placeholder or spinner could go here */}
@@ -97,11 +99,13 @@ export default function Header() {
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
                 {/* Logo and Title */}
-                <Link href="/" className="mr-6 flex items-center space-x-2">
-                    <Building2 className="h-6 w-6 text-primary" />
-                    <span className="font-bold sm:inline-block">
-                        E-Bridge
-                    </span>
+                <Link href="/" className="mr-6 flex items-center space-x-2" legacyBehavior>
+                    <a>
+                        <Building2 className="h-6 w-6 text-primary" />
+                        <span className="font-bold sm:inline-block">
+                            E-Bridge
+                        </span>
+                    </a>
                 </Link>
 
                 {/* Centered Navigation Links (Desktop) - Already hidden on small screens */}
@@ -117,7 +121,7 @@ export default function Header() {
                                     "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                                     isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                                 )}
-                            >
+                                legacyBehavior>
                                 <Icon className="h-4 w-4" />
                                 <span>{item.label}</span>
                             </Link>
@@ -140,7 +144,7 @@ export default function Header() {
                                             ? "bg-primary/10 text-primary"
                                             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                                     )}
-                                >
+                                    legacyBehavior>
                                     <profileNavItem.icon className="h-4 w-4" />
                                     <span>{profileNavItem.label}</span>
                                 </Link>
@@ -158,12 +162,12 @@ export default function Header() {
                             </>
                         ) : (
                             /* Login Button */
-                            <Button asChild variant="outline" size="sm">
-                                <Link href="/login" className="flex items-center space-x-2">
+                            (<Button asChild variant="outline" size="sm">
+                                <Link href="/login" className="flex items-center space-x-2" legacyBehavior>
                                     <LogIn className="h-4 w-4" />
                                     <span>Login</span>
                                 </Link>
-                            </Button>
+                            </Button>)
                         )}
                     </div>
 
@@ -190,15 +194,16 @@ export default function Header() {
                                     const Icon = item.icon;
                                     const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
                                     return (
-                                        <SheetClose asChild key={`mobile-${item.href}`}> 
+                                        <SheetClose asChild key={`mobile-${item.href}`}>
                                             <Link
                                                 href={item.href}
                                                 className={cn(
                                                     "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
                                                     isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                                                 )}
-                                                onClick={closeSheet} // Close sheet on click
-                                            >
+                                                // Close sheet on click
+                                                onClick={closeSheet}
+                                                legacyBehavior>
                                                 <Icon className="h-5 w-5" />
                                                 <span>{item.label}</span>
                                             </Link>
@@ -216,7 +221,7 @@ export default function Header() {
                                                      pathname === profileNavItem.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                                                 )}
                                                 onClick={closeSheet}
-                                            >
+                                                legacyBehavior>
                                                 <profileNavItem.icon className="h-5 w-5" />
                                                 <span>{profileNavItem.label}</span>
                                             </Link>
@@ -233,10 +238,10 @@ export default function Header() {
                                 ) : (
                                     <SheetClose asChild> 
                                          <Link
-                                            href="/login"
-                                            className="flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
-                                            onClick={closeSheet}
-                                        >
+                                             href="/login"
+                                             className="flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+                                             onClick={closeSheet}
+                                             legacyBehavior>
                                              <LogIn className="h-5 w-5" />
                                             <span>Login</span>
                                         </Link>

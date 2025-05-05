@@ -236,7 +236,6 @@ export default function EquipmentPage() {
   return (
     <div className="container mx-auto py-10">
       <h1 className="text-3xl font-bold text-white mb-8">Equipment Catalog</h1>
-
       {/* Filters Section */}
       <div className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
         <Input
@@ -318,59 +317,57 @@ export default function EquipmentPage() {
            </div>
         </div>
       </div>
+      {/* Actions Bar */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4 mb-4 border-border/20">
+        <div className="flex items-center gap-2 flex-wrap">
+           {/* Bulk Actions - Show only when items are selected */}
+           {hasSelection && (
+             <>
+               <span className="text-sm text-muted-foreground mr-2">
+                 {selectedEquipmentIds.length} item(s) selected
+               </span>
+               {/* Bulk Reserve Button (All users) - Now wrapped by Modal Trigger */} 
+               {/* The Modal component will render the trigger button */} 
 
-       {/* Actions Bar */}
-       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b pb-4 mb-4 border-border/20">
-         <div className="flex items-center gap-2 flex-wrap">
-            {/* Bulk Actions - Show only when items are selected */}
-            {hasSelection && (
-              <>
-                <span className="text-sm text-muted-foreground mr-2">
-                  {selectedEquipmentIds.length} item(s) selected
-                </span>
-                {/* Bulk Reserve Button (All users) - Now wrapped by Modal Trigger */} 
-                {/* The Modal component will render the trigger button */} 
+               {/* Bulk Checkout Button (Staff/Faculty only) */}
+               {canManageEquipment && (
+                  <Button size="sm" variant="outline" onClick={handleOpenBulkCheckout}>Bulk Checkout</Button>
+               )}
+               {/* Bulk Edit Status Button (Staff/Faculty only) */}
+               {canManageEquipment && (
+                   <Button size="sm" variant="outline" onClick={handleOpenBulkStatus}>Bulk Edit Status</Button>
+               )}
+               {/* Bulk Reservation Modal & Trigger (shown if >= 2 items selected) */}
+               {selectedEquipmentIds.length >= 2 && (
+                 <BulkReservationModal
+                   selectedEquipmentIds={selectedEquipmentIds}
+                   onReservationSuccess={handleBulkReservationSuccess}
+                   onClose={clearSelection} // Clear selection if modal is closed without success
+                   triggerButton={
+                     <Button 
+                       size="sm" 
+                       variant="outline" 
+                       // No disabled prop needed here as parent condition handles it
+                     >
+                       Bulk Reserve
+                     </Button>
+                   }
+                 />
+               )}
+               <Button size="sm" variant="secondary" onClick={clearSelection}>Clear Selection</Button>
+             </>
+           )}
 
-                {/* Bulk Checkout Button (Staff/Faculty only) */}
-                {canManageEquipment && (
-                   <Button size="sm" variant="outline" onClick={handleOpenBulkCheckout}>Bulk Checkout</Button>
-                )}
-                {/* Bulk Edit Status Button (Staff/Faculty only) */}
-                {canManageEquipment && (
-                    <Button size="sm" variant="outline" onClick={handleOpenBulkStatus}>Bulk Edit Status</Button>
-                )}
-                {/* Bulk Reservation Modal & Trigger (shown if >= 2 items selected) */}
-                {selectedEquipmentIds.length >= 2 && (
-                  <BulkReservationModal
-                    selectedEquipmentIds={selectedEquipmentIds}
-                    onReservationSuccess={handleBulkReservationSuccess}
-                    onClose={clearSelection} // Clear selection if modal is closed without success
-                    triggerButton={
-                      <Button 
-                        size="sm" 
-                        variant="outline" 
-                        // No disabled prop needed here as parent condition handles it
-                      >
-                        Bulk Reserve
-                      </Button>
-                    }
-                  />
-                )}
-                <Button size="sm" variant="secondary" onClick={clearSelection}>Clear Selection</Button>
-              </>
-            )}
-
-            {/* Add Equipment Button - Show when NO items selected AND user is Staff/Faculty */} 
-            {!hasSelection && canManageEquipment && (
-              <Button size="sm" asChild>
-                <Link href="/equipment/new">
-                  <PlusCircle className="mr-2 h-4 w-4" /> Add Equipment
-                </Link>
-              </Button>
-            )}
-         </div>
-       </div>
-
+           {/* Add Equipment Button - Show when NO items selected AND user is Staff/Faculty */} 
+           {!hasSelection && canManageEquipment && (
+             <Button size="sm" asChild>
+               <Link href="/equipment/new" legacyBehavior>
+                 <PlusCircle className="mr-2 h-4 w-4" /> Add Equipment
+               </Link>
+             </Button>
+           )}
+        </div>
+      </div>
       {/* Equipment Grid */}
       {isLoading ? (
         <div className="flex justify-center items-center min-h-[40vh]">
@@ -394,7 +391,6 @@ export default function EquipmentPage() {
           ))}
         </div>
       )}
-
       {/* Pagination Controls */}
       {totalPages > 1 && (
         <div className="flex justify-center items-center mt-8 space-x-2">
@@ -419,33 +415,31 @@ export default function EquipmentPage() {
           </Button>
         </div>
       )}
-
-       {/* Modals (Temporarily commented out to fix type errors) */}
-       {/* {isReservationModalOpen && selectedEquipmentForReservation && (
-          <ReservationModal
-             isOpen={isReservationModalOpen}
-             setIsOpen={setIsReservationModalOpen}
-             equipment={selectedEquipmentForReservation}
-             onSuccess={handleReservationSuccess}
-          />
+      {/* Modals (Temporarily commented out to fix type errors) */}
+      {/* {isReservationModalOpen && selectedEquipmentForReservation && (
+         <ReservationModal
+            isOpen={isReservationModalOpen}
+            setIsOpen={setIsReservationModalOpen}
+            equipment={selectedEquipmentForReservation}
+            onSuccess={handleReservationSuccess}
+         />
+      )} */}
+      {/* {isBulkCheckoutModalOpen && (
+         <BulkCheckoutModal
+           isOpen={isBulkCheckoutModalOpen}
+           setIsOpen={setIsBulkCheckoutModalOpen}
+           selectedEquipmentIds={selectedEquipmentIds}
+           onSuccess={handleBulkCheckoutSuccess} 
+         />
+      )} */}
+      {/* {isBulkStatusModalOpen && canManageEquipment && (
+        <BulkEditStatusModal
+           isOpen={isBulkStatusModalOpen}
+           setIsOpen={setIsBulkStatusModalOpen}
+           selectedEquipmentIds={selectedEquipmentIds}
+           onSuccess={handleBulkStatusSuccess} 
+         />
        )} */}
-       {/* {isBulkCheckoutModalOpen && (
-          <BulkCheckoutModal
-            isOpen={isBulkCheckoutModalOpen}
-            setIsOpen={setIsBulkCheckoutModalOpen}
-            selectedEquipmentIds={selectedEquipmentIds}
-            onSuccess={handleBulkCheckoutSuccess} 
-          />
-       )} */}
-       {/* {isBulkStatusModalOpen && canManageEquipment && (
-         <BulkEditStatusModal
-            isOpen={isBulkStatusModalOpen}
-            setIsOpen={setIsBulkStatusModalOpen}
-            selectedEquipmentIds={selectedEquipmentIds}
-            onSuccess={handleBulkStatusSuccess} 
-          />
-        )} */}
-
       {/* BulkReservationModal is now rendered conditionally inline above */}
     </div>
   );

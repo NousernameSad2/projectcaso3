@@ -252,7 +252,7 @@ export default function ClassDetailPage() {
       <div className="text-center py-10">
         <p className="text-destructive mb-4">Error: {error}</p>
         <Button variant="outline" asChild>
-            <Link href="/classes">
+            <Link href="/classes" legacyBehavior>
                 <ArrowLeft className="mr-2 h-4 w-4"/> Go back to Classes
             </Link>
         </Button>
@@ -282,47 +282,48 @@ export default function ClassDetailPage() {
 
   return (
     <div className="container mx-auto py-10 space-y-6">
-       <div className="flex items-center justify-between">
-          <Button variant="outline" size="icon" asChild>
-            <Link href="/classes">
-                <ArrowLeft className="h-4 w-4"/>
-                <span className="sr-only">Back to Classes</span>
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold text-white text-center flex-1 mx-4 truncate">
-            {classDetails.courseCode} - {classDetails.section} ({classDetails.semester})
-          </h1>
-          {canEditClass && (
-             <Button variant="outline" size="icon" onClick={handleEditClass}>
-                <Edit className="h-4 w-4"/>
-                <span className="sr-only">Edit Class</span>
-            </Button>
-          )}
-       </div>
-      
-       <Card className="bg-card/80 border-border">
-         <CardHeader>
-            <CardTitle>Class Information</CardTitle>
-         </CardHeader>
-         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-            <div><span className="font-semibold text-muted-foreground">Course Code:</span> {classDetails.courseCode}</div>
-            <div><span className="font-semibold text-muted-foreground">Section:</span> {classDetails.section}</div>
-            <div><span className="font-semibold text-muted-foreground">Semester:</span> {classDetails.semester}</div>
-            <div><span className="font-semibold text-muted-foreground">Academic Year:</span> {classDetails.academicYear ?? 'N/A'}</div>
-            <div>
-              <span className="font-semibold text-muted-foreground">Faculty in Charge:</span> 
-              {classDetails.fic?.id ? (
-                <Link href={`/users/${classDetails.fic.id}/profile`} className="hover:underline text-primary">
-                  {classDetails.fic.name ?? classDetails.fic.email}
-                </Link>
-              ) : (
-                classDetails.fic?.name ?? classDetails.fic?.email ?? 'N/A'
-              )}
-            </div>
-            <div><span className="font-semibold text-muted-foreground">Status:</span> {classDetails.isActive ? 'Active' : 'Inactive'}</div>
-         </CardContent>
-       </Card>
-
+      <div className="flex items-center justify-between">
+         <Button variant="outline" size="icon" asChild>
+           <Link href="/classes" legacyBehavior>
+               <ArrowLeft className="h-4 w-4"/>
+               <span className="sr-only">Back to Classes</span>
+           </Link>
+         </Button>
+         <h1 className="text-2xl font-bold text-white text-center flex-1 mx-4 truncate">
+           {classDetails.courseCode} - {classDetails.section} ({classDetails.semester})
+         </h1>
+         {canEditClass && (
+            <Button variant="outline" size="icon" onClick={handleEditClass}>
+               <Edit className="h-4 w-4"/>
+               <span className="sr-only">Edit Class</span>
+           </Button>
+         )}
+      </div>
+      <Card className="bg-card/80 border-border">
+        <CardHeader>
+           <CardTitle>Class Information</CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+           <div><span className="font-semibold text-muted-foreground">Course Code:</span> {classDetails.courseCode}</div>
+           <div><span className="font-semibold text-muted-foreground">Section:</span> {classDetails.section}</div>
+           <div><span className="font-semibold text-muted-foreground">Semester:</span> {classDetails.semester}</div>
+           <div><span className="font-semibold text-muted-foreground">Academic Year:</span> {classDetails.academicYear ?? 'N/A'}</div>
+           <div>
+             <span className="font-semibold text-muted-foreground">Faculty in Charge:</span> 
+             {classDetails.fic?.id ? (
+               <Link
+                 href={`/users/${classDetails.fic.id}/profile`}
+                 className="hover:underline text-primary"
+                 legacyBehavior>
+                 {classDetails.fic.name ?? classDetails.fic.email}
+               </Link>
+             ) : (
+               classDetails.fic?.name ?? classDetails.fic?.email ?? 'N/A'
+             )}
+           </div>
+           <div><span className="font-semibold text-muted-foreground">Status:</span> {classDetails.isActive ? 'Active' : 'Inactive'}</div>
+        </CardContent>
+      </Card>
       <Card className="bg-card/80 border-border">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle>Enrolled Students ({sortedEnrolledStudents.length})</CardTitle>
@@ -377,41 +378,39 @@ export default function ClassDetailPage() {
             )}
           </CardContent>
         </Card>
-        
-        {canEditClass && isEditOpen && editDialogData && (
-            <EditClassDialog 
-               classData={editDialogData} 
-               isOpen={isEditOpen}
-               onOpenChange={setIsEditOpen} 
-               onClassUpdated={handleClassUpdated}
-            />
-        )}
-
-        {/* --- Remove Student Confirmation Dialog --- */} 
-        <AlertDialog open={isRemoveConfirmOpen} onOpenChange={setIsRemoveConfirmOpen}>
-            <AlertDialogContent>
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                        This action will remove the student 
-                        <strong>{removingStudent?.name || removingStudent?.id}</strong> 
-                        from this class. They will need to be added again manually if this was a mistake.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isRemovingStudent}>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={performRemoveStudent}
-                        disabled={isRemovingStudent}
-                        className="bg-destructive hover:bg-destructive/90"
-                    >
-                        {isRemovingStudent ? <LoadingSpinner size="sm" className="mr-2" /> : null}
-                        Confirm Remove
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
-        {/* --- End Remove Student Dialog --- */}
+      {canEditClass && isEditOpen && editDialogData && (
+          <EditClassDialog 
+             classData={editDialogData} 
+             isOpen={isEditOpen}
+             onOpenChange={setIsEditOpen} 
+             onClassUpdated={handleClassUpdated}
+          />
+      )}
+      {/* --- Remove Student Confirmation Dialog --- */}
+      <AlertDialog open={isRemoveConfirmOpen} onOpenChange={setIsRemoveConfirmOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      This action will remove the student 
+                      <strong>{removingStudent?.name || removingStudent?.id}</strong> 
+                      from this class. They will need to be added again manually if this was a mistake.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel disabled={isRemovingStudent}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                      onClick={performRemoveStudent}
+                      disabled={isRemovingStudent}
+                      className="bg-destructive hover:bg-destructive/90"
+                  >
+                      {isRemovingStudent ? <LoadingSpinner size="sm" className="mr-2" /> : null}
+                      Confirm Remove
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+      {/* --- End Remove Student Dialog --- */}
     </div>
   );
 } 

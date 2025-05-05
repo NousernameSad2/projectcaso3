@@ -129,7 +129,6 @@ export default function EquipmentCard({
           className={cn(!isAvailable && "cursor-not-allowed")} 
         />
       </div>
-
       {/* Remove Link and Div wrappers */}
       {/* Card content is now directly inside Card */}
       <CardHeader 
@@ -164,7 +163,6 @@ export default function EquipmentCard({
           Condition: {equipment.condition || 'N/A'}
         </p>
       </CardContent>
-
       {/* Keep CardFooter, remove ReservationModal, add View Details button */}
       <CardFooter className="p-4 pt-0 flex justify-end items-center mt-auto">
         {canViewDetails && (
@@ -174,7 +172,10 @@ export default function EquipmentCard({
             size="sm"
             onClick={stopPropagation} // Prevent card click when clicking button
           >
-            <Link href={`/equipment/${equipment.id}`} aria-label={`View details for ${equipment.name}`}>
+            <Link
+              href={`/equipment/${equipment.id}`}
+              aria-label={`View details for ${equipment.name}`}
+              legacyBehavior>
                <Eye className="mr-2 h-4 w-4" /> View Details
             </Link>
           </Button>

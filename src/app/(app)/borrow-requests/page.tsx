@@ -332,8 +332,7 @@ export default function BorrowRequestsPage() {
         <h1 className="text-2xl font-semibold text-white">Borrow Requests</h1>
         {/* Add filtering/action buttons here later */} 
       </div>
-
-      {/* --- ADD FILTER CONTROLS --- */} 
+      {/* --- ADD FILTER CONTROLS --- */}
       <div className="flex items-center justify-between py-4">
         <div className="flex items-center gap-2">
           <Input
@@ -372,29 +371,26 @@ export default function BorrowRequestsPage() {
                       return null;
                   }
                   return (
-                     <SelectItem key={status} value={status}>
-                       {status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, ' ')}
-                     </SelectItem>
+                    <SelectItem key={status} value={status}>
+                      {status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, ' ')}
+                    </SelectItem>
                   );
               })}
             </SelectContent>
           </Select>
         </div>
       </div>
-      {/* --- END FILTER CONTROLS --- */} 
-
+      {/* --- END FILTER CONTROLS --- */}
       {isLoading && (
         <div className="flex justify-center items-center py-10">
           <LoadingSpinner size="lg" />
         </div>
       )}
-
       {error && (
         <div className="text-center text-destructive py-10">
           <p>{error}</p>
         </div>
       )}
-
       {!isLoading && !error && (
          <DataTable 
             columns={columns} 
@@ -418,8 +414,7 @@ export default function BorrowRequestsPage() {
             }}
          />
       )}
-
-      {/* Render the Modal */} 
+      {/* Render the Modal */}
       <ConfirmReturnModal
          isOpen={isReturnModalOpen}
          onOpenChange={setIsReturnModalOpen} // Control open state

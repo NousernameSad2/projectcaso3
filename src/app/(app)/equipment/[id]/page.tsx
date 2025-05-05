@@ -663,7 +663,10 @@ export default function EquipmentDetailPage() {
   return (
     <TooltipProvider>
       <div className="container mx-auto px-4 py-8">
-        <Link href="/equipment" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6">
+        <Link
+          href="/equipment"
+          className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
+          legacyBehavior>
           <ArrowLeft className="h-4 w-4" />
           Back to Equipment List
         </Link>
@@ -699,7 +702,7 @@ export default function EquipmentDetailPage() {
               {/* Commented out the individual ReservationModal trigger above */}
               {canManage && (
                 <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                  <Link href={`/equipment/${id}/edit`}>
+                  <Link href={`/equipment/${id}/edit`} legacyBehavior>
                     <Edit className="h-4 w-4" /> Edit Equipment
                   </Link>
                 </Button>

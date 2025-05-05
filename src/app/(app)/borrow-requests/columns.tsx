@@ -167,7 +167,7 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
          <Badge variant={getStatusVariant(status)} className="capitalize">
            {status.toLowerCase().replace(/_/g, ' ')}
          </Badge>
-       )
+       );
     },
     filterFn: 'equals', // Enable basic status filtering later
   },
