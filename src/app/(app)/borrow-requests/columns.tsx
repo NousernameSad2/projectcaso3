@@ -1,7 +1,7 @@
 'use client'
 
-import { ColumnDef, RowData } from "@tanstack/react-table"
-import { Borrow, BorrowStatus, User, Equipment, Class } from "@prisma/client" // Import base types
+import { ColumnDef, RowData, TableMeta } from "@tanstack/react-table"
+import { Borrow, BorrowStatus, User, Equipment, Class, ReservationType } from "@prisma/client" // Import base types
 import { format } from 'date-fns'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button" // Import Button
@@ -15,6 +15,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu" // For actions menu
 import { toast } from "sonner"; // Add toast import
+import Link from "next/link";
+import { Checkbox } from "@/components/ui/checkbox"
 
 // Define the type here (moved from page.tsx)
 export type BorrowRequestAdminView = Borrow & {
@@ -22,6 +24,7 @@ export type BorrowRequestAdminView = Borrow & {
   borrower: Pick<User, 'id' | 'name' | 'email'>;
   equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId'>;
   class: Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'>;
+  reservationType?: ReservationType | null;
 };
 
 // Helper function to get badge variant based on status (can be expanded)
@@ -61,6 +64,11 @@ declare module '@tanstack/react-table' {
     confirmReturnGroupHandler?: (borrowGroupId: string | null | undefined) => Promise<void>
     // Add other handlers/state as needed
   }
+}
+
+// Defines the shape of the meta object passed to the table
+interface BorrowRequestAdminViewMeta extends TableMeta<BorrowRequestAdminView> {
+  // ... meta properties ...
 }
 
 export const columns: ColumnDef<BorrowRequestAdminView>[] = [
@@ -146,6 +154,22 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
     // Disable sorting/filtering on this complex object by default
     enableSorting: false,
     enableColumnFilter: false,
+  },
+  {
+    accessorKey: "reservationType",
+    header: "Purpose",
+    cell: ({ row }) => {
+       const type = row.original.reservationType;
+       return (
+         <Badge variant={getReservationTypeVariant(type)} className="capitalize text-xs whitespace-nowrap font-normal">
+           {formatReservationType(type)}
+         </Badge>
+       );
+    },
+    filterFn: (row, id, value) => { // Add basic filter function
+        return value.includes(row.original.reservationType)
+    },
+    enableSorting: false, // Disable sorting for now
   },
   {
     accessorKey: "borrowStatus",
@@ -276,7 +300,6 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator />
-            <DropdownMenuItem disabled>View Details</DropdownMenuItem> 
             
             {/* Group Actions */} 
             {isGroupRequest && <DropdownMenuSeparator />} 
@@ -358,3 +381,16 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
     enableHiding: false,
   },
 ] 
+
+// *** NEW: Helpers for Reservation Type Column ***
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    // Make sure the function handles potential null/undefined explicitly
+    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
+};
+
+// Make sure variant helper also handles null/undefined explicitly
+const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
+    if (!type) return 'secondary';
+    return type === 'IN_CLASS' ? 'success' : 'destructive';
+};

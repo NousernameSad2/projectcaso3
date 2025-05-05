@@ -13,10 +13,20 @@ import { createId } from '@paralleldrive/cuid2'; // Correct import for cuid2
 // GET: Fetch borrow records, optionally filtering by status
 export async function GET(req: NextRequest) {
     const session = await getServerSession(authOptions);
-    // Optional: Add role checks if needed for fetching all borrows
-    // if (!session?.user?.id || ![UserRole.STAFF, UserRole.FACULTY].includes(session.user.role as UserRole)) {
-    //     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
-    // }
+    // 1. Authentication Check (Moved up)
+    if (!session?.user?.id) {
+        return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
+    }
+    const userId = session.user.id;
+    const userRole = session.user.role as UserRole;
+
+    // 2. Check Authorization for this specific action (Fetching borrows)
+    // Allow Staff to see all, Faculty to see theirs, others forbidden
+    const allowedRoles: UserRole[] = [UserRole.STAFF, UserRole.FACULTY];
+    if (!allowedRoles.includes(userRole)) {
+        console.warn(`User ${userId} with role ${userRole} attempted to fetch dashboard borrows.`);
+        return NextResponse.json({ message: 'Forbidden: Insufficient permissions.' }, { status: 403 });
+    }
 
     const url = new URL(req.url);
     const statusParams = url.searchParams.getAll('status');
@@ -37,11 +47,25 @@ export async function GET(req: NextRequest) {
         });
         // --- END: Update Overdue Status --- 
 
-        // Fetch borrows based on the original filter
+        // --- START: Build Prisma Where Clause with Role-Based Filtering ---
+        let whereClause: Prisma.BorrowWhereInput = {};
+
+        if (statusFilter) {
+            whereClause.borrowStatus = { in: statusFilter };
+        }
+
+        // *** NEW: Add FIC filtering for FACULTY role ***
+        if (userRole === UserRole.FACULTY) {
+            whereClause.class = {
+                ficId: userId // Only show borrows where the class's ficId matches the faculty's ID
+            };
+        }
+        // STAFF sees all borrows matching the status filter (no additional class filter needed)
+        // --- END: Build Prisma Where Clause ---
+
+        // Fetch borrows using the constructed where clause
         const borrows = await prisma.borrow.findMany({
-            where: {
-                borrowStatus: statusFilter ? { in: statusFilter } : undefined, // Apply filter if defined
-            },
+            where: whereClause, // Apply the role-based where clause
             include: {
                 equipment: { 
                     select: { id: true, name: true, equipmentId: true, images: true, status: true }
@@ -50,8 +74,11 @@ export async function GET(req: NextRequest) {
                     select: { id: true, name: true, email: true }
                 },
                  // Include class/fic details if needed by the dashboard
-                 class: { select: { courseCode: true, section: true, academicYear: true } },
-                 fic: { select: { name: true } }
+                 class: { 
+                    select: { courseCode: true, section: true, academicYear: true, ficId: true } // Ensure ficId is selected
+                 },
+                 // Remove fic include here as we filter by class.ficId
+                 // fic: { select: { name: true } } 
             },
             orderBy: {
                 // Order appropriately for different views

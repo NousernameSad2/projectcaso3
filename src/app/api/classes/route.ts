@@ -24,6 +24,18 @@ export async function GET(req: NextRequest) {
   
   const { userId, role } = payload;
 
+  // *** NEW: Get isActive filter from query params ***
+  const url = new URL(req.url);
+  const isActiveParam = url.searchParams.get('isActive'); // 'true', 'false', or null
+  let isActiveFilter: boolean | undefined = undefined;
+  if (isActiveParam === 'true') {
+    isActiveFilter = true;
+  } else if (isActiveParam === 'false') {
+    isActiveFilter = false;
+  }
+  // If null or any other value, isActiveFilter remains undefined (fetch all)
+  // *** END NEW ***
+
   try {
     let classes;
     const commonInclude = { // Define common includes to avoid repetition
@@ -50,20 +62,31 @@ export async function GET(req: NextRequest) {
       { section: Prisma.SortOrder.asc },
     ];
 
+    // --- START: Build Where Clause --- 
+    let whereClause: Prisma.ClassWhereInput = {};
+
+    // Apply isActive filter if provided
+    if (isActiveFilter !== undefined) {
+      whereClause.isActive = isActiveFilter;
+    }
+    // --- END: Build Where Clause --- 
+
     if (role === UserRole.REGULAR) {
       // Students: Fetch only classes they are enrolled in
-      console.log(`Fetching enrolled classes for REGULAR user ${userId}`);
+      // Apply isActive filter to the nested class within enrollment
+      console.log(`Fetching enrolled classes for REGULAR user ${userId} (isActive: ${isActiveParam ?? 'all'})`);
       const enrollments = await prisma.userClassEnrollment.findMany({
-        where: { userId: userId },
+        where: { 
+          userId: userId,
+          // *** NEW: Filter based on class isActive status ***
+          class: isActiveFilter !== undefined ? { isActive: isActiveFilter } : undefined,
+        },
         select: {
-          class: { // Select the nested class details
-            include: commonInclude, // Reuse common includes
+          class: { 
+            include: commonInclude,
           },
         },
-        // We might need to order the enrollments if we want ordered classes
-        // Order by class details within the enrollment?
       });
-      // Extract the class data from enrollments and filter out any nulls
       classes = enrollments.map(enrollment => enrollment.class).filter(Boolean);
       
       // Manual sort for student view
@@ -78,14 +101,27 @@ export async function GET(req: NextRequest) {
           return (a!.section || '').localeCompare(b!.section || '');
       });
 
-    } else { 
-      // Staff/Faculty: Fetch all classes
-      console.log(`Fetching all classes for ${role} user ${userId}`);
-      classes = await prisma.class.findMany({
-        where: {},
-        include: commonInclude,
-        orderBy: commonOrderBy, // Use reverted orderBy
-      });
+    } else if (role === UserRole.FACULTY) { 
+        // Faculty: Fetch ONLY their assigned classes
+        whereClause.ficId = userId; // Add FIC filter
+        console.log(`Fetching assigned classes for FACULTY user ${userId} (isActive: ${isActiveParam ?? 'all'})`);
+        classes = await prisma.class.findMany({
+            where: whereClause, // Apply combined where clause
+            include: commonInclude,
+            orderBy: commonOrderBy,
+        });
+    } else if (role === UserRole.STAFF) { 
+        // Staff: Fetches ALL classes (respecting isActive filter)
+        console.log(`Fetching ALL classes for STAFF user ${userId} (isActive: ${isActiveParam ?? 'all'})`);
+        classes = await prisma.class.findMany({
+            where: whereClause, // Apply isActive filter
+            include: commonInclude,
+            orderBy: commonOrderBy,
+        });
+    } else {
+        // Should not happen based on verifyAuthAndGetPayload, but good practice
+        console.warn(`User ${userId} has unexpected role ${role} trying to fetch classes.`);
+        return NextResponse.json({ message: 'Forbidden: Invalid role.' }, { status: 403 });
     }
 
     return NextResponse.json(classes);

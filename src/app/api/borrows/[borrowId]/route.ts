@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { BorrowStatus, UserRole, Prisma } from '@prisma/client';
+import { BorrowStatus, UserRole, Prisma, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/app/api/auth/[...nextauth]/route";
 
@@ -104,14 +104,24 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
                   
                   const updateResult = await tx.borrow.update({
                       where: { id: borrowId },
-            data: {
-                borrowStatus: newStatus,
+                      data: {
+                          borrowStatus: newStatus,
                           approvedStartTime: approvedStartTime,
                           approvedEndTime: approvedEndTime,
                           approvedByFicId: newStatus === BorrowStatus.APPROVED && actorRole === UserRole.FACULTY ? actorId : undefined,
                           approvedByStaffId: newStatus === BorrowStatus.APPROVED && actorRole === UserRole.STAFF ? actorId : undefined,
                       },
                   });
+
+                  // *** NEW: Update Equipment Status on Approval ***
+                  if (newStatus === BorrowStatus.APPROVED) {
+                      await tx.equipment.update({
+                          where: { id: borrowToUpdate.equipmentId }, // Use equipmentId from fetched borrow
+                          data: { status: EquipmentStatus.RESERVED }, // Set to RESERVED
+                      });
+                       console.log(`[API PATCH /borrows/${borrowId}] Updated equipment ${borrowToUpdate.equipmentId} status to RESERVED.`);
+                  }
+                  // *** END NEW ***
 
                   let rejCount = 0;
                   if (newStatus === BorrowStatus.APPROVED && approvedStartTime && approvedEndTime) {

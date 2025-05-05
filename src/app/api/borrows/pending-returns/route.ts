@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { BorrowStatus, UserRole, DeficiencyStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { Prisma } from '@prisma/client';
 
 // GET: Fetch borrow records with PENDING_RETURN status for Staff/Faculty dashboard
 export async function GET(req: NextRequest) {
@@ -12,6 +13,7 @@ export async function GET(req: NextRequest) {
     if (!session?.user?.id) {
         return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
+    const userId = session.user.id;
     const userRole = session.user.role as UserRole;
     const allowedRoles: UserRole[] = [UserRole.STAFF, UserRole.FACULTY]; // Add ADMIN later if needed
 
@@ -20,11 +22,23 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        // 2. Fetch borrow records with PENDING_RETURN status
+        // --- START: Build Prisma Where Clause with Role-Based Filtering ---
+        let whereClause: Prisma.BorrowWhereInput = {
+            borrowStatus: BorrowStatus.PENDING_RETURN, // Base filter
+        };
+
+        // *** NEW: Add FIC filtering for FACULTY role ***
+        if (userRole === UserRole.FACULTY) {
+            whereClause.class = {
+                ficId: userId // Only show borrows where the class's ficId matches the faculty's ID
+            };
+        }
+        // STAFF sees all pending returns
+        // --- END: Build Prisma Where Clause ---
+
+        // 2. Fetch borrow records using the constructed where clause
         const pendingReturns = await prisma.borrow.findMany({
-            where: {
-                borrowStatus: BorrowStatus.PENDING_RETURN,
-            },
+            where: whereClause, // Apply the role-based where clause
             // Use include to get all scalar Borrow fields + specified relations
             include: {
                 equipment: { 

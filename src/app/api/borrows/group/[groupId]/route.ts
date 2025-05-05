@@ -38,20 +38,33 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
             where: {
                 borrowGroupId: groupId,
             },
-            include: {
+            select: {
+                id: true,
+                borrowGroupId: true,
+                borrowerId: true,
+                equipmentId: true,
+                classId: true,
+                requestedStartTime: true,
+                requestedEndTime: true,
+                approvedStartTime: true,
+                approvedEndTime: true,
+                checkoutTime: true,
+                actualReturnTime: true,
+                borrowStatus: true,
+                requestSubmissionTime: true,
+                reservationType: true,
                 equipment: {
                     select: { id: true, name: true, equipmentId: true, images: true }
                 },
                 borrower: {
                     select: { id: true, name: true, email: true }
                 },
-                // Add other relations if needed on the detail page
-                class: { // Include class for context if available
+                class: { 
                   select: { courseCode: true, section: true, semester: true, academicYear: true }
                 }
             },
             orderBy: {
-                requestSubmissionTime: 'asc', // Or by equipment name?
+                requestSubmissionTime: 'asc',
             },
         });
 

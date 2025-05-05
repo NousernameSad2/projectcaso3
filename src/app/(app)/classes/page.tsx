@@ -12,10 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from 'sonner';
 import AddClassDialog from '@/components/classes/AddClassDialog';
 import Link from 'next/link';
-import { Trash2, Edit } from 'lucide-react';
+import { Trash2, Edit, PlusCircle } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -80,6 +81,9 @@ export default function ClassesPage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingClassData, setEditingClassData] = useState<EditDialogClassData | null>(null);
 
+  // State for filter
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
+
   // Log user session details
   console.log("[ClassesPage] User Session:", JSON.stringify(user));
   console.log("[ClassesPage] Session Status:", sessionStatus);
@@ -89,22 +93,33 @@ export default function ClassesPage() {
   console.log("[ClassesPage] Calculated canManageClasses:", canManageClasses);
 
   // Extracted fetch function
-  const fetchClasses = async () => {
-      // If session is still loading or no token, wait.
-      if (sessionStatus === 'loading' || !token) {
+  const fetchClasses = async (statusFilter: 'all' | 'active' | 'inactive') => {
+      if (sessionStatus !== 'authenticated' || !token) {
           console.log("[fetchClasses] Waiting for session or token...");
-          // Optionally set loading true if not already set by effect
-          // setIsFetchingData(true);
-          return; 
+          // Don't fetch if not authenticated
+          setIsFetchingData(false); 
+          setClasses([]); 
+          return;
       }
       
-      console.log("[fetchClasses] Token found, attempting fetch...");
+      console.log(`[fetchClasses] Token found, attempting fetch with filter: ${statusFilter}...`);
       setIsFetchingData(true);
       setError(null);
-      let response: Response | null = null; // Keep track of response
+      let response: Response | null = null; 
+      
+      // --- Build API URL with filter ---
+      let apiUrl = '/api/classes';
+      if (statusFilter === 'active') {
+        apiUrl += '?isActive=true';
+      } else if (statusFilter === 'inactive') {
+        apiUrl += '?isActive=false';
+      }
+      // 'all' doesn't add a query parameter
+      // --- End Build API URL ---
+      
       try {
-        console.log("Fetching classes using NextAuth token...");
-        response = await fetch('/api/classes', {
+        console.log(`Fetching classes from: ${apiUrl}`);
+        response = await fetch(apiUrl, { // Use dynamic URL
           headers: { Authorization: `Bearer ${token}` },
         });
         
@@ -144,25 +159,23 @@ export default function ClassesPage() {
       }
     };
 
-  // Effect for initial data fetching
+  // Effect for initial data fetching and when filter changes
   useEffect(() => {
+    // Only fetch if authenticated
     if (sessionStatus === 'authenticated') {
-        // Token might still be null briefly after status becomes authenticated
-        // fetchClasses will handle the !token case inside
-        fetchClasses();
+      fetchClasses(filterStatus); 
     } else if (sessionStatus === 'unauthenticated') {
       setIsFetchingData(false);
       // Don't set error here, let potential redirects handle it
       // setError('Authentication required to view classes.');
       setClasses([]); // Clear classes if unauthenticated
     }
-    // Dependency array: run when session status changes
-  }, [sessionStatus]); // Remove token from dependency array, rely on check inside fetchClasses
+    // Dependency array: run when session status or filterStatus changes
+  }, [sessionStatus, filterStatus]); // Add filterStatus dependency
 
-  const handleClassAdded = (/* newClass: ClassData */) => { // Parameter no longer needed
-    // Instead of adding locally, refetch the list to get complete data
-    console.log("[handleClassAdded] New class added, refetching list...");
-    fetchClasses();
+  const handleClassAdded = () => {
+    console.log("[handleClassAdded] New class added, refetching list with current filter...");
+    fetchClasses(filterStatus); // Refetch with current filter
   };
 
   const handleDeleteClass = async (classId: string, classIdentifier: string) => {
@@ -215,12 +228,10 @@ export default function ClassesPage() {
 
   // Update handler: Close dialog and re-fetch class list
   const handleClassUpdated = () => {
-     console.log("Edit successful, closing dialog and re-fetching classes...");
+     console.log("Edit successful, closing dialog and re-fetching classes with current filter...");
      setIsEditDialogOpen(false); 
      setEditingClassData(null); 
-     // Re-fetch data to show updates
-     fetchClasses(); 
-     // Toast message is likely handled within EditClassDialog
+     fetchClasses(filterStatus); // Refetch with current filter
   };
 
   const isLoading = sessionStatus === 'loading' || isFetchingData;
@@ -243,12 +254,24 @@ export default function ClassesPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-white">Classes</h1>
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
+        <h1 className="text-3xl font-bold text-white">Manage Classes</h1>
         {canManageClasses && (
           <AddClassDialog onClassAdded={handleClassAdded} />
         )}
       </div>
+
+      <Tabs 
+        value={filterStatus} 
+        onValueChange={(value: string) => setFilterStatus(value as 'all' | 'active' | 'inactive')}
+        className="mb-6"
+      >
+        <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
+          <TabsTrigger value="all">All Classes</TabsTrigger>
+          <TabsTrigger value="active">Active</TabsTrigger>
+          <TabsTrigger value="inactive">Inactive</TabsTrigger>
+        </TabsList>
+      </Tabs>
 
       <div className="border rounded-md overflow-hidden bg-card">
         <Table>
@@ -260,14 +283,15 @@ export default function ClassesPage() {
               <TableHead>Academic Year</TableHead>
               <TableHead>Faculty</TableHead>
               <TableHead>Students</TableHead>
+              <TableHead>Status</TableHead>
               <TableHead className="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {classes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                  No classes found.
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                  No classes found matching the current filter.
                 </TableCell>
               </TableRow>
             ) : (
@@ -286,6 +310,15 @@ export default function ClassesPage() {
                     <TableCell>{cls.academicYear}</TableCell>
                     <TableCell>{cls.fic?.name ?? cls.fic?.email ?? 'N/A'}</TableCell>
                     <TableCell>{cls._count.enrollments}</TableCell>
+                    <TableCell>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          cls.isActive 
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
+                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                      }`}>
+                          {cls.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </TableCell>
                     <TableCell className="text-right">
                       <Button variant="outline" size="sm" className="mr-2" asChild>
                         <Link href={`/classes/${cls.id}`}>View</Link>

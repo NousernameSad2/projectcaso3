@@ -303,8 +303,11 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                 const groupItems = groupedBorrowHistory[groupId];
                 const representativeItem = groupItems[0];
                 return (
-                <Link href={`/borrows/group/${groupId}`} key={groupId} passHref legacyBehavior>
-                  <a className="block hover:bg-muted/10 transition-colors rounded-lg"> {/* Added wrapper 'a' tag */}
+                <Link 
+                    href={`/borrows/group/${groupId}`} 
+                    key={groupId} 
+                    className="block hover:bg-muted/10 transition-colors rounded-lg"
+                >
                     <Card className="overflow-hidden bg-card/60 border">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-base">
@@ -342,7 +345,6 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                             </ul>
                         </CardContent>
                     </Card>
-                  </a>
                 </Link>
                 );
             })}

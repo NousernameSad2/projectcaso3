@@ -28,7 +28,8 @@ import {
   LogIn,
   Building2,
   BookUser,
-  Menu
+  Menu,
+  ScrollText
 } from 'lucide-react';
 
 // Define all possible nav items
@@ -43,6 +44,14 @@ const allNavItems = [
 ];
 
 const profileNavItem = { href: '/profile', label: 'My Profile', icon: UserCircle };
+
+// *** NEW: Define Borrow Requests Nav Item ***
+const borrowRequestsNavItem = { 
+    href: '/borrow-requests', 
+    label: 'Borrow Requests', 
+    icon: ScrollText, 
+    adminOnly: true // Reuse adminOnly logic for STAFF/FACULTY visibility
+};
 
 export default function Header() {
     const { data: session, status } = useSession();
@@ -66,9 +75,11 @@ export default function Header() {
 
     // Filter nav items based on role
     const accessibleNavItems = allNavItems.filter(item => {
-        // Show item if it's not adminOnly OR if the user is privileged
         return !item.adminOnly || isPrivilegedUser;
     });
+
+    // *** NEW: Determine if borrow requests link should be shown ***
+    const showBorrowRequestsLink = isPrivilegedUser;
 
     // Handle loading state (optional, show minimal header or loading indicator)
     if (isLoading) {
@@ -76,13 +87,11 @@ export default function Header() {
             <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
                     {/* Logo and Title */}
-                    <Link href="/" className="mr-6 flex items-center space-x-2" legacyBehavior>
-                        <a>
-                            <Building2 className="h-6 w-6 text-primary" />
-                            <span className="font-bold sm:inline-block">
-                                E-Bridge
-                            </span>
-                        </a>
+                    <Link href="/" className="mr-6 flex items-center space-x-2">
+                        <Building2 className="h-6 w-6 text-primary" />
+                        <span className="font-bold sm:inline-block">
+                            E-Bridge
+                        </span>
                     </Link>
                     <div className="flex items-center space-x-4">
                         {/* Placeholder or spinner could go here */}
@@ -99,13 +108,11 @@ export default function Header() {
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
                 {/* Logo and Title */}
-                <Link href="/" className="mr-6 flex items-center space-x-2" legacyBehavior>
-                    <a>
-                        <Building2 className="h-6 w-6 text-primary" />
-                        <span className="font-bold sm:inline-block">
-                            E-Bridge
-                        </span>
-                    </a>
+                <Link href="/" className="mr-6 flex items-center space-x-2">
+                    <Building2 className="h-6 w-6 text-primary" />
+                    <span className="font-bold sm:inline-block">
+                        E-Bridge
+                    </span>
                 </Link>
 
                 {/* Centered Navigation Links (Desktop) - Already hidden on small screens */}
@@ -121,7 +128,7 @@ export default function Header() {
                                     "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
                                     isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                                 )}
-                                legacyBehavior>
+                                >
                                 <Icon className="h-4 w-4" />
                                 <span>{item.label}</span>
                             </Link>
@@ -135,6 +142,22 @@ export default function Header() {
                     <div className="hidden md:flex items-center space-x-4">
                         {isAuthenticated ? (
                             <>
+                                {/* Borrow Requests Link (Desktop) - Icon Only */}
+                                {showBorrowRequestsLink && (
+                                    <Link
+                                        href={borrowRequestsNavItem.href}
+                                        className={cn(
+                                            "flex items-center justify-center rounded-md h-9 w-9 text-sm font-medium transition-colors",
+                                            pathname === borrowRequestsNavItem.href
+                                                ? "bg-primary/10 text-primary"
+                                                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                                        )}
+                                        title={borrowRequestsNavItem.label}
+                                        >
+                                        <borrowRequestsNavItem.icon className="h-5 w-5" />
+                                        <span className="sr-only">{borrowRequestsNavItem.label}</span>
+                                    </Link>
+                                )}
                                 {/* Profile Link */}
                                 <Link
                                     href={profileNavItem.href}
@@ -144,7 +167,7 @@ export default function Header() {
                                             ? "bg-primary/10 text-primary"
                                             : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                                     )}
-                                    legacyBehavior>
+                                    >
                                     <profileNavItem.icon className="h-4 w-4" />
                                     <span>{profileNavItem.label}</span>
                                 </Link>
@@ -163,7 +186,7 @@ export default function Header() {
                         ) : (
                             /* Login Button */
                             (<Button asChild variant="outline" size="sm">
-                                <Link href="/login" className="flex items-center space-x-2" legacyBehavior>
+                                <Link href="/login" className="flex items-center space-x-2">
                                     <LogIn className="h-4 w-4" />
                                     <span>Login</span>
                                 </Link>
@@ -203,13 +226,31 @@ export default function Header() {
                                                 )}
                                                 // Close sheet on click
                                                 onClick={closeSheet}
-                                                legacyBehavior>
+                                                >
                                                 <Icon className="h-5 w-5" />
                                                 <span>{item.label}</span>
                                             </Link>
                                         </SheetClose>
                                     );
                                 })}
+                                 {/* *** NEW: Add Borrow Requests Link (Mobile) *** */}
+                                {showBorrowRequestsLink && (
+                                    <SheetClose asChild>
+                                        <Link
+                                            href={borrowRequestsNavItem.href}
+                                            className={cn(
+                                                "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
+                                                pathname === borrowRequestsNavItem.href 
+                                                    ? "bg-primary/10 text-primary" 
+                                                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                            )}
+                                            onClick={closeSheet}
+                                            >
+                                            <borrowRequestsNavItem.icon className="h-5 w-5" />
+                                            <span>{borrowRequestsNavItem.label}</span>
+                                        </Link>
+                                    </SheetClose>
+                                )}
                                  {/* Mobile Profile/Logout/Login */} 
                                 {isAuthenticated ? (
                                     <>
@@ -221,7 +262,7 @@ export default function Header() {
                                                      pathname === profileNavItem.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
                                                 )}
                                                 onClick={closeSheet}
-                                                legacyBehavior>
+                                                >
                                                 <profileNavItem.icon className="h-5 w-5" />
                                                 <span>{profileNavItem.label}</span>
                                             </Link>
@@ -241,7 +282,7 @@ export default function Header() {
                                              href="/login"
                                              className="flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
                                              onClick={closeSheet}
-                                             legacyBehavior>
+                                             >
                                              <LogIn className="h-5 w-5" />
                                             <span>Login</span>
                                         </Link>

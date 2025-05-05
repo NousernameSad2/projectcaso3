@@ -24,6 +24,7 @@ export async function POST(req: NextRequest, { params: { id: classId } }: RouteC
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can enroll students.' }, { status: 403 });
   }
+  const { userId: actorUserId, role: actorRole } = payload;
 
   if (!classId) {
       return NextResponse.json({ message: 'Class ID missing from URL path' }, { status: 400 });
@@ -44,14 +45,35 @@ export async function POST(req: NextRequest, { params: { id: classId } }: RouteC
   const { userIds } = validatedData;
 
   try {
-    // 3. Check if class exists
-    const targetClass = await prisma.class.findUnique({
-      where: { id: classId }, // Use destructured classId
-      select: { id: true }, // Only need to check existence
-    });
+    // *** NEW: Authorization Check for FACULTY ***
+    let targetClassFicId: string | null = null; // Store FIC ID for logging/checking
+    if (actorRole === UserRole.FACULTY) {
+      const currentClass = await prisma.class.findUnique({ 
+        where: { id: classId }, 
+        select: { ficId: true }
+      });
+      if (!currentClass) {
+         // Handled below, but good check
+         return NextResponse.json({ message: `Class with ID ${classId} not found.` }, { status: 404 });
+      }
+      if (currentClass.ficId !== actorUserId) {
+         console.warn(`Faculty ${actorUserId} attempted to bulk enroll in class ${classId} not assigned to them (FIC: ${currentClass.ficId})`);
+         return NextResponse.json({ message: 'Forbidden: You can only enroll students in classes you are assigned to.' }, { status: 403 });
+      }
+      targetClassFicId = currentClass.ficId; // Store for later use
+    }
+    // *** END NEW: Authorization Check ***
 
-    if (!targetClass) {
-      return NextResponse.json({ message: `Class with ID ${classId} not found.` }, { status: 404 });
+    // 3. Check if class exists (already done in Auth check for faculty, but keep for staff)
+    if (!targetClassFicId) { // Only check again if we didn't fetch it during auth
+        const targetClass = await prisma.class.findUnique({
+          where: { id: classId },
+          select: { id: true, ficId: true }, // Select ficId here too if needed later
+        });
+        if (!targetClass) {
+          return NextResponse.json({ message: `Class with ID ${classId} not found.` }, { status: 404 });
+        }
+        // Optional: Store targetClass.ficId if needed
     }
 
     // 4. Check if all provided student IDs exist and are REGULAR users

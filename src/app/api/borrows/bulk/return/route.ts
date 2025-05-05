@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, BorrowStatus, UserRole } from '@prisma/client';
+import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
 import { z } from 'zod';
@@ -81,7 +81,7 @@ export async function POST(request: Request) {
        result = await prisma.$transaction(async (tx) => {
            const borrowToReturn = await tx.borrow.findUnique({
                where: { id: borrowId, borrowStatus: BorrowStatus.PENDING_RETURN },
-               select: { id: true }
+               select: { id: true, equipmentId: true }
            });
 
            if (!borrowToReturn) {
@@ -89,11 +89,36 @@ export async function POST(request: Request) {
                if (!exists) throw new Error(`Borrow record ${borrowId} not found.`);
                throw new Error(`Borrow record ${borrowId} is not pending return (Status: ${exists.borrowStatus}).`);
            }
+           const equipmentId = borrowToReturn.equipmentId;
 
            await tx.borrow.update({
               where: { id: borrowId },
               data: updateData, // Use pre-defined updateData
            });
+           console.log(`[API /borrows/bulk/return - Single ${borrowId}] Borrow status updated.`);
+
+           // *** NEW: Update Equipment Status (Single Item) ***
+           const equipment = await tx.equipment.findUnique({ where: { id: equipmentId }, select: { stockCount: true, status: true }});
+           if (!equipment) throw new Error(`Equipment ${equipmentId} not found during return confirmation.`);
+
+           const activeBorrowsCount = await tx.borrow.count({
+               where: {
+                   equipmentId: equipmentId,
+                   id: { not: borrowId }, // Exclude the one just returned
+                   borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.PENDING, BorrowStatus.APPROVED] },
+               },
+           });
+           console.log(`[API /borrows/bulk/return TX - Single ${borrowId}] Active count: ${activeBorrowsCount}, Stock: ${equipment.stockCount}`);
+
+           if (activeBorrowsCount < equipment.stockCount && equipment.status === EquipmentStatus.BORROWED) {
+                console.log(`[API /borrows/bulk/return TX - Single ${borrowId}] Updating Equipment ${equipmentId} to AVAILABLE.`);
+                await tx.equipment.update({
+                    where: { id: equipmentId },
+                    data: { status: EquipmentStatus.AVAILABLE },
+                });
+           }
+           // *** END NEW ***
+
            console.log(`[API /borrows/bulk/return - Single ${borrowId}] Transaction complete.`);
            return { count: 1 }; // Return count consistent with bulk
        });
@@ -118,7 +143,7 @@ export async function POST(request: Request) {
                borrowGroupId: borrowGroupId,
                borrowStatus: BorrowStatus.PENDING_RETURN,
              },
-             select: { id: true }, 
+             select: { id: true, equipmentId: true },
            });
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Found ${itemsToReturn.length} items pending return:`, itemsToReturn.map(i => i.id));
 
@@ -137,28 +162,52 @@ export async function POST(request: Request) {
              }
            }
 
-           // 3. Get the IDs of the items to update
+           // 3. Get the IDs of the items and unique equipment IDs
            const itemIdsToUpdate = itemsToReturn.map(item => item.id);
+           const uniqueEquipmentIds = Array.from(new Set(itemsToReturn.map(item => item.equipmentId)));
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] IDs to update:`, itemIdsToUpdate);
+           console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Unique Equipment IDs:`, uniqueEquipmentIds);
 
-           // 4. Perform the update using the specific IDs
-            // --- START: Before updateMany Log ---
-           console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Attempting updateMany for IDs: ${itemIdsToUpdate.join(', ')}...`);
-           // --- END: Before updateMany Log ---
+           // 4. Perform the borrow status update 
+           console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Attempting borrow updateMany for IDs: ${itemIdsToUpdate.join(', ')}...`);
            const updateResult = await tx.borrow.updateMany({
              where: {
                id: { in: itemIdsToUpdate }, 
              },
-             data: {
-               // Reverted diagnostic change
-               borrowStatus: BorrowStatus.RETURNED, 
-               actualReturnTime: returnTimestamp, // Re-enabled timestamp update
-               approvedByStaffId: user.id, 
-             },
+             data: updateData, // Use pre-defined updateData
            });
-           console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] updateMany result (full update):`, updateResult); // Updated log message
+           console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] updateMany result:`, updateResult);
+           
+           // 5. *** NEW: Update Equipment Statuses (Bulk) ***
+           console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Updating equipment statuses...`);
+           for (const equipmentId of uniqueEquipmentIds) {
+               const equipment = await tx.equipment.findUnique({ where: { id: equipmentId }, select: { stockCount: true, status: true }});
+               if (!equipment) {
+                   console.warn(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Equipment ${equipmentId} not found during status update. Skipping.`);
+                   continue; // Skip to next equipment if not found
+               }
+
+               const activeBorrowsCount = await tx.borrow.count({
+                   where: {
+                       equipmentId: equipmentId,
+                       id: { notIn: itemIdsToUpdate }, // Exclude items just returned in this bulk op
+                       borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.PENDING, BorrowStatus.APPROVED] },
+                   },
+               });
+               console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] Active count: ${activeBorrowsCount}, Stock: ${equipment.stockCount}`);
+
+               if (activeBorrowsCount < equipment.stockCount && equipment.status === EquipmentStatus.BORROWED) {
+                   console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] Updating Equipment to AVAILABLE.`);
+                   await tx.equipment.update({
+                       where: { id: equipmentId },
+                       data: { status: EquipmentStatus.AVAILABLE },
+                   });
+               }
+           }
+           // *** END NEW ***
+
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Transaction complete.`);
-           return updateResult; // Return the result of updateMany
+           return updateResult; // Return the result of borrow updateMany
         }); // End Transaction
         console.log(`[API /borrows/bulk/return - Group ${borrowGroupId}] Transaction block finished.`);
 

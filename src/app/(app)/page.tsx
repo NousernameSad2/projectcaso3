@@ -39,6 +39,7 @@ import {
     User,
     Prisma // Import Prisma namespace
 } from '@prisma/client'; 
+import { ReservationType } from '@prisma/client'; // <<< Import ReservationType
 import { format, isValid, differenceInHours } from 'date-fns'; // For date formatting and isValid
 import { toast } from 'sonner'; // Import toast
 import { cn } from '@/lib/utils'; // Added
@@ -137,6 +138,12 @@ const formatDateSafe = (dateInput: string | Date | null | undefined, formatStrin
   if (!dateInput) return 'N/A';
   const date = new Date(dateInput);
   return isValid(date) ? format(date, formatString) : 'Invalid Date';
+};
+
+// <<< ADDED: Helper function to format reservation type >>>
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
 };
 
 // Placeholder Panel Component (Can be moved to separate file later)
@@ -622,7 +629,7 @@ function StaffActionPanel() {
                           href={href}
                           key={groupId}
                           className="block hover:bg-muted/10 transition-colors rounded-lg"
-                          legacyBehavior>
+                          >
                           <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup ? 'opacity-50' : ''}`}>
                               <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                   <div>
@@ -637,6 +644,13 @@ function StaffActionPanel() {
                                               </Badge>
                                           )}
                                           {/* --- END: Render Request Timing Badge --- */}
+                                          {/* --- START: Render Reservation Type Badge --- */}
+                                          {representativeItem.reservationType && (
+                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="ml-2 text-xs font-normal">
+                                                  {formatReservationType(representativeItem.reservationType)}
+                                              </Badge>
+                                          )}
+                                          {/* --- END: Render Reservation Type Badge --- */}
                                       </CardTitle>
                                       <CardDescription className="text-xs mt-1">
                                           Requested: {formatDateSafe(representativeItem.requestSubmissionTime, 'MMM d, yyyy h:mm a')}
@@ -742,7 +756,7 @@ function StaffActionPanel() {
                               href={href}
                               key={groupId}
                               className="block hover:bg-muted/10 transition-colors rounded-lg"
-                              legacyBehavior>
+                              >
                               <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup || isRejectingThisApprovedGroup ? 'opacity-50' : ''}`}>
                                   <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                       <div>
@@ -754,6 +768,13 @@ function StaffActionPanel() {
                                           <CardDescription className="text-xs mt-1">
                                               Approved: {formatDateSafe(representativeItem.updatedAt, 'MMM d, yyyy h:mm a')}
                                           </CardDescription>
+                                          {/* --- START: Render Reservation Type Badge (Approved) --- */}
+                                          {representativeItem.reservationType && (
+                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs font-normal">
+                                                  {formatReservationType(representativeItem.reservationType)}
+                                              </Badge>
+                                          )}
+                                          {/* --- END: Render Reservation Type Badge (Approved) --- */}
                                       </div>
                                       {/* Group Actions */}
                                       {!isIndividual && (
@@ -855,7 +876,7 @@ function StaffActionPanel() {
                                    href={href}
                                    key={groupId}
                                    className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                                   legacyBehavior>
+                                   >
                                    <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors overflow-hidden">
                                        <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                            <div className="flex justify-between items-center gap-2">
@@ -866,6 +887,13 @@ function StaffActionPanel() {
                                                    <p className="text-xs text-muted-foreground">
                                                        Borrowed by: {representativeItem.borrower.name || representativeItem.borrower.email}
                                                    </p>
+                                                   {/* --- START: Render Reservation Type Badge (Returns) --- */}
+                                                   {representativeItem.reservationType && (
+                                                       <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs font-normal">
+                                                           {formatReservationType(representativeItem.reservationType)}
+                                                       </Badge>
+                                                   )}
+                                                   {/* --- END: Render Reservation Type Badge (Returns) --- */}
                                                    <p className="text-xs text-muted-foreground mt-1">
                                                        Checked out: {formatDateSafe(representativeItem.checkoutTime)}
                                                    </p>
@@ -965,7 +993,7 @@ function StaffActionPanel() {
                               href={href}
                               key={groupId}
                               className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                              legacyBehavior>
+                              >
                               <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors">
                                   <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                       <div className="flex justify-between items-center gap-2">
@@ -976,6 +1004,13 @@ function StaffActionPanel() {
                                               <p className="text-xs text-muted-foreground">
                                                   Borrowed by: {representativeItem.borrower.name || representativeItem.borrower.email}
                                               </p>
+                                               {/* --- START: Render Reservation Type Badge (Active) --- */}
+                                               {representativeItem.reservationType && (
+                                                   <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs font-normal">
+                                                       {formatReservationType(representativeItem.reservationType)}
+                                                   </Badge>
+                                               )}
+                                               {/* --- END: Render Reservation Type Badge (Active) --- */}
                                                <p className="text-xs text-muted-foreground mt-1">
                                                   Checked out: {formatDateSafe(representativeItem.checkoutTime)}
                                                </p>
@@ -1169,7 +1204,7 @@ export default function DashboardPage() {
               )}
             </div>
             <Button asChild size="lg">
-               <Link href="/equipment" className="flex items-center gap-2" legacyBehavior>
+               <Link href="/equipment" className="flex items-center gap-2" >
                  <PlusCircle className="h-5 w-5" /> New Reservation
                </Link>
             </Button>

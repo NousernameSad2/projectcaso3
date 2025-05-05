@@ -13,8 +13,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, Trash2, Edit, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { ArrowLeft, Trash2, Edit, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, Users } from 'lucide-react';
 import Link from 'next/link';
 import { UserRole, UserStatus } from '@prisma/client';
 import AddStudentDialog from '@/components/classes/AddStudentDialog';
@@ -30,6 +30,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { format, isValid } from 'date-fns';
+import Image from 'next/image';
+import { Badge } from '@/components/ui/badge';
+import { useQuery } from '@tanstack/react-query';
+import { Prisma, BorrowStatus as PrismaBorrowStatus } from '@prisma/client';
 
 // Define the structure for enrolled user data within the class details
 interface EnrolledUser {
@@ -65,6 +70,66 @@ type EnrolledSortField = 'name' | 'email';
 type SortOrder = 'asc' | 'desc';
 // -------------------------------------
 
+// --- Type Definition for Borrow History Item --- 
+const classBorrowHistoryItem = Prisma.validator<Prisma.BorrowSelect>()({
+    id: true,
+    borrowGroupId: true,
+    requestSubmissionTime: true,
+    checkoutTime: true,
+    actualReturnTime: true,
+    borrowStatus: true,
+    reservationType: true,
+    equipment: { select: { id: true, name: true, equipmentId: true, images: true } },
+    borrower: { select: { id: true, name: true, email: true } },
+});
+type ClassBorrowHistoryItem = Prisma.BorrowGetPayload<{ select: typeof classBorrowHistoryItem }>;
+
+// --- Type for Grouped Borrows --- 
+interface GroupedClassBorrows {
+    [key: string]: ClassBorrowHistoryItem[]; // Group ID as key
+}
+
+// --- API Fetcher for Class Borrow History --- 
+const fetchClassBorrowHistory = async (classId: string, token: string | undefined): Promise<ClassBorrowHistoryItem[]> => {
+    if (!classId || !token) throw new Error("Class ID or Auth Token missing");
+    const response = await fetch(`/api/classes/${classId}/borrows`, {
+        headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to fetch borrow history (${response.status})`);
+    }
+    return response.json();
+};
+
+// --- Locally Defined Helper Functions --- 
+// Helper function to safely format dates
+const formatDateSafe = (dateInput: string | Date | null | undefined, formatString: string = 'PPp'): string => {
+  if (!dateInput) return 'N/A';
+  const date = new Date(dateInput);
+  return isValid(date) ? format(date, formatString) : 'Invalid Date';
+};
+
+// Helper function to get badge variant based on status 
+const getBorrowStatusVariant = (status?: PrismaBorrowStatus): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
+  if (!status) return 'default';
+  switch (status) {
+    case PrismaBorrowStatus.PENDING: return "secondary";
+    case PrismaBorrowStatus.APPROVED: return "default"; 
+    case PrismaBorrowStatus.ACTIVE: return "success";
+    case PrismaBorrowStatus.OVERDUE: return "destructive";
+    case PrismaBorrowStatus.PENDING_RETURN: return "warning";
+    case PrismaBorrowStatus.RETURNED: return "outline"; 
+    case PrismaBorrowStatus.COMPLETED: return "success"; 
+    case PrismaBorrowStatus.REJECTED_FIC:
+    case PrismaBorrowStatus.REJECTED_STAFF: return "destructive";
+    case PrismaBorrowStatus.CANCELLED: return "default";
+    default: return "default";
+  }
+};
+
+// -------------------------------------
+
 export default function ClassDetailPage() {
   const params = useParams();
   const classId = params.id as string;
@@ -86,6 +151,18 @@ export default function ClassDetailPage() {
   const [removingStudent, setRemovingStudent] = useState<{ id: string; name: string | null } | null>(null);
   const [isRemovingStudent, setIsRemovingStudent] = useState(false);
   // -------------------------------------------
+
+  // --- State for Borrow History ---
+  const { 
+      data: borrowHistory = [], 
+      isLoading: isLoadingHistory, 
+      error: historyError 
+  } = useQuery<ClassBorrowHistoryItem[], Error>({
+      queryKey: ['classBorrowHistory', classId], 
+      queryFn: () => fetchClassBorrowHistory(classId, token), 
+      enabled: !!classId && !!token, // Only run query when classId and token are available
+      staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
 
   const isStaff = user?.role === UserRole.STAFF;
   const isFIC = user?.role === UserRole.FACULTY && classDetails?.fic?.id === user?.id;
@@ -240,6 +317,43 @@ export default function ClassDetailPage() {
   );
   // --------------------------------------------------------
 
+  // --- Memoized Grouping Logic for Borrow History ---
+  const groupedBorrowHistory = useMemo((): GroupedClassBorrows => {
+    if (!borrowHistory) return {};
+    return borrowHistory.reduce((acc, borrow) => {
+      // Ensure borrowGroupId is not null/undefined before using
+      const key = borrow.borrowGroupId;
+      if (!key) return acc; // Skip items without a group ID
+      
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(borrow);
+      return acc;
+    }, {} as GroupedClassBorrows);
+  }, [borrowHistory]);
+
+  const sortedGroupHistoryIds = useMemo(() => {
+    return Object.keys(groupedBorrowHistory).sort((a, b) => {
+        const firstItemA = groupedBorrowHistory[a]?.[0];
+        const firstItemB = groupedBorrowHistory[b]?.[0];
+        // Primarily sort by actualReturnTime descending (most recent first)
+        const dateA = firstItemA?.actualReturnTime ? new Date(firstItemA.actualReturnTime).getTime() : 0;
+        const dateB = firstItemB?.actualReturnTime ? new Date(firstItemB.actualReturnTime).getTime() : 0;
+        if (dateB !== dateA) return dateB - dateA;
+        
+        // Secondary sort by checkoutTime descending
+        const checkoutA = firstItemA?.checkoutTime ? new Date(firstItemA.checkoutTime).getTime() : 0;
+        const checkoutB = firstItemB?.checkoutTime ? new Date(firstItemB.checkoutTime).getTime() : 0;
+        if (checkoutB !== checkoutA) return checkoutB - checkoutA;
+        
+        // Tertiary sort by requestSubmissionTime descending
+        const requestA = firstItemA?.requestSubmissionTime ? new Date(firstItemA.requestSubmissionTime).getTime() : 0;
+        const requestB = firstItemB?.requestSubmissionTime ? new Date(firstItemB.requestSubmissionTime).getTime() : 0;
+        return requestB - requestA;
+    });
+  }, [groupedBorrowHistory]);
+
   // --- Render Logic --- 
   const isLoading = sessionStatus === 'loading' || isFetchingDetails;
 
@@ -252,7 +366,7 @@ export default function ClassDetailPage() {
       <div className="text-center py-10">
         <p className="text-destructive mb-4">Error: {error}</p>
         <Button variant="outline" asChild>
-            <Link href="/classes" legacyBehavior>
+            <Link href="/classes">
                 <ArrowLeft className="mr-2 h-4 w-4"/> Go back to Classes
             </Link>
         </Button>
@@ -265,7 +379,16 @@ export default function ClassDetailPage() {
   }
 
   if (!classDetails) {
-    return <div className="text-center py-10 text-muted-foreground">Class details not available.</div>;
+    return (
+        <div className="text-center py-10">
+            <p className="text-muted-foreground mb-4">Class not found.</p>
+            <Button asChild variant="outline">
+                <Link href="/classes">
+                    <ArrowLeft className="mr-2 h-4 w-4"/> Back to Classes List
+                </Link>
+            </Button>
+        </div>
+    );
   }
 
   const editDialogData = classDetails ? {
@@ -284,7 +407,7 @@ export default function ClassDetailPage() {
     <div className="container mx-auto py-10 space-y-6">
       <div className="flex items-center justify-between">
          <Button variant="outline" size="icon" asChild>
-           <Link href="/classes" legacyBehavior>
+           <Link href="/classes">
                <ArrowLeft className="h-4 w-4"/>
                <span className="sr-only">Back to Classes</span>
            </Link>
@@ -314,7 +437,7 @@ export default function ClassDetailPage() {
                <Link
                  href={`/users/${classDetails.fic.id}/profile`}
                  className="hover:underline text-primary"
-                 legacyBehavior>
+                 >
                  {classDetails.fic.name ?? classDetails.fic.email}
                </Link>
              ) : (
@@ -411,6 +534,85 @@ export default function ClassDetailPage() {
           </AlertDialogContent>
       </AlertDialog>
       {/* --- End Remove Student Dialog --- */}
+      
+      {/* --- START: RENDER GROUP BORROW HISTORY CARD (Conditional) --- */}
+      {(user?.role === UserRole.STAFF || user?.role === UserRole.FACULTY) && (
+        <Card className="bg-card/80 border-border">
+            <CardHeader>
+                <CardTitle>Class Group Borrow History</CardTitle>
+                <CardDescription>History of group borrows associated with this class.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoadingHistory && <LoadingSpinner />}
+                {historyError && (
+                    <p className="text-destructive flex items-center gap-1"><AlertCircle className="h-4 w-4"/> Error loading history: {historyError.message}</p>
+                )}
+                {!isLoadingHistory && !historyError && sortedGroupHistoryIds.length === 0 && (
+                    <p className="text-muted-foreground italic">No group borrow history found for this class.</p>
+                )}
+                {!isLoadingHistory && !historyError && sortedGroupHistoryIds.length > 0 && (
+                    <div className="space-y-4 max-h-[1200px] overflow-y-auto p-1">
+                        {sortedGroupHistoryIds.map((groupId) => {
+                            const groupItems = groupedBorrowHistory[groupId];
+                            const representativeItem = groupItems[0];
+                            // Determine representative date (Return > Checkout > Request)
+                            const representativeDate = representativeItem.actualReturnTime 
+                                ?? representativeItem.checkoutTime 
+                                ?? representativeItem.requestSubmissionTime;
+                            const dateLabel = representativeItem.actualReturnTime ? 'Returned' 
+                                : representativeItem.checkoutTime ? 'Checked Out' 
+                                : 'Requested';
+
+                            return (
+                                <Link href={`/borrows/group/${groupId}`} key={groupId} passHref>
+                                    <div className="block hover:bg-muted/10 transition-colors rounded-lg border p-4 cursor-pointer">
+                                        <div className="flex justify-between items-start mb-2">
+                                            <div>
+                                                <h4 className="font-semibold text-base flex items-center gap-2">
+                                                    <Users className="h-5 w-5"/> 
+                                                    Group Borrow
+                                                </h4>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {dateLabel}: {formatDateSafe(representativeDate, 'PPp')}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                    Borrower: {representativeItem.borrower.name ?? representativeItem.borrower.email}
+                                                </p>
+                                            </div>
+                                            <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs scale-95 whitespace-nowrap">
+                                                {representativeItem.borrowStatus.toLowerCase().replace(/_/g, ' ')}
+                                            </Badge>
+                                        </div>
+                                        <ul className="space-y-2 mt-3">
+                                            {groupItems.slice(0, 3).map(item => ( // Show first 3 items
+                                                <li key={item.id} className="flex items-center gap-2 text-sm">
+                                                    <Image
+                                                        src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                                        alt={item.equipment.name}
+                                                        width={24}
+                                                        height={24}
+                                                        className="rounded object-cover aspect-square"
+                                                    />
+                                                    <div className="flex-grow">
+                                                        <span className="font-medium">{item.equipment.name}</span>
+                                                        {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                                    </div>
+                                                </li>
+                                            ))}
+                                            {groupItems.length > 3 && (
+                                                <li className="text-xs text-muted-foreground italic ml-8">...and {groupItems.length - 3} more item(s)</li>
+                                            )}
+                                        </ul>
+                                    </div>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                )}
+            </CardContent>
+        </Card>
+      )}
+      {/* --- END: RENDER GROUP BORROW HISTORY CARD --- */}
     </div>
   );
 } 

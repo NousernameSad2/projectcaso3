@@ -2,10 +2,9 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { ReservationBaseSchema, ReservationInput } from "@/lib/schemas";
-import { Equipment, Class, User } from '@prisma/client';
+import { Equipment, Class, User, ReservationType } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { toast } from "sonner";
 import { format, parseISO, isAfter } from 'date-fns';
@@ -39,10 +38,15 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-const BulkReservationFormSchema = ReservationBaseSchema.omit({
-  equipmentIds: true,
-  groupMates: true
+const BulkReservationFormSchema = z.object({
+    requestedStartTime: z.date({ required_error: "Start time is required." }),
+    requestedEndTime: z.date({ required_error: "End time is required." }),
+    classId: z.string().optional(),
+}).refine(data => !data.requestedStartTime || !data.requestedEndTime || isAfter(data.requestedEndTime, data.requestedStartTime), {
+    message: "End time must be after start time.",
+    path: ["requestedEndTime"], 
 });
 
 type BulkFormInput = z.infer<typeof BulkReservationFormSchema>;
@@ -75,7 +79,8 @@ export default function BulkReservationModal({
   const [selectedClassmateIds, setSelectedClassmateIds] = useState<Set<string>>(new Set());
   const [isClassmatePopoverOpen, setIsClassmatePopoverOpen] = useState(false);
   
-  const [selectedClassId, setSelectedClassId] = useState<string>("");
+  const [reservationType, setReservationType] = useState<ReservationType>('OUT_OF_CLASS');
+  const [selectedClassIdState, setSelectedClassIdState] = useState<string>("");
 
   const form = useForm<BulkFormInput>({
     resolver: zodResolver(BulkReservationFormSchema),
@@ -110,15 +115,13 @@ export default function BulkReservationModal({
     }
   };
 
-  // Fetch classmates when selectedClassId changes
   useEffect(() => {
     const fetchClassmates = async () => {
-      if (!selectedClassId) {
+      if (!selectedClassIdState) {
         setClassmates([]);
-        setSelectedClassmateIds(new Set()); // Clear selections if class changes
+        setSelectedClassmateIds(new Set());
         return;
       }
-      // Don't fetch if the user is not authenticated
       if (sessionStatus !== 'authenticated' || !session?.user?.id) {
         setClassmates([]);
         setSelectedClassmateIds(new Set());
@@ -127,53 +130,53 @@ export default function BulkReservationModal({
       
       setIsLoadingClassmates(true);
       try {
-        const response = await fetch(`/api/classes/${selectedClassId}/students`);
+        const response = await fetch(`/api/classes/${selectedClassIdState}/students`);
         if (!response.ok) {
            const errorData = await response.json().catch(() => ({}));
            throw new Error(errorData.message || 'Failed to fetch classmates.');
         }
         const data = await response.json();
-        // Filter out the logged-in user from the list
         const filteredData = (data as Classmate[]).filter(cm => cm.id !== session?.user?.id);
         setClassmates(filteredData);
-        // Clear selections when classmates reload to avoid keeping stale IDs
         setSelectedClassmateIds(new Set()); 
       } catch (error) { 
          console.error("Error fetching classmates:", error);
          toast.error(error instanceof Error ? error.message : "Could not load classmates for the selected class.");
-         setClassmates([]); // Clear on error
-         setSelectedClassmateIds(new Set()); // Clear selections on error
+         setClassmates([]);
+         setSelectedClassmateIds(new Set());
       } 
       finally { setIsLoadingClassmates(false); }
     };
     fetchClassmates();
-  }, [selectedClassId, sessionStatus, session?.user?.id]); // Depend on selectedClassId and session status/user id
+  }, [selectedClassIdState, sessionStatus, session?.user?.id]);
 
-  // --- Submission Handler ---
   async function onSubmit(values: BulkFormInput) {
-    // Add session check here
     if (sessionStatus !== 'authenticated') {
-      toast.error("Authentication required to make a reservation.");
-      console.error("Attempted submission without authentication.");
-      return; // Prevent submission
+      toast.error("Authentication required."); return;
     }
-    // End of session check
+    
+    if (!values.classId) {
+       form.setError("classId", { message: "Class selection is required." });
+       toast.error("Please select the class for this reservation.");
+       return; 
+    }
 
-    const { requestedStartTime, requestedEndTime, classId } = values;
+    const finalClassId = values.classId;
 
-    if (!isAfter(requestedEndTime, requestedStartTime)) {
-        toast.error("End date/time must be after start date/time.");
+    if (!isAfter(values.requestedEndTime, values.requestedStartTime)) {
         form.setError("requestedEndTime", { message: "End time must be after start time." });
+        toast.error("End date/time must be after start date/time.");
         return;
     }
 
     try {
       const payload = {
           equipmentIds: selectedEquipmentIds,
-          classId: values.classId,
+          classId: finalClassId,
           requestedStartTime: values.requestedStartTime.toISOString(),
           requestedEndTime: values.requestedEndTime.toISOString(),
           groupMateIds: Array.from(selectedClassmateIds),
+          reservationType: reservationType,
       };
       console.log("Submitting Bulk Reservation:", payload);
       
@@ -205,11 +208,12 @@ export default function BulkReservationModal({
     setIsOpen(open);
     if (!open) {
       form.reset();
-      setSelectedClassId("");
+      setSelectedClassIdState("");
       setSelectedClassmateIds(new Set());
       setEnrolledClasses([]);
       setClassmates([]);
       setClassError(null);
+      setReservationType('OUT_OF_CLASS');
       if (onClose) {
         onClose();
       }
@@ -253,12 +257,36 @@ export default function BulkReservationModal({
         <DialogHeader>
           <DialogTitle>Bulk Reservation Request</DialogTitle>
           <DialogDescription>
-            Requesting reservation for {selectedEquipmentIds.length} items. Select class, time, and group mates (optional).
+            Requesting reservation for {selectedEquipmentIds.length} items. 
           </DialogDescription>
         </DialogHeader>
+        
+        {/* Reservation Type Radio Group */}
+         <div className="space-y-2">
+            <Label className="text-sm font-medium">Reservation Purpose</Label>
+            <RadioGroup 
+                defaultValue="OUT_OF_CLASS" 
+                className="grid grid-cols-2 gap-4"
+                value={reservationType}
+                onValueChange={(value: string) => setReservationType(value as ReservationType)}
+            >
+                <div>
+                    <RadioGroupItem value="IN_CLASS" id="inClass" className="peer sr-only" />
+                    <Label htmlFor="inClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
+                        In Class
+                    </Label>
+                </div>
+                <div>
+                    <RadioGroupItem value="OUT_OF_CLASS" id="outClass" className="peer sr-only" />
+                    <Label htmlFor="outClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
+                        Out of Class
+                    </Label>
+                </div>
+            </RadioGroup>
+        </div>
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} id="bulk-reservation-form" className="space-y-4 py-4">
-             {/* Time Selection */}
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -269,11 +297,14 @@ export default function BulkReservationModal({
                       <FormControl>
                         <Input
                           type="datetime-local"
-                          value={field.value ? format(field.value, "yyyy-MM-dd'T'HH:mm") : ''}
-                          onChange={(e) => field.onChange(e.target.value ? parseISO(e.target.value) : null)}
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                          value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ''}
+                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
                           min={nowDateTimeLocal}
-                          className="block w-full"
                           disabled={isSubmitting}
+                          className="block w-full"
                         />
                       </FormControl>
                       <FormMessage />
@@ -289,11 +320,14 @@ export default function BulkReservationModal({
                       <FormControl>
                         <Input
                           type="datetime-local"
-                          value={field.value ? format(field.value, "yyyy-MM-dd'T'HH:mm") : ''}
-                          onChange={(e) => field.onChange(e.target.value ? parseISO(e.target.value) : null)}
+                          name={field.name}
+                          onBlur={field.onBlur}
+                          ref={field.ref}
+                          value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ''}
+                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
                           min={minEndTime}
-                          className="block w-full"
                           disabled={isSubmitting || !startTimeValue}
+                          className="block w-full"
                         />
                       </FormControl>
                       <FormMessage />
@@ -302,24 +336,24 @@ export default function BulkReservationModal({
                 />
              </div>
 
-            {/* Class Selection Dropdown */}
+            {/* Class Selection Dropdown (Always Visible & Required) */}
             <FormField
               control={form.control}
               name="classId"
               render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Class (Required)</FormLabel>
+                <FormItem> 
+                  <FormLabel>Class <span className="text-destructive">*</span></FormLabel>
                   <Select 
-                    onValueChange={(value) => {
-                      field.onChange(value);
-                      setSelectedClassId(value); // Update state to trigger classmate fetch
+                    onValueChange={(value) => { 
+                      field.onChange(value); 
+                      setSelectedClassIdState(value); 
                     }}
-                    value={field.value}
+                    value={field.value ?? ""}
                     disabled={isLoadingClasses || enrolledClasses.length === 0}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={isLoadingClasses ? "Loading classes..." : "Select your class..."} />
+                        <SelectValue placeholder={isLoadingClasses ? "Loading..." : "Select the class"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -343,18 +377,18 @@ export default function BulkReservationModal({
               )}
             />
 
-            {/* Group Mates Multi-Select Combobox */}
-             <FormItem>
+            {/* Group Mates Multi-Select (Always Visible) */}
+             <FormItem> 
                <FormLabel>Group Mates (Optional)</FormLabel>
                  <Popover open={isClassmatePopoverOpen} onOpenChange={setIsClassmatePopoverOpen}>
                     <PopoverTrigger asChild>
                        <FormControl>
                          <Button
-                            variant="outline"
-                            role="combobox"
-                            aria-expanded={isClassmatePopoverOpen}
-                            className={`w-full justify-between h-auto min-h-10 ${selectedClassmateIds.size === 0 && "text-muted-foreground"}`}
-                            disabled={!selectedClassId || isLoadingClassmates || classmates.length === 0}
+                           variant="outline"
+                           role="combobox"
+                           aria-expanded={isClassmatePopoverOpen}
+                           className={`w-full justify-between h-auto min-h-10 ${selectedClassmateIds.size === 0 && "text-muted-foreground"}`}
+                           disabled={!selectedClassIdState || isLoadingClassmates || classmates.length === 0}
                          >
                              <span className="flex flex-wrap gap-1">
                                 {selectedClassmateIds.size === 0 && (isLoadingClassmates ? "Loading..." : (classmates.length === 0 ? "No classmates in selected class" : "Select classmates..."))}
@@ -366,7 +400,7 @@ export default function BulkReservationModal({
                                       key={id}
                                       className="mr-1 mb-1"
                                       onClick={(e) => { 
-                                          e.stopPropagation(); // Prevent popover close
+                                          e.stopPropagation();
                                           toggleClassmate(id);
                                       }}
                                     >
@@ -389,7 +423,7 @@ export default function BulkReservationModal({
                              {classmates.map((classmate) => (
                                <CommandItem
                                   key={classmate.id}
-                                  value={classmate.name ?? classmate.id} // Use name for search
+                                  value={classmate.name ?? classmate.id}
                                   onSelect={() => {
                                       toggleClassmate(classmate.id);
                                   }}
@@ -408,9 +442,7 @@ export default function BulkReservationModal({
                        </Command>
                     </PopoverContent>
                 </Popover>
-                <FormDescription>
-                    Select classmates you are borrowing with.
-                </FormDescription>
+                <FormDescription>Select classmates you are borrowing with (requires selecting a class first).</FormDescription>
                <FormMessage />
              </FormItem>
           </form>
@@ -422,7 +454,6 @@ export default function BulkReservationModal({
           <Button 
             type="submit"
             form="bulk-reservation-form"
-            onClick={form.handleSubmit(onSubmit)}
             disabled={isSubmitting}
           >
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}

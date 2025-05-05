@@ -25,8 +25,9 @@ export async function GET(
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
   
-  // Access params.id after await
-  const equipmentId = params.id; 
+  // *** FIX: Await params before accessing ***
+  const resolvedParams = await params;
+  const equipmentId = resolvedParams.id; 
 
   if (!equipmentId) {
     return NextResponse.json({ message: 'Equipment ID is required' }, { status: 400 });
@@ -62,15 +63,17 @@ export async function GET(
               requestedEndTime: true,
               approvedStartTime: true,
               approvedEndTime: true,
-              // Select nested borrower fields directly
               borrower: {
                  select: { id: true, name: true, email: true }
               },
-              // Select nested deficiency fields directly
+              // *** NEW: Include Class details ***
+              class: {
+                select: { id: true, courseCode: true, section: true, academicYear: true, semester: true } 
+              },
+              // *** END NEW ***
               deficiencies: {
                  select: { type: true, description: true }
               },
-              // Select nested approver fields directly
               approvedByFic: {
                 select: { id: true, name: true, email: true }
               },
@@ -118,7 +121,9 @@ export async function PUT(
     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
   }
   
-  const equipmentId = params.id; 
+  // *** FIX: Await params before accessing ***
+  const resolvedParams = await params;
+  const equipmentId = resolvedParams.id; 
   
   try {
     const body = await request.json();
@@ -217,7 +222,9 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
   }
 
-  const equipmentId = params.id; // Use variable
+  // *** FIX: Await params before accessing ***
+  const resolvedParams = await params;
+  const equipmentId = resolvedParams.id; // Use variable
 
   if (!equipmentId) {
     return NextResponse.json({ message: 'Equipment ID is missing' }, { status: 400 });

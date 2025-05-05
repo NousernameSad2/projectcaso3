@@ -71,6 +71,11 @@ enum DeficiencyStatus {
   UNDER_REVIEW
 }
 
+// Define ReservationType enum
+enum ReservationType {
+  IN_CLASS
+  OUT_OF_CLASS
+}
 
 // --- Models ---
 
@@ -159,16 +164,16 @@ model UserClassEnrollment {
 model Borrow {
   id                  String            @id @default(auto()) @map("_id") @db.ObjectId
   borrowGroupId       String?           // Keep this field for querying
-  requestSubmissionTime DateTime          @default(now()) // Renamed from reservationTime - When the request was made
+  requestSubmissionTime DateTime          @default(now()) 
   
   // ---- Requested Times ----
-  requestedStartTime  DateTime          // Renamed from requestedStartDate - Includes Time
-  requestedEndTime    DateTime          // Added - Includes Time
+  requestedStartTime  DateTime          
+  requestedEndTime    DateTime          
   // -------------------------
   
   borrowerId          String            @db.ObjectId
-  borrower            User              @relation("BorrowsInitiated", fields: [borrowerId], references: [id], onDelete: Cascade) // If borrower deleted, remove borrow?
-  classId             String?           @db.ObjectId // Make classId optional
+  borrower            User              @relation("BorrowsInitiated", fields: [borrowerId], references: [id], onDelete: Cascade) 
+  classId             String?           @db.ObjectId 
   class               Class?            @relation(fields: [classId], references: [id], onDelete: SetNull) 
   ficId               String?           @db.ObjectId 
   fic                 User?             @relation("BorrowsSupervised", fields: [ficId], references: [id])
@@ -182,10 +187,10 @@ model Borrow {
   approvedByFic       User?             @relation("FicApprovals", fields: [approvedByFicId], references: [id])
   approvedByStaffId   String?           @db.ObjectId
   approvedByStaff     User?             @relation("StaffApprovals", fields: [approvedByStaffId], references: [id])
-  approvedStartTime   DateTime?         // Added - The approved/adjusted start time
-  approvedEndTime     DateTime?         // Added - The approved/adjusted end time (replaces expectedReturnTime?)
-  checkoutTime        DateTime?         // Actual time item was checked out
-  actualReturnTime    DateTime?
+  approvedStartTime   DateTime?         
+  approvedEndTime     DateTime?         
+  checkoutTime        DateTime?         
+  actualReturnTime    DateTime?         
   // -----------------------------
   
   returnCondition     String?
@@ -194,6 +199,9 @@ model Borrow {
   deficiencies        Deficiency[]
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+
+  // *** NEW: Add Reservation Type ***
+  reservationType     ReservationType?  
 
   @@index([borrowGroupId]) 
 }

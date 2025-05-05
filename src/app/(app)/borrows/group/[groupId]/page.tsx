@@ -12,19 +12,44 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Prisma, Borrow, Equipment, User as PrismaUser, BorrowStatus, UserRole } from '@prisma/client';
+import { Prisma, Borrow, Equipment, User as PrismaUser, BorrowStatus, UserRole, ReservationType } from '@prisma/client';
 import Image from 'next/image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
+// Helper function to format reservation type
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
+};
+
 // Define the shape of the data returned by the API
-const borrowGroupItem = Prisma.validator<Prisma.BorrowDefaultArgs>()({
-    include: {
-        equipment: { select: { id: true, name: true, equipmentId: true, images: true } },
-        borrower: { select: { id: true, name: true, email: true } },
-        class: { select: { courseCode: true, section: true, semester: true } }
+const borrowGroupItemSelect = Prisma.validator<Prisma.BorrowSelect>()({
+    id: true,
+    borrowGroupId: true,
+    borrowerId: true,
+    equipmentId: true,
+    classId: true,
+    requestedStartTime: true,
+    requestedEndTime: true,
+    approvedStartTime: true,
+    approvedEndTime: true,
+    checkoutTime: true,
+    actualReturnTime: true,
+    borrowStatus: true,
+    requestSubmissionTime: true,
+    reservationType: true,
+    equipment: {
+        select: { id: true, name: true, equipmentId: true, images: true }
+    },
+    borrower: {
+        select: { id: true, name: true, email: true }
+    },
+    class: { 
+        select: { courseCode: true, section: true, semester: true, academicYear: true }
     }
 });
-type BorrowGroupItem = Prisma.BorrowGetPayload<typeof borrowGroupItem>;
+
+type BorrowGroupItem = Prisma.BorrowGetPayload<{ select: typeof borrowGroupItemSelect }>;
 
 // Define a simple type for the user object expected for group mates
 interface GroupMateUser extends Pick<PrismaUser, 'id' | 'name' | 'email'> {}
@@ -146,10 +171,8 @@ export default function BorrowGroupDetailPage() {
             <div className="text-center py-10">
                 <p className="text-destructive mb-4">Error: {error.message}</p>
                 <Button variant="outline" asChild>
-                    <Link href="/" legacyBehavior>
-                        <a>
-                            <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
-                        </a>
+                    <Link href="/">
+                        <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
                     </Link>
                 </Button>
             </div>
@@ -161,10 +184,8 @@ export default function BorrowGroupDetailPage() {
             <div className="text-center py-10">
                 <p className="text-muted-foreground mb-4">Borrow group not found or has no borrowable items.</p>
                 <Button variant="outline" asChild>
-                    <Link href="/" legacyBehavior>
-                        <a>
-                            <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
-                        </a>
+                    <Link href="/">
+                        <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
                     </Link>
                 </Button>
             </div>
@@ -176,11 +197,9 @@ export default function BorrowGroupDetailPage() {
             <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" asChild>
-                        <Link href="/" legacyBehavior>
-                            <a>
-                                <ArrowLeft className="h-4 w-4"/>
-                                <span className="sr-only">Back to Dashboard</span>
-                            </a>
+                        <Link href="/">
+                            <ArrowLeft className="h-4 w-4"/>
+                            <span className="sr-only">Back to Dashboard</span>
                         </Link>
                     </Button>
                     <h1 className="text-2xl font-bold text-white truncate">
@@ -222,6 +241,10 @@ export default function BorrowGroupDetailPage() {
                              {format(new Date(representativeItem.approvedStartTime), 'PPp')} - {format(new Date(representativeItem.approvedEndTime), 'PPp')}
                         </div>
                     )}
+                    <div>
+                        <span className="font-semibold text-muted-foreground">Purpose: </span> 
+                        {formatReservationType(representativeItem?.reservationType)}
+                    </div>
                     {representativeItem.class && (
                          <div>
                              <span className="font-semibold text-muted-foreground">Class:</span> {representativeItem.class.courseCode} {representativeItem.class.section} ({representativeItem.class.semester})
@@ -245,60 +268,96 @@ export default function BorrowGroupDetailPage() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {borrowItems.map((item) => (
-                                    <TableRow key={item.id} className="hover:bg-muted/20">
-                                        {/* Image Cell: Conditionally Link or Div with onClick */}
-                                        <TableCell className="p-0">
-                                            {canViewDetails ? (
-                                                <Link
-                                                    href={`/equipment/${item.equipment.id}`}
-                                                    className="flex items-center p-2 h-full"
-                                                    aria-label={`View details for ${item.equipment.name}`}
-                                                    legacyBehavior>
-                                                    <Image 
-                                                        src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                                        alt={item.equipment.name}
-                                                        width={50}
-                                                        height={50}
-                                                        className="rounded aspect-square object-cover pointer-events-none" // Prevent image itself intercepting clicks
-                                                    />
-                                                </Link>
-                                            ) : (
-                                                <div onClick={handleRegularUserItemClick} className="flex items-center p-2 h-full cursor-pointer">
-                                                    <Image 
-                                                        src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                                        alt={item.equipment.name}
-                                                        width={50}
-                                                        height={50}
-                                                        className="rounded aspect-square object-cover pointer-events-none"
-                                                    />
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        {/* Name Cell: Conditionally Link or Div with onClick */}
-                                        <TableCell className="font-medium p-0">
-                                            {canViewDetails ? (
-                                                <Link
-                                                    href={`/equipment/${item.equipment.id}`}
-                                                    className="block p-2 h-full"
-                                                    aria-label={`View details for ${item.equipment.name}`}
-                                                    legacyBehavior>
-                                                    {item.equipment.name}
-                                                </Link>
-                                            ) : (
-                                                <div onClick={handleRegularUserItemClick} className="block p-2 h-full cursor-pointer">
-                                                    {item.equipment.name}
-                                                </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="p-2">{item.equipment.equipmentId || 'N/A'}</TableCell>
-                                        <TableCell className="p-2">
-                                            <Badge variant={item.borrowStatus === 'APPROVED' ? 'secondary' : item.borrowStatus === 'PENDING' ? 'outline' : 'destructive'} className="capitalize">
-                                                {item.borrowStatus.toLowerCase().replace('_', ' ')}
-                                            </Badge>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {borrowItems.map((item) => {
+                                    // --- Helper to convert DB path to URL path --- 
+                                    const getImagePath = (dbPath: string | undefined | null): string => {
+                                        const fallback = '/images/placeholder-default.png'; // *** CORRECTED FALLBACK ***
+                                        if (!dbPath || typeof dbPath !== 'string') {
+                                            return fallback;
+                                        }
+                                        // Check if it's the problematic absolute path
+                                        const publicDirMarker = '/public/';
+                                        const publicIndex = dbPath.indexOf(publicDirMarker);
+                                        if (publicIndex !== -1) {
+                                             // Extract the part after /public (e.g., /images/...) 
+                                             return dbPath.substring(publicIndex + publicDirMarker.length - 1);
+                                        }
+                                        // If it doesn't contain '/public/', assume it might be a correct relative path or external URL
+                                        if (dbPath.startsWith('/') || dbPath.startsWith('http')) {
+                                             return dbPath;
+                                        }
+                                         // If it's neither, return fallback
+                                        console.warn(`Unrecognized image path format: ${dbPath}`);
+                                        return fallback;
+                                    };
+                                    const imageSrc = getImagePath(item.equipment.images?.[0]);
+                                    // --- End Helper ---
+
+                                    return (
+                                        <TableRow key={item.id} className="hover:bg-muted/20">
+                                            {/* Image Cell: Conditionally Link or Div with onClick */}
+                                            <TableCell className="p-0">
+                                                {canViewDetails ? (
+                                                    <Link
+                                                        href={`/equipment/${item.equipment.id}`}
+                                                        className="relative flex h-16 w-16 items-center justify-center bg-background rounded overflow-hidden border p-2"
+                                                        aria-label={`View details for ${item.equipment.name}`}
+                                                    >
+                                                        <Image
+                                                            src={imageSrc}
+                                                            alt={item.equipment.name}
+                                                            width={50}
+                                                            height={50}
+                                                            className="object-contain"
+                                                            onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                                                        />
+                                                    </Link>
+                                                ) : (
+                                                    <div
+                                                        onClick={handleRegularUserItemClick}
+                                                        className="relative flex h-16 w-16 items-center justify-center bg-background rounded overflow-hidden border cursor-not-allowed p-2"
+                                                        aria-label={item.equipment.name}
+                                                    >
+                                                        <Image
+                                                            src={imageSrc}
+                                                            alt={item.equipment.name}
+                                                            width={50}
+                                                            height={50}
+                                                            className="object-contain"
+                                                            onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            {/* Name Cell: Conditionally Link or Div with onClick */}
+                                            <TableCell>
+                                                {canViewDetails ? (
+                                                    <Link
+                                                        href={`/equipment/${item.equipment.id}`}
+                                                        className="font-medium hover:underline"
+                                                        aria-label={`View details for ${item.equipment.name}`}
+                                                    >
+                                                        {item.equipment.name}
+                                                    </Link>
+                                                ) : (
+                                                    <div 
+                                                        onClick={handleRegularUserItemClick} 
+                                                        className="font-medium cursor-not-allowed"
+                                                        aria-label={item.equipment.name}
+                                                    >
+                                                        {item.equipment.name}
+                                                    </div>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="p-2">{item.equipment.equipmentId || 'N/A'}</TableCell>
+                                            <TableCell className="p-2">
+                                                <Badge variant={item.borrowStatus === 'APPROVED' ? 'secondary' : item.borrowStatus === 'PENDING' ? 'outline' : 'destructive'} className="capitalize">
+                                                    {item.borrowStatus.toLowerCase().replace('_', ' ')}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                             </TableBody>
                         </Table>
                     </div>
@@ -318,8 +377,8 @@ export default function BorrowGroupDetailPage() {
                         <ul className="space-y-2 text-sm">
                             {groupMates.map((mate) => (
                                 <li key={mate.id} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                                    <Link href={`/users/${mate.id}/profile`} passHref legacyBehavior>
-                                        <a className="font-medium hover:underline">{mate.name}</a>
+                                    <Link href={`/users/${mate.id}/profile`} className="font-medium hover:underline">
+                                        {mate.name}
                                     </Link>
                                     <span className="text-muted-foreground text-xs">{mate.email}</span>
                                 </li>

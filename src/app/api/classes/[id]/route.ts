@@ -93,6 +93,7 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can update classes.' }, { status: 403 });
   }
+  const { userId, role } = payload;
 
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
@@ -113,6 +114,22 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
     }
     
     const updateData = parsedData.data;
+
+    // *** NEW: Authorization Check for FACULTY ***
+    if (role === UserRole.FACULTY) {
+      const currentClass = await prisma.class.findUnique({
+        where: { id: classId },
+        select: { ficId: true },
+      });
+      if (!currentClass) {
+        return NextResponse.json({ message: 'Class not found' }, { status: 404 });
+      }
+      if (currentClass.ficId !== userId) {
+        console.warn(`Faculty ${userId} attempted to update class ${classId} not assigned to them (FIC: ${currentClass.ficId})`);
+        return NextResponse.json({ message: 'Forbidden: You can only update classes you are assigned to.' }, { status: 403 });
+      }
+    }
+    // *** END NEW: Authorization Check ***
 
     // Ensure at least one field is being updated
     if (Object.keys(updateData).length === 0) {
@@ -196,12 +213,28 @@ export async function DELETE(req: NextRequest, { params: { id: classId } }: Rout
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can delete classes.' }, { status: 403 });
   }
+  const { userId, role } = payload;
 
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
   }
 
   try {
+    // *** NEW: Authorization Check for FACULTY ***
+    if (role === UserRole.FACULTY) {
+      const currentClass = await prisma.class.findUnique({
+        where: { id: classId },
+        select: { ficId: true },
+      });
+      // If class doesn't exist, P2025 will be caught later anyway, but good practice to check
+      if (currentClass && currentClass.ficId !== userId) { 
+        console.warn(`Faculty ${userId} attempted to DELETE class ${classId} not assigned to them (FIC: ${currentClass.ficId})`);
+        return NextResponse.json({ message: 'Forbidden: You can only delete classes you are assigned to.' }, { status: 403 });
+      }
+      // Allow deletion if class doesn't exist (will throw P2025 below) or if FIC matches
+    }
+    // *** END NEW: Authorization Check ***
+
     // Attempt to delete the class directly.
     // onDelete: SetNull in schema should handle related Borrows and Enrollments.
     console.log(`Attempting deletion for class ${classId}. Related records will have classId set to null.`);

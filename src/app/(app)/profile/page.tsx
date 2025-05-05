@@ -3,37 +3,40 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useSession } from 'next-auth/react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { User, Borrow, Equipment, UserRole, UserStatus, BorrowStatus } from '@prisma/client'; // Import relevant types
+import { User, Borrow, Equipment, UserRole, UserStatus, BorrowStatus, Class, ReservationType } from '@prisma/client'; // Import relevant types
 import { format, isValid, formatDistanceStrict } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from '@/components/ui/button';
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Edit, KeyRound, Users, Clock } from 'lucide-react'; // Added icons
+import { AlertCircle, Edit, KeyRound, Users, Clock, BookUser } from 'lucide-react'; // Added BookUser
 import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import ProfileEditForm from '@/components/profile/ProfileEditForm'; // Import the form
 import ChangePasswordForm from '@/components/profile/ChangePasswordForm'; // Import the change password form
 import Link from 'next/link'; // Add Link import
+import { useQuery } from '@tanstack/react-query'; // Import useQuery
 
 // Correct UserProfile type to use string literals for sex
 type UserProfile = Omit<User, 'password'> & { sex: 'Male' | 'Female' | null };
 
 // Borrow type including equipment details (similar to borrows page)
-type BorrowWithEquipment = Borrow & {
-    equipment: Pick<Equipment, 'name' | 'equipmentId' | 'images'>;
-    expectedReturnTime: Date | null;
-    // Make sure borrowGroupId and actualReturnTime are included if fetching from API
-    borrowGroupId: string | null;
-    actualReturnTime: Date | null; 
-    checkoutTime: Date | null; // Ensure checkoutTime is fetched
+type BorrowWithDetails = Borrow & {
+    equipment: Pick<Equipment, 'name' | 'equipmentId' | 'images' | 'id'>;
+    borrower: Pick<User, 'id' | 'name' | 'email'>; // <<< Added borrower
+    class: Pick<Class, 'id' | 'courseCode' | 'section' | 'academicYear' | 'semester'> | null; // <<< Added class
+    expectedReturnTime?: Date | null;
+    borrowGroupId?: string | null;
+    actualReturnTime?: Date | null; 
+    checkoutTime?: Date | null;
+    _count?: { deficiencies: number }; // <<< Added deficiency count
+    reservationType?: ReservationType | null; 
 };
 
-// --- NEW: Grouped borrows structure ---
+// --- Grouped borrows structure (for personal history) ---
 interface GroupedBorrows {
-  [groupId: string]: BorrowWithEquipment[];
+  [groupId: string]: BorrowWithDetails[];
 }
-
-const INDIVIDUAL_BORROWS_KEY = "__individual_history__"; // Use a distinct key
+const INDIVIDUAL_BORROWS_KEY = "__individual_history__"; 
 // --- END NEW ---
 
 // Helper: Get badge variant for borrow status (reuse from borrows page if possible)
@@ -53,6 +56,16 @@ const getBorrowStatusVariant = (status: BorrowStatus): "default" | "secondary" |
 // Helper: Format borrow status (reuse from borrows page if possible)
 const formatBorrowStatus = (status: BorrowStatus) => {
   return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+// *** NEW: Helpers for Reservation Type Display ***
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+};
+const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
+    if (!type) return 'secondary';
+    return type === 'IN_CLASS' ? 'success' : 'destructive';
 };
 
 // Helper function to safely format dates (copied from my-borrows)
@@ -118,6 +131,24 @@ const calculateDuration = (
 };
 // --- END NEW ---
 
+// --- NEW: Fetch function for faculty borrows ---
+const fetchFacultyBorrows = async (): Promise<BorrowWithDetails[]> => {
+    const response = await fetch('/api/users/me/faculty-borrows');
+    if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+            // Don't throw for auth errors, handle in component
+            console.log(`[fetchFacultyBorrows] Unauthorized (${response.status})`);
+            return []; 
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to fetch faculty borrows: ${response.statusText}`);
+    }
+    const data = await response.json();
+    // Add basic validation if needed
+    return data as BorrowWithDetails[];
+};
+// --- END NEW ---
+
 export default function ProfilePage() {
   const { data: session, status: sessionStatus } = useSession();
   
@@ -125,7 +156,7 @@ export default function ProfilePage() {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   
-  const [borrowHistory, setBorrowHistory] = useState<BorrowWithEquipment[]>([]);
+  const [borrowHistory, setBorrowHistory] = useState<BorrowWithDetails[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
@@ -133,6 +164,21 @@ export default function ProfilePage() {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false); 
   // State for managing the change password dialog
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
+
+  // *** NEW: Fetching Faculty-Related Borrows ***
+  const isFaculty = useMemo(() => session?.user?.role === UserRole.FACULTY, [session?.user?.role]);
+
+  const { 
+      data: facultyBorrows,
+      isLoading: isLoadingFacultyBorrows,
+      error: facultyBorrowsError,
+  } = useQuery<BorrowWithDetails[], Error>({
+      queryKey: ['facultyBorrows', session?.user?.id], // Include userId in key
+      queryFn: fetchFacultyBorrows,
+      enabled: sessionStatus === 'authenticated' && isFaculty, // Only enable if authenticated and faculty
+      staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
+  // *** END NEW ***
 
   // Fetch user profile details
   useEffect(() => {
@@ -182,7 +228,7 @@ export default function ProfilePage() {
             const errorData = JSON.parse(errorText || '{}');
             throw new Error(errorData.message || `Failed to fetch history: ${response.statusText}`);
           }
-          const data: BorrowWithEquipment[] = await response.json();
+          const data: BorrowWithDetails[] = await response.json();
           // ---- START Logging ----
           console.log('[Profile History] Raw data received from API:', JSON.stringify(data, null, 2)); 
           // ---- END Logging ----
@@ -238,7 +284,7 @@ export default function ProfilePage() {
   });
   // --- END NEW ---
 
-  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory;
+  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory || (isFaculty && isLoadingFacultyBorrows);
 
   // Callback function for successful profile update
   const handleUpdateSuccess = (updatedData: Partial<UserProfile>) => {
@@ -264,7 +310,7 @@ export default function ProfilePage() {
   }
 
   // Function to render profile details
-  const renderProfileDetails = () => {
+  const renderProfileDetails = (): React.ReactNode => {
     if (isLoadingProfile) {
         return <LoadingSpinner />;
     }
@@ -275,26 +321,31 @@ export default function ProfilePage() {
         return <p className="text-muted-foreground">Could not load profile details.</p>;
     }
     
-    // Simple list display for now
+    const detailItem = (label: string, value: React.ReactNode) => (
+        <div className="mb-2">
+            <span className="font-semibold text-muted-foreground text-sm">{label}:</span> 
+            <span className="ml-2 text-foreground/90 text-sm">{value || 'N/A'}</span>
+        </div>
+    );
+
     return (
-        <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
-            <div className="font-medium text-muted-foreground">Name:</div>
-            <div>{profile.name}</div>
-            <div className="font-medium text-muted-foreground">Email:</div>
-            <div>{profile.email}</div>
-            <div className="font-medium text-muted-foreground">Student Number:</div>
-            <div>{profile.studentNumber || '-'}</div>
-            <div className="font-medium text-muted-foreground">Contact Number:</div>
-            <div>{profile.contactNumber || '-'}</div>
-            <div className="font-medium text-muted-foreground">Sex:</div>
-            <div>{profile.sex === null ? '-' : profile.sex.replace('_', ' ')}</div>
-            <div className="font-medium text-muted-foreground">Role:</div>
-            <div><Badge variant="secondary">{profile.role}</Badge></div>
-            <div className="font-medium text-muted-foreground">Status:</div>
-            <div><Badge variant={profile.status === UserStatus.ACTIVE ? 'success' : 'warning'}>{profile.status.replace('_', ' ')}</Badge></div>
-             <div className="font-medium text-muted-foreground">Member Since:</div>
-            <div>{formatDateSafe(profile.createdAt, 'PPP')}</div>
-        </dl>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
+            {detailItem('Name', profile.name)}
+            {detailItem('Email', profile.email)}
+            {detailItem('Student Number', profile.studentNumber)}
+            {detailItem('Contact Number', profile.contactNumber)}
+            {detailItem('Sex', profile.sex)}
+            {detailItem('Role', <Badge variant="outline" className="capitalize">{profile.role.toLowerCase()}</Badge>)}
+            {detailItem('Status', 
+               <Badge 
+                   variant={profile.status === UserStatus.ACTIVE ? 'success' : 'destructive'} 
+                   className="capitalize"
+               >
+                   {profile.status.toLowerCase()}
+               </Badge>
+            )}
+            {detailItem('Joined', formatDateSafe(profile.createdAt))}
+        </div>
     );
   };
 
@@ -329,8 +380,11 @@ export default function ProfilePage() {
                 // ---- END Logging ----
 
                 return (
-                <Link href={`/borrows/group/${groupId}`} key={groupId} passHref legacyBehavior>
-                  <a className="block hover:bg-muted/10 transition-colors rounded-lg"> {/* Added wrapper 'a' tag for styling and legacyBehavior */}
+                <Link 
+                    href={`/borrows/group/${groupId}`} 
+                    key={groupId} 
+                    className="block hover:bg-muted/10 transition-colors rounded-lg"
+                >
                     <Card className="overflow-hidden bg-card/60 border">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2 text-base">
@@ -379,7 +433,6 @@ export default function ProfilePage() {
                         </CardContent>
                         {/* No footer actions for history */}
                     </Card>
-                  </a>
                 </Link>
                 );
             })}
@@ -431,13 +484,96 @@ export default function ProfilePage() {
     // --- END NEW ---
   };
 
+  // *** NEW: Render Faculty Related Borrows ***
+  const renderFacultyRelatedBorrows = () => {
+      if (!isFaculty) return null; // Only render for faculty
+      if (isLoadingFacultyBorrows) return <LoadingSpinner>Loading Faculty Related Borrows...</LoadingSpinner>;
+      if (facultyBorrowsError) return <p className="text-destructive">Error loading faculty borrows: {facultyBorrowsError.message}</p>;
+      if (!facultyBorrows || facultyBorrows.length === 0) return <p className="text-muted-foreground italic">No borrow records found for the classes you manage.</p>;
+      
+      // *** CHANGE Scrollable Container Height ***
+      return (
+        <div className="max-h-[800px] overflow-y-auto pr-1"> {/* Changed 400px to 800px */}
+          {/* Existing space-y container */}
+          <div className="space-y-3">
+            {facultyBorrows.map((borrow) => (
+              <Card key={borrow.id} className="overflow-hidden bg-card/70 border">
+                <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
+                  <Link href={`/equipment/${borrow.equipment.id}`} className="block flex-shrink-0">
+                    <Image 
+                      src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'} 
+                      alt={borrow.equipment.name}
+                      width={80} 
+                      height={80} 
+                      className="rounded border aspect-square object-contain bg-background p-1"
+                      onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                    />
+                  </Link>
+                  <div className="flex-grow space-y-1 text-sm">
+                     <div className="flex justify-between items-start gap-1">
+                         <Link href={`/equipment/${borrow.equipment.id}`} className="font-semibold hover:underline flex-shrink min-w-0 mr-2" title={borrow.equipment.name}>
+                             <span className="truncate">{borrow.equipment.name}</span>
+                         </Link>
+                         {/* --- Badge Container --- */}
+                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                             {/* Reservation Type Badge */}
+                             <Badge
+                                 variant={getReservationTypeVariant(borrow.reservationType)}
+                                 className="capitalize text-[10px] scale-90 whitespace-nowrap font-normal"
+                                 title={`Reservation Type: ${formatReservationType(borrow.reservationType)}`}
+                             >
+                                 {formatReservationType(borrow.reservationType)}
+                             </Badge>
+                             {/* Status Badge */}
+                             <Badge variant={getBorrowStatusVariant(borrow.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
+                                 {formatBorrowStatus(borrow.borrowStatus)}
+                             </Badge>
+                         </div>
+                     </div>
+                     <p className="text-xs text-muted-foreground">
+                         Borrowed by: <Link href={`/users/${borrow.borrower.id}/profile`} className="hover:underline">{borrow.borrower.name ?? borrow.borrower.email}</Link>
+                     </p>
+                     {borrow.class && (
+                       <p className="text-xs text-muted-foreground">
+                         Class: {borrow.class.courseCode} {borrow.class.section}
+                       </p>
+                     )}
+                     <p className="text-xs text-muted-foreground">
+                        Requested: {formatDateSafe(borrow.requestedStartTime, 'PPp')} - {formatDateSafe(borrow.requestedEndTime, 'PPp')}
+                     </p>
+                     {borrow.approvedStartTime && borrow.approvedEndTime && (
+                         <p className="text-xs text-muted-foreground">
+                           Approved: {formatDateSafe(borrow.approvedStartTime, 'PPp')} - {formatDateSafe(borrow.approvedEndTime, 'PPp')}
+                         </p>
+                     )}
+                     {borrow.checkoutTime && (
+                       <p className="text-xs text-muted-foreground">
+                           Checked Out: {formatDateSafe(borrow.checkoutTime, 'PPp')}
+                       </p>
+                     )}
+                      {/* Add link to group details if applicable? */}
+                      {borrow.borrowGroupId && (
+                           <Link href={`/borrows/group/${borrow.borrowGroupId}`} className="text-xs text-blue-400 hover:underline block mt-1">
+                               View Group Details
+                           </Link>
+                      )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      );
+  };
+  // *** END NEW ***
+
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto max-w-4xl py-10 space-y-8">
       <h1 className="text-3xl font-bold mb-6 text-white">My Profile</h1>
       
       <div className="space-y-8">
         {/* Profile Info Card */}
-        <Card className="bg-card/80 border-border/60">
+        <Card className="overflow-hidden bg-card/80 border border-border/50">
            <CardHeader className="flex flex-row items-center justify-between">
     <div>
                     <CardTitle className="text-xl">Profile Information</CardTitle>
@@ -460,15 +596,33 @@ export default function ProfilePage() {
         </Card>
 
         {/* Borrow History Card */}
-        <Card className="bg-card/80 border-border/60">
+        <Card className="bg-card/80 border border-border/50">
             <CardHeader>
-                <CardTitle className="text-xl">My Borrow History</CardTitle>
-                <CardDescription>Your past and current borrow records.</CardDescription>
+                <CardTitle className="flex items-center">
+                    <Clock className="mr-2 h-5 w-5" /> Borrow History (Completed)
+                </CardTitle>
+                <CardDescription>Your past completed borrow records.</CardDescription>
             </CardHeader>
             <CardContent>
                 {renderBorrowHistory()}
             </CardContent>
         </Card>
+
+        {/* *** NEW: Faculty Related Borrows Card *** */}
+        {isFaculty && (
+          <Card className="bg-card/80 border border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BookUser className="mr-2 h-5 w-5" /> Faculty Related Borrows
+              </CardTitle>
+              <CardDescription>Borrow requests from students in classes you manage.</CardDescription>
+            </CardHeader>
+            <CardContent>
+               {renderFacultyRelatedBorrows()} 
+            </CardContent>
+          </Card>
+        )}
+        {/* *** END NEW *** */}
       </div>
 
       {/* Profile Edit Form Dialog */}

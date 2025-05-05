@@ -1,5 +1,5 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { PrismaClient, BorrowStatus, UserRole } from '@prisma/client';
+import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/app/api/auth/[...nextauth]/route';
 
@@ -34,43 +34,66 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     // Determine the rejection status based on user role
     const rejectionStatus = userRole === UserRole.FACULTY ? BorrowStatus.REJECTED_FIC : BorrowStatus.REJECTED_STAFF;
 
-    // 2. Find borrows in the group that are currently APPROVED
-    const borrowsToReject = await prisma.borrow.findMany({
-      where: {
-        borrowGroupId: borrowGroupId, // Use the variable holding the group ID
-        borrowStatus: BorrowStatus.APPROVED, 
-      },
-      select: {
-        id: true, 
-      },
+    // --- Use a Transaction --- 
+    const transactionResult = await prisma.$transaction(async (tx) => {
+        // 2. Find borrows in the group that are currently APPROVED
+        const borrowsToReject = await tx.borrow.findMany({
+            where: {
+                borrowGroupId: borrowGroupId,
+                borrowStatus: BorrowStatus.APPROVED, 
+            },
+            select: {
+                id: true, 
+                equipmentId: true // <-- Select equipmentId
+            },
+        });
+
+        if (borrowsToReject.length === 0) {
+            // Throw an error to rollback transaction if no borrows found
+            throw new Error('No approved requests found for this group ID to reject.'); 
+        }
+
+        const borrowIdsToReject = borrowsToReject.map(b => b.id);
+        const equipmentIdsToUpdate = [...new Set(borrowsToReject.map(b => b.equipmentId))]; // Get unique equipment IDs
+
+        // 3. Update the status of these borrows to the determined rejection status
+        const updateBorrowsResult = await tx.borrow.updateMany({
+            where: {
+                id: { in: borrowIdsToReject },
+            },
+            data: {
+                borrowStatus: rejectionStatus,
+                approvedStartTime: null, // <<< Also clear approval times
+                approvedEndTime: null,   // <<< Also clear approval times
+                approvedByFicId: null,
+                approvedByStaffId: null,
+            },
+        });
+
+        // 4. Update the status of associated equipment to AVAILABLE
+        // IMPORTANT: This assumes rejecting makes it immediately available.
+        // A more complex check might be needed if other reservations exist.
+        const updateEquipmentResult = await tx.equipment.updateMany({
+            where: {
+                id: { in: equipmentIdsToUpdate },
+                // Optional: Only update if status is RESERVED?
+                // status: EquipmentStatus.RESERVED 
+            },
+            data: {
+                status: EquipmentStatus.AVAILABLE,
+            }
+        });
+
+        console.log(`[Reject Approved Group TX] User ${userId} (${userRole}) rejected ${updateBorrowsResult.count} borrows for group ${borrowGroupId}.`);
+        console.log(`[Reject Approved Group TX] Updated ${updateEquipmentResult.count} equipment statuses to AVAILABLE for IDs: ${equipmentIdsToUpdate.join(', ')}`);
+        
+        return { count: updateBorrowsResult.count };
     });
-
-    if (borrowsToReject.length === 0) {
-      return NextResponse.json({ message: 'No approved requests found for this group ID to reject.' }, { status: 404 });
-    }
-
-    const borrowIdsToReject = borrowsToReject.map(b => b.id);
-
-    // 3. Update the status of these borrows to the determined rejection status
-    const updateResult = await prisma.borrow.updateMany({
-      where: {
-        id: { in: borrowIdsToReject },
-      },
-      data: {
-        borrowStatus: rejectionStatus,
-        approvedByFicId: null,
-        approvedByStaffId: null,
-        // Optionally add rejection details
-        // rejectedById: userId, 
-        // rejectedTime: new Date(),
-      },
-    });
-
-    console.log(`[Reject Approved Group] User ${userId} (${userRole}) rejected ${updateResult.count} approved borrows for group ${borrowGroupId}.`);
+    // --- End Transaction --- 
 
     return NextResponse.json({
-      message: `Successfully rejected ${updateResult.count} approved item(s) in the group.`,
-      rejectedCount: updateResult.count,
+      message: `Successfully rejected ${transactionResult.count} approved item(s) in the group and updated equipment status.`,
+      rejectedCount: transactionResult.count,
     }, { status: 200 });
 
   } catch (error) {

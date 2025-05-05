@@ -18,7 +18,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
     if (!session?.user?.id) {
       return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
-    const equipmentId = params.id;
+    const resolvedParams = await params; 
+    const equipmentId = resolvedParams.id;
 
     if (!equipmentId) {
         return NextResponse.json({ message: 'Equipment ID is required' }, { status: 400 });

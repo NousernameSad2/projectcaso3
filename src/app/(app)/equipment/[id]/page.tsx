@@ -4,12 +4,12 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Equipment, EquipmentStatus, EquipmentCategory, Borrow, BorrowStatus, UserRole, Prisma, Deficiency, DeficiencyType, User } from '@prisma/client';
+import { Equipment, EquipmentStatus, EquipmentCategory, Borrow, BorrowStatus, UserRole, Prisma, Deficiency, DeficiencyType, User, Class, ReservationType } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ArrowLeft, Edit, Trash2, Loader2, CalendarDays, AlertCircle, Wrench, History, PackagePlus, ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Loader2, CalendarDays, AlertCircle, Wrench, History, PackagePlus, ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, MessageSquare, User as UserIcon, School } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -26,7 +26,7 @@ import {
 import ReservationModal from '@/components/equipment/ReservationModal';
 import { Calendar } from "@/components/ui/calendar";
 import { addDays, eachDayOfInterval, startOfDay, isSameDay, format, isValid } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { 
@@ -43,9 +43,11 @@ interface BorrowWithDetails extends Borrow {
   borrower: User;
   approvedByFic: User | null;
   approvedByStaff: User | null;
+  class: Pick<Class, 'id' | 'courseCode' | 'section'> | null;
   deficiencies?: Pick<Deficiency, 'type' | 'description'>[]; // Add deficiencies
   checkoutTime: Date | null;
   actualReturnTime: Date | null;
+  reservationType: ReservationType | null;
 }
 
 // Extended Equipment interface including counts and related records
@@ -152,6 +154,35 @@ const formatDuration = (totalSeconds: number): string => {
   return parts.join(' ');
 };
 
+// Helper: Get badge variant for borrow status (reuse from borrows page if possible)
+const getBorrowStatusVariant = (status: BorrowStatus): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
+  switch (status) {
+    case BorrowStatus.PENDING: return "warning";
+    case BorrowStatus.APPROVED: return "secondary";
+    case BorrowStatus.ACTIVE: return "success";
+    case BorrowStatus.PENDING_RETURN: return "secondary"; // Use secondary for PENDING_RETURN
+    case BorrowStatus.RETURNED: case BorrowStatus.COMPLETED: return "default"; // Use default for RETURNED/COMPLETED
+    case BorrowStatus.REJECTED_FIC: case BorrowStatus.REJECTED_STAFF: case BorrowStatus.CANCELLED: return "destructive";
+    case BorrowStatus.OVERDUE: return "destructive";
+    default: return "default";
+  }
+};
+
+// Helper: Format borrow status (reuse from borrows page if possible)
+const formatBorrowStatus = (status: BorrowStatus) => {
+  return status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
+
+// *** NEW: Helpers for Reservation Type Display ***
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+};
+const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
+    if (!type) return 'secondary';
+    return type === 'IN_CLASS' ? 'success' : 'destructive';
+};
+
 export default function EquipmentDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -224,6 +255,17 @@ export default function EquipmentDetailPage() {
     const latestLog = equipment.maintenanceLog[equipment.maintenanceLog.length - 1] as any;
     return latestLog?.notes || null; // Return notes or null if notes field is missing/empty
   }, [equipment?.maintenanceLog]);
+
+  // Sort borrow records for the history panel (most recent first)
+  const sortedBorrowRecords = useMemo(() => {
+    if (!equipment?.borrowRecords) return [];
+    // Sort by requestSubmissionTime descending
+    return [...equipment.borrowRecords].sort((a, b) => { 
+        const dateA = a.requestSubmissionTime ? new Date(a.requestSubmissionTime).getTime() : 0;
+        const dateB = b.requestSubmissionTime ? new Date(b.requestSubmissionTime).getTime() : 0;
+        return dateB - dateA; // Newest first
+    });
+  }, [equipment?.borrowRecords]);
 
   // Need fetchEquipmentDetail accessible for refresh
   const fetchEquipmentDetail = useMemo(() => async () => {
@@ -660,13 +702,81 @@ export default function EquipmentDetailPage() {
   // Determine if tooltip should be shown
   const showMaintenanceTooltip = effectiveStatus === EquipmentStatus.UNDER_MAINTENANCE && latestMaintenanceNote;
 
+  // *** NEW: Render Borrow History ***
+  const renderBorrowHistory = () => {
+    if (!equipment) return null; // Should be handled by main loading state
+    if (!sortedBorrowRecords || sortedBorrowRecords.length === 0) {
+      return <p className="text-sm text-muted-foreground italic px-6 pb-6">No borrow history found for this equipment.</p>;
+    }
+
+    return (
+      <div className="max-h-[800px] overflow-y-auto pr-6 pl-6 pb-6">
+        <div className="space-y-4">
+          {sortedBorrowRecords.map((borrow: BorrowWithDetails) => (
+            <div key={borrow.id} className="flex items-start gap-4 p-3 border rounded-md bg-background/50">
+               {/* Icon based on status? Or generic history icon? */}
+               {/* <History className="h-5 w-5 text-muted-foreground mt-1" /> */} 
+              <div className="flex-grow space-y-1">
+                <div className="flex justify-between items-center">
+                   <p className="text-sm font-medium">
+                       <UserIcon className="inline h-4 w-4 mr-1.5 text-muted-foreground"/> 
+                       Borrowed by: <Link href={`/users/${borrow.borrower.id}/profile`} className="hover:underline">{borrow.borrower.name ?? borrow.borrower.email}</Link>
+                   </p>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-2">
+                        {/* *** Reservation Type Badge *** */}
+                        <Badge 
+                            variant={getReservationTypeVariant(borrow.reservationType)}
+                            className="capitalize text-[10px] scale-95 whitespace-nowrap font-normal"
+                        >
+                            {formatReservationType(borrow.reservationType)}
+                        </Badge>
+                        {/* Borrow Status Badge */}
+                        <Badge variant={getBorrowStatusVariant(borrow.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
+                            {formatBorrowStatus(borrow.borrowStatus)}
+                        </Badge>
+                    </div>
+                </div>
+                 {borrow.class && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                      <School className="h-3.5 w-3.5"/> Class: {borrow.class.courseCode} {borrow.class.section}
+                    </p>
+                 )}
+                 <p className="text-xs text-muted-foreground">
+                    Requested: {safeFormatDate(borrow.requestedStartTime, 'PPp')} - {safeFormatDate(borrow.requestedEndTime, 'PPp')}
+                 </p>
+                 {borrow.approvedStartTime && borrow.approvedEndTime && (
+                   <p className="text-xs text-muted-foreground">
+                      Approved: {safeFormatDate(borrow.approvedStartTime, 'PPp')} - {safeFormatDate(borrow.approvedEndTime, 'PPp')}
+                   </p>
+                 )}
+                 {borrow.checkoutTime && (
+                   <p className="text-xs text-muted-foreground">
+                       Checked Out: {safeFormatDate(borrow.checkoutTime, 'PPp')}
+                   </p>
+                 )}
+                 {borrow.actualReturnTime && (
+                   <p className="text-xs text-muted-foreground">
+                       Returned: {safeFormatDate(borrow.actualReturnTime, 'PPp')}
+                   </p>
+                 )}
+                 {/* Link to group? */}
+                 {/* {borrow.borrowGroupId && <Link href={`/borrows/group/${borrow.borrowGroupId}`}>Group</Link>} */} 
+               </div>
+             </div>
+           ))}
+         </div>
+       </div>
+     );
+   };
+  // *** END NEW ***
+
   return (
     <TooltipProvider>
       <div className="container mx-auto px-4 py-8">
         <Link
           href="/equipment"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
-          legacyBehavior>
+          >
           <ArrowLeft className="h-4 w-4" />
           Back to Equipment List
         </Link>
@@ -702,7 +812,7 @@ export default function EquipmentDetailPage() {
               {/* Commented out the individual ReservationModal trigger above */}
               {canManage && (
                 <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                  <Link href={`/equipment/${id}/edit`} legacyBehavior>
+                  <Link href={`/equipment/${id}/edit`}>
                     <Edit className="h-4 w-4" /> Edit Equipment
                   </Link>
                 </Button>
@@ -801,7 +911,7 @@ export default function EquipmentDetailPage() {
                 {equipment.purchaseCost != null && (
                   <div>
                      <h4 className="font-semibold text-sm text-muted-foreground mb-1">Purchase Cost</h4>
-                     <p className="text-sm text-foreground/90">${equipment.purchaseCost.toFixed(2)}</p>
+                     <p className="text-sm text-foreground/90">₱{equipment.purchaseCost.toFixed(2)}</p>
                    </div>
                 )}
                  <div>
@@ -898,7 +1008,7 @@ export default function EquipmentDetailPage() {
                   </div>
                   <div className="flex justify-between">
                       <span>Purchase Cost:</span>
-                      <span>{equipment.purchaseCost ? `$${equipment.purchaseCost.toFixed(2)}` : 'N/A'}</span>
+                      <span>{equipment.purchaseCost ? `₱${equipment.purchaseCost.toFixed(2)}` : 'N/A'}</span>
                   </div>
               </CardContent>
             </Card>
@@ -996,6 +1106,21 @@ export default function EquipmentDetailPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* *** NEW: Borrow History Card *** */}
+            <Card className="bg-card/80 border-border/50 mt-6">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <History className="mr-2 h-5 w-5" /> Borrow History
+                </CardTitle>
+                 <CardDescription>Past and present borrows associated with this equipment.</CardDescription>
+              </CardHeader>
+               {/* Render history inside CardContent or directly */}
+              <CardContent className="p-0">
+                {renderBorrowHistory()}
+              </CardContent>
+            </Card>
+            {/* *** END NEW *** */} 
 
           </div>
         </div>

@@ -101,8 +101,10 @@ export default function EquipmentCard({
     // Add onClick handler and conditional cursor to the Card
     <Card 
       className={cn(
-        "overflow-hidden flex flex-col h-full bg-card/60 border-border/40 hover:border-border/80 transition-colors duration-200 relative",
-        isAvailable && "cursor-pointer" 
+        "overflow-hidden flex flex-col h-full bg-card/60 border-border/40 transition-colors duration-200 relative",
+        // Apply hover effect only when available
+        isAvailable ? "hover:border-border/80 cursor-pointer" : "opacity-50 grayscale cursor-not-allowed",
+        // Remove separate isAvailable && "cursor-pointer" as it's handled above
       )}
       onClick={handleCardClick}
     >
@@ -175,7 +177,7 @@ export default function EquipmentCard({
             <Link
               href={`/equipment/${equipment.id}`}
               aria-label={`View details for ${equipment.name}`}
-              legacyBehavior>
+              >
                <Eye className="mr-2 h-4 w-4" /> View Details
             </Link>
           </Button>

@@ -11,7 +11,7 @@ import { format, isValid, formatDistanceStrict } from 'date-fns';
 import Link from 'next/link';
 import { Users, List } from 'lucide-react';
 // Import types
-import { Borrow, Equipment, Class, BorrowStatus } from '@prisma/client'; 
+import { Borrow, Equipment, Class, BorrowStatus, ReservationType } from '@prisma/client';
 // Import the new modal
 import ReportDeficiencyModal from '@/components/deficiencies/ReportDeficiencyModal';
 
@@ -22,6 +22,7 @@ type UserBorrowView = Borrow & {
   class: Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'>;
   expectedReturnTime: Date | null;
   borrowGroupId: string | null;
+  reservationType?: ReservationType | null;
 };
 
 // Grouped borrows structure
@@ -61,6 +62,22 @@ const calculateDuration = (start: Date | string | null | undefined, end: Date | 
     }
 };
 // --- END NEW ---
+
+// *** NEW: Helpers for Reservation Type Display ***
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+};
+const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
+    if (!type) return 'secondary';
+    return type === 'IN_CLASS' ? 'success' : 'destructive';
+};
+
+// *** NEW: Add formatBorrowStatus helper ***
+const formatBorrowStatus = (status: BorrowStatus): string => {
+    if (!status) return 'N/A';
+    return status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+};
 
 export default function MyBorrowsPage() {
   const [borrows, setBorrows] = useState<UserBorrowView[]>([]);
@@ -186,6 +203,46 @@ export default function MyBorrowsPage() {
   const individualBorrows = groupedBorrows[INDIVIDUAL_BORROWS_KEY] || [];
   const groupIds = Object.keys(groupedBorrows).filter(key => key !== INDIVIDUAL_BORROWS_KEY);
 
+  // --- Render Function for Borrow Card Items (used for both individual and group) ---
+  const renderBorrowItems = (items: UserBorrowView[]) => (
+      <ul className="space-y-3 mt-3">
+          {items.map(item => (
+              <li key={item.id} className="flex items-start gap-3 border-b pb-3 last:border-b-0">
+                  <Image 
+                      src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                      alt={item.equipment.name}
+                      width={48} height={48}
+                      className="rounded object-cover aspect-square mt-1"
+                  />
+                  <div className="flex-grow">
+                      <div className="flex justify-between items-center mb-1">
+                          <span className="font-medium text-sm text-foreground truncate" title={item.equipment.name}>{item.equipment.name}</span>
+                          {/* Badges: Status & Type */}
+                          <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
+                              {/* *** Reservation Type Badge *** */}
+                              <Badge 
+                                  variant={getReservationTypeVariant(item.reservationType)}
+                                  className="capitalize text-[10px] scale-90 whitespace-nowrap font-normal"
+                                  title={`Reservation Type: ${formatReservationType(item.reservationType)}`}
+                              >
+                                  {formatReservationType(item.reservationType)}
+                              </Badge>
+                              {/* Status Badge */}
+                              <Badge variant={getStatusVariant(item.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
+                                  {formatBorrowStatus(item.borrowStatus)}
+                              </Badge>
+                          </div>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Equipment ID: {item.equipment.equipmentId || 'N/A'}</p>
+                      <p className="text-xs text-muted-foreground">Checkout Time: {formatDateSafe(item.checkoutTime)}</p>
+                      {/* Display Due Time / Overdue Info */}
+                      {/* ... Existing due time / overdue logic ... */}
+                  </div>
+              </li>
+          ))}
+      </ul>
+  );
+
   return (
       <div className="space-y-8">
           <div className="flex justify-between items-center">
@@ -223,7 +280,7 @@ export default function MyBorrowsPage() {
                                    Time Checked Out: {calculateDuration(representativeItem.checkoutTime, currentTime)}
                                 </CardDescription>
                             </div>
-                            <Link href={`/borrows/group/${groupId}`} passHref legacyBehavior>
+                            <Link href={`/borrows/group/${groupId}`} passHref>
                                <Button variant="outline" size="sm" asChild>
                                    <span>View Details</span>
                                </Button>
@@ -231,16 +288,7 @@ export default function MyBorrowsPage() {
                         </CardHeader>
                         <CardContent className="p-4 pt-0">
                             <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
-                            <ul className="space-y-1 list-disc list-inside text-sm">
-                                {groupItems.map(item => (
-                                    <li key={item.id}>
-                                       {item.equipment.name} {item.equipment.equipmentId ? `(${item.equipment.equipmentId})` : ''}
-                                        <Badge variant={getStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90">
-                                           {item.borrowStatus.toLowerCase().replace('_', ' ')}
-                                        </Badge>
-                                    </li>
-                                ))}
-                            </ul>
+                            {renderBorrowItems(groupItems)}
                         </CardContent>
                         <CardFooter className="p-4 pt-2">
                             <Button
