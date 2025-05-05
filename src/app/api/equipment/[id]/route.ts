@@ -1,11 +1,19 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, BorrowStatus } from '@prisma/client';
+import { PrismaClient, BorrowStatus, EquipmentStatus, UserRole } from '@prisma/client';
 import { EquipmentSchema } from '@/lib/schemas'; // Import schema for validation
 import { z } from 'zod';
 import { getServerSession } from "next-auth/next"; // Added import
 import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Added import
+import { NextRequest } from 'next/server'; // Added NextRequest
 
 const prisma = new PrismaClient();
+
+// Define RouteContext for params type
+interface RouteContext {
+  params: {
+    id: string; // Equipment ID from the URL
+  };
+}
 
 // GET Handler for fetching a single equipment item by ID
 export async function GET(
@@ -200,46 +208,57 @@ export async function PUT(
   }
 }
 
-// DELETE Handler for deleting equipment by ID
-export async function DELETE(
-  request: Request, 
-  { params }: { params: { id: string } }
-) {
-  // TODO: Add await for session/auth check if needed here
-  // const session = await getServerSession(authOptions); // Example
-  // if (!session || session.user.role !== 'STAFF') return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
-  
-  // Access params.id after potential await (if added above) or just use directly if no await is planned
-  const equipmentId = params.id;
-  
+// DELETE: "Delete" an equipment record by archiving it
+export async function DELETE(req: NextRequest, { params }: RouteContext) {
+  // Permission check (ensure user is STAFF or FACULTY)
+  const session = await getServerSession(authOptions);
+  const userRole = session?.user?.role as UserRole;
+  if (!session?.user || !(userRole === UserRole.STAFF || userRole === UserRole.FACULTY)) {
+    return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
+  }
+
+  const equipmentId = params.id; // Use variable
+
+  if (!equipmentId) {
+    return NextResponse.json({ message: 'Equipment ID is missing' }, { status: 400 });
+  }
+
   try {
-    // Optional: Check if equipment exists before deleting (provides specific 404)
-    const existingEquipment = await prisma.equipment.findUnique({
-      where: { id: equipmentId }, // Use variable
+    // Check if equipment exists first
+    const equipment = await prisma.equipment.findUnique({
+      where: { id: equipmentId },
+      select: { id: true, status: true } // Select status to avoid archiving already archived
     });
-    if (!existingEquipment) {
-      return NextResponse.json({ message: `Equipment with ID ${equipmentId} not found` }, { status: 404 });
+
+    if (!equipment) {
+      return NextResponse.json({ message: 'Equipment not found' }, { status: 404 });
     }
 
-    // Delete the equipment record
-    await prisma.equipment.delete({
-      where: { id: equipmentId }, // Use variable
+    // Optional: Prevent archiving if already archived?
+    if (equipment.status === EquipmentStatus.ARCHIVED) {
+        return NextResponse.json({ message: 'Equipment is already archived' }, { status: 400 });
+    }
+
+    // Update the equipment status to ARCHIVED instead of deleting
+    await prisma.equipment.update({
+      where: { id: equipmentId },
+      data: { status: EquipmentStatus.ARCHIVED },
     });
 
-    console.log(`Equipment deleted successfully: ${equipmentId}`); // Use variable
-    // Return No Content on successful deletion
-    return new NextResponse(null, { status: 204 }); 
+    console.log(`Equipment ${equipmentId} archived by ${session.user.email}.`);
+    // Return success with No Content status (standard for DELETE/Archive)
+    return new NextResponse(null, { status: 204 });
 
-  } catch (error) {
-    // Use variable in error logging
-    console.error(`Error deleting equipment ${equipmentId}:`, error); 
-    // Handle potential errors, e.g., if the delete fails due to constraints
-    // or if the findUnique check was skipped and delete fails.
-    // Add check for specific Prisma errors if needed
-    // if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') { // Record not found
-    //   return NextResponse.json({ message: 'Equipment not found' }, { status: 404 });
-    // }
-    return NextResponse.json({ message: 'An unexpected error occurred during deletion.' }, { status: 500 });
+  } catch (error: any) {
+    console.error(`API Error - DELETE (Archive) /api/equipment/${equipmentId}:`, error);
+
+    // Specific check for Record Not Found during the initial findUnique or update
+    if (error.code === 'P2025') {
+      return NextResponse.json({ message: 'Equipment not found' }, { status: 404 });
+    }
+
+    // Fallback for other errors
+    return NextResponse.json({ message: 'Internal Server Error archiving equipment' }, { status: 500 });
   }
 }
 

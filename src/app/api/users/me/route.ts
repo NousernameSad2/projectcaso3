@@ -76,18 +76,17 @@ export async function PATCH(req: NextRequest) {
         const updateData = parsedData.data;
 
         // Ensure we don't try to update with undefined values if fields were omitted
-        // Also convert empty strings for nullable fields to null
         const dataToUpdate: { [key: string]: any } = {};
         if (updateData.name !== undefined) dataToUpdate.name = updateData.name;
         
-        // Convert empty string to null for studentNumber if provided
+        // Assign directly, Zod validation already ensures non-empty string
         if (updateData.studentNumber !== undefined) {
-            dataToUpdate.studentNumber = updateData.studentNumber === '' ? null : updateData.studentNumber;
+            dataToUpdate.studentNumber = updateData.studentNumber;
         }
         
-        // Convert empty string to null for contactNumber if provided
+        // Assign directly, Zod validation already ensures non-empty string
         if (updateData.contactNumber !== undefined) {
-            dataToUpdate.contactNumber = updateData.contactNumber === '' ? null : updateData.contactNumber;
+            dataToUpdate.contactNumber = updateData.contactNumber;
         }
         
         if (updateData.sex !== undefined) dataToUpdate.sex = updateData.sex;

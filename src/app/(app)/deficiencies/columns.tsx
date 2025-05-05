@@ -1,8 +1,7 @@
 'use client'
 
 import { ColumnDef, RowData } from "@tanstack/react-table"
-import { Deficiency, DeficiencyStatus, DeficiencyType, User, Borrow, Equipment } from "@prisma/client"
-import { format } from 'date-fns'
+import { Deficiency, DeficiencyStatus, User, Equipment } from "@prisma/client"; import { format } from 'date-fns'
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ArrowUpDown, MoreHorizontal } from "lucide-react"

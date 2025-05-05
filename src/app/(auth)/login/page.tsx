@@ -51,9 +51,7 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        setError(result.error === "CredentialsSignin" 
-                 ? "Invalid email or password." 
-                 : "An unexpected error occurred during login.");
+        setError(result.error || "An unexpected error occurred during login.");
       } else if (result?.ok) {
         router.push('/'); 
       } else {

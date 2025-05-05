@@ -141,7 +141,7 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
       }
 
       toast.success(result.message || 'Class created successfully!');
-      onClassAdded(result.class);
+      onClassAdded(result);
       form.reset();
       setIsOpen(false);
     } catch (error: any) {

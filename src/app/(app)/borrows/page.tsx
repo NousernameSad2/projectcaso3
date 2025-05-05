@@ -43,7 +43,6 @@ export default function BorrowsPage() {
   const [borrows, setBorrows] = useState<BorrowWithEquipment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [loadingReturn, setLoadingReturn] = useState<string | null>(null); // Store ID of borrow being returned
   const [loadingCancel, setLoadingCancel] = useState<string | null>(null); // Store ID of borrow being cancelled
 
   const fetchBorrows = async () => {
@@ -154,7 +153,6 @@ export default function BorrowsPage() {
             <TableBody>
               {borrows.map((borrow) => {
                 const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
-                const isReturnLoading = loadingReturn === borrow.id;
                 const isCancelLoading = loadingCancel === borrow.id;
                 // Explicit check for cancellable statuses
                 const canCancel = borrow.borrowStatus === BorrowStatus.PENDING || borrow.borrowStatus === BorrowStatus.APPROVED;
@@ -180,16 +178,15 @@ export default function BorrowsPage() {
                         {formatBorrowStatus(borrow.borrowStatus)}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
-                        {format(new Date(borrow.requestedStartDate), 'PP')}
+                    <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                       {format(new Date(borrow.requestedStartTime), 'PP')} - {format(new Date(borrow.requestedEndTime), 'PP')}
                     </TableCell>
                      <TableCell className="text-sm text-muted-foreground">
                         {borrow.checkoutTime ? format(new Date(borrow.checkoutTime), 'PPp') : '-'}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                         {/* Check if expectedReturnTime exists before formatting */} 
-                         {borrow.expectedReturnTime 
-                           ? format(new Date(borrow.expectedReturnTime), 'PPp') // Changed format to 'PPp' to include time
+                         {borrow.approvedEndTime 
+                           ? format(new Date(borrow.approvedEndTime), 'PPp') 
                            : '-'} 
                     </TableCell>
                     <TableCell className="text-right space-x-2">
@@ -213,7 +210,6 @@ export default function BorrowsPage() {
                       {borrow.borrowStatus === BorrowStatus.PENDING_RETURN && (
                           <span className="text-sm text-info-foreground italic whitespace-nowrap">Pending Return</span>
                       )}
-                      {/* ADDED Cancel Button */}
                       {canCancel && (
                          <Button 
                           variant="destructive" 

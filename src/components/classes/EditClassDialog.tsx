@@ -121,6 +121,8 @@ export function EditClassDialog({
   const [facultyUsers, setFacultyUsers] = useState<FacultyUser[]>([]);
   const [isFetchingFaculty, setIsFetchingFaculty] = useState(false);
 
+  const token = (session as any)?.accessToken; // Extract token
+
   const form = useForm<ClassUpdateInput>({
     resolver: zodResolver(ClassUpdateSchema),
     defaultValues: {
@@ -161,7 +163,6 @@ export function EditClassDialog({
       if (!isStaff || !isOpen) return; // Only fetch if staff and dialog is open
       setIsFetchingFaculty(true);
       try {
-        const token = (session as any)?.accessToken; // Cast to any temporarily
         if (!token) {
           throw new Error('Authentication token not found.');
         }
@@ -184,7 +185,7 @@ export function EditClassDialog({
     }
 
     fetchFaculty();
-  }, [isStaff, isOpen, (session as any)?.accessToken]); // Re-fetch if role changes or dialog opens
+  }, [isStaff, isOpen, session, token]);
 
   async function onSubmit(values: ClassUpdateInput) {
     if (!classData) return;

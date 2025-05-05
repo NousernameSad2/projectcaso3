@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, use } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation'; // Import for redirection
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Users, Clock } from 'lucide-react'; // Removed Edit, KeyRound
 import Image from 'next/image';
 import { toast } from "sonner"; // Added toast import
+import Link from 'next/link'; // Ensure Link is imported
 // Removed cn, ProfileEditForm, ChangePasswordForm imports
 
 // UserProfile type remains the same
@@ -96,17 +97,18 @@ const calculateDuration = (
 };
 // --- End Helper Functions ---
 
-// Interface for page props including params
+// Define Props with params as a Promise
 interface AdminViewUserProfilePageProps {
-    params: {
-        id: string; // User ID from the URL
-    };
+    params: Promise<{ id: string }>; // Type params as a Promise resolving to { id: string }
 }
 
 export default function AdminViewUserProfilePage({ params }: AdminViewUserProfilePageProps) {
+  // Use React.use which expects a Promise or context
+  const resolvedParams = use(params);
+  const targetUserId = resolvedParams.id; // Access id after resolving
+
   const { data: session, status: sessionStatus } = useSession();
   const router = useRouter();
-  const targetUserId = params.id;
   const token = session?.accessToken;
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -116,8 +118,6 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
   const [borrowHistory, setBorrowHistory] = useState<BorrowWithEquipment[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
-
-  // Removed state for edit/password dialogs
 
   // Authorization Check Effect
   useEffect(() => {
@@ -143,8 +143,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
         setProfileError(null);
         try {
           console.log(`[Admin View] Fetching profile for user ID: ${targetUserId}`);
-          // Fetch specific user by ID using admin permissions
-          const response = await fetch(`/api/users/${targetUserId}`, {
+          const response = await fetch(`/api/users/${targetUserId}`, { // Use resolved targetUserId
              headers: { 'Authorization': `Bearer ${token}` }
           });
           console.log(`[Admin View] Profile API Response Status: ${response.status}`);
@@ -169,7 +168,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
         setIsLoadingProfile(false);
         setProfileError('Authentication required.');
     }
-  }, [sessionStatus, token, targetUserId]); // Add token and targetUserId as dependencies
+  }, [sessionStatus, token, targetUserId]);
 
   // Fetch specific user borrow history
   useEffect(() => {
@@ -180,8 +179,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
         setHistoryError(null);
         try {
           console.log(`[Admin View] Fetching borrow history for user ID: ${targetUserId}`);
-          // Fetch specific user's history using admin permissions (NEW ENDPOINT)
-          const response = await fetch(`/api/borrows/user/${targetUserId}`, {
+          const response = await fetch(`/api/borrows/user/${targetUserId}`, { // Use resolved targetUserId
              headers: { 'Authorization': `Bearer ${token}` }
           });
           console.log(`[Admin View] History API Response Status: ${response.status}`);
@@ -209,7 +207,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
         setIsLoadingHistory(false);
         setHistoryError('Authentication required.');
     }
-  }, [sessionStatus, token, targetUserId]); // Add token and targetUserId as dependencies
+  }, [sessionStatus, token, targetUserId]);
 
   // Group borrow history (logic remains the same, but remove filtering)
   const groupedBorrowHistory = useMemo((): GroupedBorrows => {
@@ -240,8 +238,6 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
   // --- END Borrow History Grouping ---
 
   const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory;
-
-  // Removed handleUpdateSuccess callback
 
   // Handle initial loading or unauthenticated state
   if (sessionStatus === 'loading') {
@@ -307,43 +303,47 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                 const groupItems = groupedBorrowHistory[groupId];
                 const representativeItem = groupItems[0];
                 return (
-                <Card key={groupId} className="overflow-hidden bg-card/60 border">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <Users className="h-5 w-5"/> Group Borrow (Returned {formatDateSafe(representativeItem.actualReturnTime, 'PP')})
-                        </CardTitle>
-                         <CardDescription className="text-xs mt-1">
-                           Borrow ID: {groupId}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                         <ul className="space-y-3 mt-3">
-                            {groupItems.map(item => (
-                                <li key={item.id} className="flex items-center gap-2">
-                                    <Image
-                                        src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                        alt={item.equipment.name}
-                                        width={32}
-                                        height={32}
-                                        className="rounded object-cover aspect-square"
-                                    />
-                                    <div className='flex-grow'>
-                                        <span className='font-medium'>{item.equipment.name}</span>
-                                        {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
-                                        <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                            <Clock className='h-3 w-3'/>
-                                            Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
-                                            (Returned: {formatDateSafe(item.actualReturnTime, 'Pp')})
-                                        </span>
-                                    </div>
-                                    <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90 whitespace-nowrap">
-                                        {item.borrowStatus.toLowerCase().replace('_', ' ')}
-                                    </Badge>
-                                </li>
-                            ))}
-                        </ul>
-                    </CardContent>
-                </Card>
+                <Link href={`/borrows/group/${groupId}`} key={groupId} passHref legacyBehavior>
+                  <a className="block hover:bg-muted/10 transition-colors rounded-lg"> {/* Added wrapper 'a' tag */}
+                    <Card className="overflow-hidden bg-card/60 border">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <Users className="h-5 w-5"/> Group Borrow (Returned {formatDateSafe(representativeItem.actualReturnTime, 'PP')})
+                            </CardTitle>
+                             <CardDescription className="text-xs mt-1">
+                               Borrow ID: {groupId}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                             <ul className="space-y-3 mt-3">
+                                {groupItems.map(item => (
+                                    <li key={item.id} className="flex items-center gap-2">
+                                        <Image
+                                            src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                            alt={item.equipment.name}
+                                            width={32}
+                                            height={32}
+                                            className="rounded object-cover aspect-square"
+                                        />
+                                        <div className='flex-grow'>
+                                            <span className='font-medium'>{item.equipment.name}</span>
+                                            {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                            <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                <Clock className='h-3 w-3'/>
+                                                Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
+                                                (Returned: {formatDateSafe(item.actualReturnTime, 'Pp')})
+                                            </span>
+                                        </div>
+                                        <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90 whitespace-nowrap">
+                                            {item.borrowStatus.toLowerCase().replace('_', ' ')}
+                                        </Badge>
+                                    </li>
+                                ))}
+                            </ul>
+                        </CardContent>
+                    </Card>
+                  </a>
+                </Link>
                 );
             })}
 

@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { cn } from '@/lib/utils';
 import ProfileEditForm from '@/components/profile/ProfileEditForm'; // Import the form
 import ChangePasswordForm from '@/components/profile/ChangePasswordForm'; // Import the change password form
+import Link from 'next/link'; // Add Link import
 
 // Correct UserProfile type to use string literals for sex
 type UserProfile = Omit<User, 'password'> & { sex: 'Male' | 'Female' | null };
@@ -328,54 +329,58 @@ export default function ProfilePage() {
                 // ---- END Logging ----
 
                 return (
-                <Card key={groupId} className="overflow-hidden bg-card/60 border">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-base">
-                            <Users className="h-5 w-5"/> Group Borrow (Returned {formatDateSafe(representativeItem.actualReturnTime, 'PP')})
-                        </CardTitle>
-                         <CardDescription className="text-xs mt-1">
-                           Borrow ID: {groupId}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent className="p-4 pt-0">
-                        <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
-                        <ul className="space-y-2 text-sm">
-                            {groupItems.map(item => {
-                                // ---- START Logging ----
-                                console.log(`[Profile History Render Group Item ${item.id}] Data passed to calculation:`, JSON.stringify({ 
-                                  checkoutTime: item.checkoutTime, 
-                                  actualReturnTime: item.actualReturnTime, 
-                                  approvedStartTime: item.approvedStartTime 
-                                }, null, 2));
-                                // ---- END Logging ----
-                                return (
-                                <li key={item.id} className="flex items-center gap-2">
-                                    <Image 
-                                        src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                        alt={item.equipment.name}
-                                        width={32}
-                                        height={32}
-                                        className="rounded object-cover aspect-square"
-                                    />
-                                    <div className='flex-grow'>
-                                        <span className='font-medium'>{item.equipment.name}</span>
-                                        {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
-                                        <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                            <Clock className='h-3 w-3'/> 
-                                            Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
-                                            (Returned: {formatDateSafe(item.actualReturnTime, 'Pp')})
-                                        </span>
-                                    </div>
-                                    <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90 whitespace-nowrap">
-                                        {item.borrowStatus.toLowerCase().replace('_', ' ')}
-                                    </Badge>
-                                </li>
-                                );
-                            })}
-                        </ul>
-                    </CardContent>
-                    {/* No footer actions for history */}
-                </Card>
+                <Link href={`/borrows/group/${groupId}`} key={groupId} passHref legacyBehavior>
+                  <a className="block hover:bg-muted/10 transition-colors rounded-lg"> {/* Added wrapper 'a' tag for styling and legacyBehavior */}
+                    <Card className="overflow-hidden bg-card/60 border">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <Users className="h-5 w-5"/> Group Borrow (Returned {formatDateSafe(representativeItem.actualReturnTime, 'PP')})
+                            </CardTitle>
+                             <CardDescription className="text-xs mt-1">
+                               Borrow ID: {groupId}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0">
+                            <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
+                            <ul className="space-y-2 text-sm">
+                                {groupItems.map(item => {
+                                    // ---- START Logging ----
+                                    console.log(`[Profile History Render Group Item ${item.id}] Data passed to calculation:`, JSON.stringify({ 
+                                      checkoutTime: item.checkoutTime, 
+                                      actualReturnTime: item.actualReturnTime, 
+                                      approvedStartTime: item.approvedStartTime 
+                                    }, null, 2));
+                                    // ---- END Logging ----
+                                    return (
+                                    <li key={item.id} className="flex items-center gap-2">
+                                        <Image 
+                                            src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                            alt={item.equipment.name}
+                                            width={32}
+                                            height={32}
+                                            className="rounded object-cover aspect-square"
+                                        />
+                                        <div className='flex-grow'>
+                                            <span className='font-medium'>{item.equipment.name}</span>
+                                            {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                            <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                <Clock className='h-3 w-3'/> 
+                                                Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
+                                                (Returned: {formatDateSafe(item.actualReturnTime, 'Pp')})
+                                            </span>
+                                        </div>
+                                        <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90 whitespace-nowrap">
+                                            {item.borrowStatus.toLowerCase().replace('_', ' ')}
+                                        </Badge>
+                                    </li>
+                                    );
+                                })}
+                            </ul>
+                        </CardContent>
+                        {/* No footer actions for history */}
+                    </Card>
+                  </a>
+                </Link>
                 );
             })}
 

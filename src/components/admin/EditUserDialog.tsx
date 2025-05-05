@@ -207,7 +207,7 @@ export default function EditUserDialog({
               name="studentNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Student Number (Optional)</FormLabel>
+                  <FormLabel>Student Number</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
                   </FormControl>
@@ -222,7 +222,7 @@ export default function EditUserDialog({
               name="contactNumber"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Contact Number (Optional)</FormLabel>
+                  <FormLabel>Contact Number</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., 09171234567" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
                   </FormControl>

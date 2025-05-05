@@ -27,7 +27,8 @@ export const authOptions: AuthOptions = {
 
         if (!credentials?.email || !credentials.password) {
           console.error("[Authorize] Missing email or password.");
-          return null; 
+          // Throw an error that will be shown on the login page
+          throw new Error("Please enter both email and password.");
         }
 
         try {
@@ -43,40 +44,53 @@ export const authOptions: AuthOptions = {
           });
 
           console.log("[Authorize] Login API Response Status:", loginRes.status);
+
+          // If login API request failed, parse the error message and throw it
           if (!loginRes.ok) {
              console.error("[Authorize] Login API request failed. Status:", loginRes.status);
+             let errorMessage = "Login failed due to an unexpected error."; // Default error
              try {
                 const errorData = await loginRes.json();
                 console.error("[Authorize] Login API Error Data:", errorData);
-                return null; // Or throw error
+                // Use the message from the API response if available
+                if (errorData?.message) {
+                    errorMessage = errorData.message;
+                }
              } catch (e) {
                 console.error("[Authorize] Failed to parse Login API error response.");
-                return null;
              }
+             // Throw the error with the specific message from the API
+             throw new Error(errorMessage);
           }
-          
+
           const loginData = await loginRes.json();
           console.log("[Authorize] Login API Response Data:", JSON.stringify(loginData)); // Log stringified data
 
-          if (!loginData.token || !loginData.user || !loginData.user.userId) { 
+          // Check if the expected data structure is returned
+          if (!loginData.token || !loginData.user || !loginData.user.userId) {
             console.error("[Authorize] Login API returned invalid data structure (missing token, user, or user.userId).");
-            return null;
+            // Throw an error for invalid data structure
+            throw new Error("Received invalid data from login service.");
           }
 
+          // Prepare the user object required by NextAuth
           const userObjectToReturn = {
-            id: loginData.user.userId, 
+            id: loginData.user.userId,
             name: loginData.user.name,
             email: loginData.user.email,
-            image: loginData.user.image,
-            role: loginData.user.role, 
+            // image: loginData.user.image, // Include image if available and needed
+            role: loginData.user.role,
             accessToken: loginData.token,
           };
           console.log("[Authorize] Login API success. Returning User Object:", JSON.stringify(userObjectToReturn));
-          return userObjectToReturn;
+          return userObjectToReturn; // Return the user object on success
 
         } catch (error: any) {
-          console.error("[Authorize] Error during API call:", error);
-          return null;
+          // Log any other errors during the process
+          console.error("[Authorize] Error during API call or processing:", error);
+          // Re-throw the error or throw a generic one
+          // If the error already has a message (like the ones we threw above), use it
+          throw new Error(error.message || "An unexpected error occurred during authorization.");
         }
       }
     })

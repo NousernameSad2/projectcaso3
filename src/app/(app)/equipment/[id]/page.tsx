@@ -245,10 +245,11 @@ export default function EquipmentDetailPage() {
       data.editHistory = Array.isArray(data.editHistory) ? data.editHistory : [];
       data.customNotesLog = Array.isArray(data.customNotesLog) ? data.customNotesLog : [];
       setEquipment(data);
-    } catch (err) {
+    } catch (err: unknown) {
       console.error("Error fetching equipment detail:", err);
-      // Don't overwrite main page error if this is just a refresh
-      toast.error(err instanceof Error ? err.message : "Could not refresh equipment data");
+      // Type check added
+      const message = err instanceof Error ? err.message : "An unknown error occurred";
+      toast.error(message);
       // setError(err instanceof Error ? err.message : "An unknown error occurred");
     } finally {
       // setIsFetching(false);
@@ -331,7 +332,7 @@ export default function EquipmentDetailPage() {
       toast.success("Equipment deleted successfully!");
       router.push('/equipment');
 
-    } catch (err) {
+    } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
       toast.error(errorMessage);
       console.error("Delete Equipment Error:", err);
@@ -553,9 +554,11 @@ export default function EquipmentDetailPage() {
       toast.success('Note added successfully!');
       setNewNoteText(""); // Clear input field
       fetchEquipmentDetail(); // Refresh equipment details to show the new note
-    } catch (error) {
-      console.error('Error adding note:', error);
-      toast.error(error instanceof Error ? error.message : 'Could not add note.');
+    } catch (err: unknown) {
+      console.error('Error adding note:', err);
+      // Type check added
+      const message = err instanceof Error ? err.message : "An unknown error occurred";
+      toast.error(message);
     } finally {
       setIsSubmittingNote(false);
     }
@@ -581,9 +584,11 @@ export default function EquipmentDetailPage() {
 
       toast.success('Note deleted successfully!');
       fetchEquipmentDetail(); // Refresh equipment details to remove the note
-    } catch (error) {
-      console.error('Error deleting note:', error);
-      toast.error(error instanceof Error ? error.message : 'Could not delete note.');
+    } catch (err: unknown) {
+      console.error('Error deleting note:', err);
+      // Type check added
+      const message = err instanceof Error ? err.message : "An unknown error occurred";
+      toast.error(`Error deleting note: ${message}`);
     } finally {
       setIsDeletingNote(null); // Reset deleting state regardless of outcome
     }
@@ -786,7 +791,7 @@ export default function EquipmentDetailPage() {
               <CardContent className="space-y-4">
                  {equipment.condition && (
                   <div>
-                    <h4 className="font-semibold text-sm text-muted-foreground mb-1">Condition Notes</h4>
+                    <h4 className="font-semibold text-sm text-muted-foreground mb-1">Description</h4>
                     <p className="text-sm text-foreground/90">{equipment.condition}</p>
                   </div>
                 )}
@@ -853,6 +858,7 @@ export default function EquipmentDetailPage() {
               </CardHeader>
             </Card>
 
+            {/* Commenting out Maintenance Count Card
             <Card className="bg-card">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center space-x-2">
@@ -862,6 +868,7 @@ export default function EquipmentDetailPage() {
                 </CardTitle>
               </CardHeader>
             </Card>
+            */}
 
             <Card className="col-span-1 lg:col-span-1">
               <CardHeader>
@@ -876,10 +883,12 @@ export default function EquipmentDetailPage() {
                       <span>Net Contact Hours:</span>
                       <span>{netContactHoursFormatted}</span>
                   </div>
+                   {/* Commenting out Maintenance Logs line item
                    <div className="flex justify-between">
                       <span>Maintenance Logs:</span>
                       <span>{equipment.maintenanceLog?.length ?? 0}</span>
                   </div>
+                  */}
                   <div className="flex justify-between">
                       <span>Condition:</span>
                       <span className="capitalize">{equipment.condition?.toLowerCase() ?? 'N/A'}</span>

@@ -215,7 +215,6 @@ export default function BorrowRequestsPage() {
     
     const { borrowId } = returnTarget;
     setIsSubmittingAction(true);
-    let returnSuccess = false; // Flag to track success
 
     try {
       // Call Confirm Return API
@@ -233,7 +232,6 @@ export default function BorrowRequestsPage() {
         throw new Error(confirmResult.error || `Failed to confirm return (${confirmResponse.status})`);
       }
       toast.success(confirmResult.message || "Item return confirmed successfully!");
-      returnSuccess = true;
 
       // --- Log Deficiency if requested --- 
       if (returnData.logDeficiency && returnData.deficiencyType) {

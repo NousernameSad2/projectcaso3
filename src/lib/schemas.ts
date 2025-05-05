@@ -4,14 +4,14 @@ import { EquipmentCategory, EquipmentStatus, UserRole, UserStatus } from "@prism
 export const RegistrationSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }),
   email: z.string().email({ message: "Please enter a valid email address." }),
-  studentNumber: z.string().optional(), // Added - Optional for now
-  contactNumber: z.string().optional(), // Added - Optional for now
-  sex: z.enum(['Male', 'Female'], { errorMap: () => ({ message: 'Please select a valid sex.' }) }), // Added - Required enum
+  studentNumber: z.string().min(1, { message: "Student number is required." }),
+  contactNumber: z.string().min(10, { message: "Contact number must be at least 10 digits." }),
+  sex: z.enum(['Male', 'Female'], { errorMap: () => ({ message: 'Please select a valid sex.' }) }),
   password: z.string().min(8, { message: "Password must be at least 8 characters." }),
   confirmPassword: z.string()
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords do not match.",
-  path: ["confirmPassword"], // Set the error path to confirmPassword
+  path: ["confirmPassword"],
 });
 
 export type RegistrationInput = z.infer<typeof RegistrationSchema>;
@@ -21,7 +21,7 @@ export const LoginSchema = z.object({
   email: z.string().email({
     message: "Please enter a valid email address.",
   }),
-  password: z.string().min(1, { // Password is required
+  password: z.string().min(1, {
     message: "Password is required.",
   }),
 });
@@ -31,18 +31,14 @@ export type LoginInput = z.infer<typeof LoginSchema>;
 // --- Add Equipment Schema ---
 export const EquipmentSchema = z.object({
   name: z.string().min(3, { message: "Name must be at least 3 characters." }),
-  equipmentId: z.string().optional(), // Optional user-defined ID
-  // qrCodeValue: z.string().optional(), // Handle QR separately if needed
+  equipmentId: z.string().optional(),
   category: z.nativeEnum(EquipmentCategory),
   condition: z.string().optional(),
   status: z.nativeEnum(EquipmentStatus),
   stockCount: z.coerce.number().int().min(0),
-  purchaseCost: z.coerce.number().positive().optional().nullable(), // Coerce, allow null/optional
-  // images: z.array(z.string().url()).optional(), // Handle image uploads separately
-  // Add optional image URL field
+  purchaseCost: z.coerce.number().positive().optional().nullable(),
   imageUrl: z.string()
     .refine((val) => {
-      // Allow empty string or string starting with '/' or a valid URL
       if (val === '' || val.startsWith('/')) return true;
       try {
         new URL(val);
@@ -71,7 +67,6 @@ export const ReservationBaseSchema = z.object({
       invalid_type_error: "Invalid end date/time format."
   }),
   classId: z.string().min(1, { message: "Class selection is required."}), 
-  // groupMates is handled separately now, removed from base for form
   groupMateIds: z.array(z.string()).optional(),
 });
 
@@ -90,11 +85,9 @@ export const AdminUserUpdateSchema = z.object({
   email: z.string().email({ message: "Please enter a valid email address." }).optional(),
   role: z.nativeEnum(UserRole).optional(),
   status: z.nativeEnum(UserStatus).optional(),
-  studentNumber: z.string().optional(), // Added optional studentNumber
-  contactNumber: z.string().optional(), // Added optional contactNumber
-  sex: z.enum(['Male', 'Female']).optional(), // Added optional sex
-  // Password updates should likely be a separate process or require specific handling
-  // password: z.string().min(8).optional(), 
+  studentNumber: z.string().min(1, { message: "Student number cannot be empty." }).optional(),
+  contactNumber: z.string().min(10, { message: "Contact number must be at least 10 digits." }).optional(),
+  sex: z.enum(['Male', 'Female']).optional(),
 });
 
 export type AdminUserUpdateInput = z.infer<typeof AdminUserUpdateSchema>;
@@ -107,8 +100,8 @@ export const AdminUserCreateSchema = z.object({
   role: z.nativeEnum(UserRole),
   status: z.nativeEnum(UserStatus),
   sex: z.enum(['Male', 'Female'], { errorMap: () => ({ message: 'Please select a valid sex if provided.' }) }).optional(),
-  studentNumber: z.string().optional(), // Added optional studentNumber
-  contactNumber: z.string().optional(), // Added optional contactNumber
+  studentNumber: z.string().min(1, { message: "Student number is required." }),
+  contactNumber: z.string().min(10, { message: "Contact number must be at least 10 digits." }),
 });
 
 export type AdminUserCreateInput = z.infer<typeof AdminUserCreateSchema>;
@@ -116,9 +109,8 @@ export type AdminUserCreateInput = z.infer<typeof AdminUserCreateSchema>;
 // --- Add Profile Update Schema --- 
 export const ProfileUpdateSchema = z.object({
   name: z.string().min(2, { message: "Name must be at least 2 characters." }).optional(),
-  studentNumber: z.string().optional(), 
-  contactNumber: z.string().optional(),
-  // Ensure sex is optional but still one of the allowed values if provided
+  studentNumber: z.string().min(1, { message: "Student number cannot be empty." }),
+  contactNumber: z.string().min(10, { message: "Contact number must be at least 10 digits." }),
   sex: z.enum(['Male', 'Female'], { errorMap: () => ({ message: 'Please select a valid sex.' }) }).optional(),
 });
 
@@ -129,14 +121,14 @@ export type ProfileUpdateInput = z.infer<typeof ProfileUpdateSchema>;
 // Define the base object schema first
 const ChangePasswordBaseSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(8, "New password must be at least 8 characters long"), // Enforce minimum length
+  newPassword: z.string().min(8, "New password must be at least 8 characters long"),
   confirmPassword: z.string().min(1, "Please confirm your new password"),
 });
 
 // Apply refinement to the base schema
 export const ChangePasswordSchema = ChangePasswordBaseSchema.refine((data) => data.newPassword === data.confirmPassword, {
   message: "New passwords do not match",
-  path: ["confirmPassword"], // Set the error on the confirm password field
+  path: ["confirmPassword"],
 });
 
 export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
@@ -147,5 +139,4 @@ export { ChangePasswordBaseSchema };
 // Schema for Borrow Request Creation
 export const BorrowRequestSchema = z.object({
   equipmentId: z.string({ required_error: "Equipment ID is required."}),
-  // ... existing code ...
 }); 

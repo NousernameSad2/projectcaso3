@@ -11,15 +11,13 @@ interface RouteContext {
 }
 
 // GET: Get a specific class by ID, including enrolled students
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(req: NextRequest, { params: { id: classId } }: RouteContext) {
   // Allow any authenticated user to view class details
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload) { 
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
   
-  const classId = params.id;
-
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
   }
@@ -89,8 +87,7 @@ const ClassUpdateSchema = z.object({
 });
 
 // PATCH: Update class details
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
-  const classId = params.id;
+export async function PATCH(req: NextRequest, { params: { id: classId } }: RouteContext) {
   // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
@@ -193,15 +190,12 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 }
 
 // DELETE: Delete a class (sets classId to null in related records)
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
+export async function DELETE(req: NextRequest, { params: { id: classId } }: RouteContext) {
   // Verify user is STAFF or FACULTY 
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can delete classes.' }, { status: 403 });
   }
-
-  // Access params.id *after* await
-  const classId = params.id;
 
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });

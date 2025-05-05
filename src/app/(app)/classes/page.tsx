@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -69,7 +68,6 @@ interface EditDialogClassData {
 }
 
 export default function ClassesPage() {
-  const router = useRouter();
   const { data: session, status: sessionStatus } = useSession();
   const token = session?.accessToken;
   const user = session?.user;
@@ -128,12 +126,14 @@ export default function ClassesPage() {
         
         const data: ClassData[] = await response.json();
         setClasses(data);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Error fetching classes:", err);
         // Avoid setting general error state if it was a 401 we already handled by signing out
         if (response?.status !== 401) { 
-            setError(err.message || 'Failed to fetch classes.');
-            toast.error(err.message || 'Failed to fetch classes.');
+            // Type check added
+            const message = err instanceof Error ? err.message : 'Failed to fetch classes.';
+            setError(message);
+            toast.error(message);
             setClasses([]); // Clear classes on error
         }
       } finally {
@@ -159,8 +159,10 @@ export default function ClassesPage() {
     // Dependency array: run when session status changes
   }, [sessionStatus]); // Remove token from dependency array, rely on check inside fetchClasses
 
-  const handleClassAdded = (newClass: ClassData) => {
-    setClasses(prevClasses => [newClass, ...prevClasses]);
+  const handleClassAdded = (/* newClass: ClassData */) => { // Parameter no longer needed
+    // Instead of adding locally, refetch the list to get complete data
+    console.log("[handleClassAdded] New class added, refetching list...");
+    fetchClasses();
   };
 
   const handleDeleteClass = async (classId: string, classIdentifier: string) => {
@@ -183,9 +185,11 @@ export default function ClassesPage() {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Failed to delete class (Status: ${response.status})`);
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error deleting class:", err);
-      toast.error(`Error: ${err.message || 'Could not delete class.'}`);
+      // Type check added
+      const message = err instanceof Error ? err.message : 'Could not delete class.';
+      toast.error(`Error: ${message}`);
     } finally {
       setIsDeleting(null);
     }

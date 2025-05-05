@@ -4,7 +4,6 @@ import { ColumnDef, RowData } from "@tanstack/react-table"
 import { Borrow, BorrowStatus, User, Equipment, Class } from "@prisma/client" // Import base types
 import { format } from 'date-fns'
 import { Badge } from "@/components/ui/badge"
-import { Checkbox } from "@/components/ui/checkbox" // For potential row selection later
 import { Button } from "@/components/ui/button" // Import Button
 import { ArrowUpDown, MoreHorizontal } from "lucide-react" // For sorting/actions icons
 import {
@@ -191,7 +190,7 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
        try {
           const date = new Date(dateValue as string | number | Date) // Cast needed
           return <div>{format(date, 'PPp')}</div>
-       } catch (e) {
+       } catch {
           console.error("Invalid date value:", dateValue);
           return <div>Invalid Date</div>
        }

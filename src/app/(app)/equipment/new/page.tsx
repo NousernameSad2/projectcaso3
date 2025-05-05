@@ -246,7 +246,7 @@ export default function AddEquipmentPage() {
             name="condition"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Condition Notes (Optional)</FormLabel>
+                <FormLabel>Description</FormLabel>
                 <FormControl>
                   <Textarea
                     placeholder="Describe the current condition (e.g., Like New, Minor Scratches)"

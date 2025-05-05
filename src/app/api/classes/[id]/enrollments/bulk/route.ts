@@ -16,107 +16,107 @@ const BulkEnrollmentSchema = z.object({
 });
 
 // POST: Bulk enroll students into a class
-export async function POST(req: NextRequest, { params }: RouteContext) {
-  const classId = params.id;
+export async function POST(req: NextRequest, { params: { id: classId } }: RouteContext) {
+  // const classId = params.id; // No longer needed
   
   // 1. Verify Authentication and Authorization
   const payload = await verifyAuthAndGetPayload(req);
-  if (!payload) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+  if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
+    return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can enroll students.' }, { status: 403 });
   }
 
-  // Fetch class details to check FIC
-  let classData = null;
+  if (!classId) {
+      return NextResponse.json({ message: 'Class ID missing from URL path' }, { status: 400 });
+  }
+
+  // 2. Validate Request Body
+  let validatedData;
   try {
-      classData = await prisma.class.findUnique({
-          where: { id: classId },
-          select: { ficId: true } // Only need ficId for auth check
-      });
-  } catch (dbError) {
-      console.error("Error fetching class data for auth check:", dbError);
-      // Handle potential DB errors during the check
-  }
-  
-  if (!classData) {
-       return NextResponse.json({ message: 'Class not found' }, { status: 404 });
-  }
-
-  const isStaff = payload.role === UserRole.STAFF;
-  const isFIC = payload.role === UserRole.FACULTY && classData.ficId === payload.userId;
-  const canEnroll = isStaff || isFIC;
-
-  if (!canEnroll) {
-    return NextResponse.json({ message: 'Forbidden: Only Staff or the Class FIC can enroll students.' }, { status: 403 });
-  }
-
-  // 2. Parse and Validate Body
-  let body;
-  try {
-    body = await req.json();
+    const body = await req.json();
+    validatedData = BulkEnrollmentSchema.parse(body);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ message: 'Invalid input', errors: error.errors }, { status: 400 });
+    }
     return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
   }
 
-  const parsedData = BulkEnrollmentSchema.safeParse(body);
-  if (!parsedData.success) {
-    return NextResponse.json({ message: 'Invalid input', errors: parsedData.error.flatten().fieldErrors }, { status: 400 });
-  }
-  const { userIds } = parsedData.data;
+  const { userIds } = validatedData;
 
-  // 3. Create Enrollments (handle potential errors and duplicates for MongoDB)
   try {
-    // Fetch IDs of users already enrolled in this class
-    const existingEnrollments = await prisma.userClassEnrollment.findMany({
-      where: {
-        classId: classId,
-        userId: { in: userIds } // Only check against the submitted user IDs
-      },
-      select: { userId: true }
+    // 3. Check if class exists
+    const targetClass = await prisma.class.findUnique({
+      where: { id: classId }, // Use destructured classId
+      select: { id: true }, // Only need to check existence
     });
-    const existingUserIds = new Set(existingEnrollments.map(e => e.userId));
 
-    // Filter out users who are already enrolled
-    const newUserIdsToEnroll = userIds.filter(id => !existingUserIds.has(id));
-
-    if (newUserIdsToEnroll.length === 0) {
-        console.log(`Bulk enrollment for class ${classId}: No new students to add.`);
-        return NextResponse.json(
-            { 
-                message: "No new students to enroll (selected users might already be enrolled).", 
-                count: 0 
-            }, 
-            { status: 200 } // OK status, nothing created
-        );
+    if (!targetClass) {
+      return NextResponse.json({ message: `Class with ID ${classId} not found.` }, { status: 404 });
     }
 
-    // Prepare data for only the new users
-    const enrollmentData = newUserIdsToEnroll.map(userId => ({
-      userId: userId,
-      classId: classId,
+    // 4. Check if all provided student IDs exist and are REGULAR users
+    const existingStudents = await prisma.user.findMany({
+        where: {
+            id: { in: userIds },
+            role: UserRole.REGULAR, // Ensure they are students
+        },
+        select: { id: true }
+    });
+    const existingStudentIds = new Set(existingStudents.map(s => s.id));
+    const invalidStudentIds = userIds.filter(id => !existingStudentIds.has(id));
+
+    if (invalidStudentIds.length > 0) {
+        return NextResponse.json({
+            message: `Invalid student IDs provided: ${invalidStudentIds.join(", ")}. Ensure IDs exist and belong to REGULAR users.`,
+            invalidIds: invalidStudentIds,
+        }, { status: 400 });
+    }
+    
+    // 5. Find which students are *already* enrolled
+    const currentEnrollments = await prisma.userClassEnrollment.findMany({
+        where: {
+            classId: classId, // Use destructured classId
+            userId: { in: userIds }
+        },
+        select: { userId: true }
+    });
+    const alreadyEnrolledIds = new Set(currentEnrollments.map(e => e.userId));
+
+    // 6. Determine which students need to be enrolled
+    const studentIdsToEnroll = userIds.filter(id => !alreadyEnrolledIds.has(id));
+
+    if (studentIdsToEnroll.length === 0) {
+        return NextResponse.json({
+            message: `All provided students (${userIds.length}) are already enrolled in this class.`,
+            alreadyEnrolledCount: alreadyEnrolledIds.size
+        }, { status: 200 }); // Use 200 OK with message
+    }
+
+    // 7. Prepare data for bulk creation
+    const enrollmentData = studentIdsToEnroll.map(studentId => ({
+      userId: studentId,
+      classId: classId, // Use destructured classId
     }));
 
-    // Use createMany (without skipDuplicates)
-    const result = await prisma.userClassEnrollment.createMany({
+    // 8. Perform bulk creation
+    const createResult = await prisma.userClassEnrollment.createMany({
       data: enrollmentData,
-      // skipDuplicates: true, // Not supported on MongoDB
+      // skipDuplicates: true, // Removed: Not supported on MongoDB
     });
 
-    console.log(`Bulk enrollment for class ${classId}: ${result.count} new students added by ${payload.email}. Requested: ${userIds.length}, Already Enrolled: ${existingUserIds.size}`);
-    
-    // 4. Return Success Response
-    return NextResponse.json(
-        { 
-            message: `${result.count} new student(s) enrolled successfully.`, 
-            count: result.count 
-        }, 
-        { status: 201 } // 201 Created
-    );
+    console.log(`Bulk enrollment for class ${classId}: ${createResult.count} new students added by ${payload.email}. Requested: ${userIds.length}, Already Enrolled: ${alreadyEnrolledIds.size}`);
+
+    // 9. Return success response
+    return NextResponse.json({
+      message: `Successfully enrolled ${createResult.count} new students.`, 
+      enrolledCount: createResult.count,
+      alreadyEnrolledCount: alreadyEnrolledIds.size,
+      requestedCount: userIds.length,
+    }, { status: 201 }); // 201 Created
 
   } catch (error: any) {
     console.error(`API Error - POST /api/classes/${classId}/enrollments/bulk:`, error);
-    if (error.code === 'P2003') { // Foreign key constraint failed (e.g., userId doesn't exist)
-         return NextResponse.json({ message: 'One or more provided user IDs are invalid.' }, { status: 400 });
-    }
-    return NextResponse.json({ message: 'Internal Server Error enrolling students' }, { status: 500 });
+    // Handle specific Prisma errors if necessary (e.g., foreign key constraints)
+    return NextResponse.json({ message: 'Internal Server Error during bulk enrollment' }, { status: 500 });
   }
 } 

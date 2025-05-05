@@ -1,12 +1,21 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import { cn } from "@/lib/utils";
 import { UserRole } from '@prisma/client';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+    SheetTrigger,
+    SheetClose,
+} from "@/components/ui/sheet";
 import {
   LayoutDashboard,
   HardDrive,
@@ -18,7 +27,8 @@ import {
   LogOut,
   LogIn,
   Building2,
-  BookUser
+  BookUser,
+  Menu
 } from 'lucide-react';
 
 // Define all possible nav items
@@ -26,7 +36,7 @@ const allNavItems = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/equipment', label: 'Equipment', icon: HardDrive },
   { href: '/classes', label: 'Classes', icon: BookUser },
-  { href: '/my-borrows', label: 'Borrows', icon: ClipboardList },
+  { href: '/my-borrows', label: 'My Borrows', icon: ClipboardList },
   { href: '/deficiencies', label: 'Deficiencies', icon: TriangleAlert },
   { href: '/reports', label: 'Reports', icon: AreaChart, adminOnly: true },
   { href: '/users', label: 'Manage Users', icon: Users, adminOnly: true },
@@ -38,6 +48,7 @@ export default function Header() {
     const { data: session, status } = useSession();
     const router = useRouter();
     const pathname = usePathname();
+    const [isSheetOpen, setIsSheetOpen] = useState(false);
     
     // Extract user role
     const userRole = session?.user?.role as UserRole | undefined;
@@ -79,6 +90,9 @@ export default function Header() {
         );
     }
 
+    // Helper function to close sheet
+    const closeSheet = () => setIsSheetOpen(false);
+
     return (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
             <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
@@ -90,20 +104,18 @@ export default function Header() {
                     </span>
                 </Link>
 
-                {/* Centered Navigation Links (Uses filtered accessibleNavItems) */}
+                {/* Centered Navigation Links (Desktop) - Already hidden on small screens */}
                 <nav className="hidden md:flex flex-1 items-center justify-center space-x-1 lg:space-x-2">
                     {accessibleNavItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
                         return (
                             <Link
-                                key={item.href}
+                                key={`desktop-${item.href}`}
                                 href={item.href}
                                 className={cn(
                                     "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                    isActive
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
                                 )}
                             >
                                 <Icon className="h-4 w-4" />
@@ -113,45 +125,127 @@ export default function Header() {
                     })}
                 </nav>
 
-                {/* Profile and Logout/Login */}
-                <div className="flex items-center space-x-4">
-                    {isAuthenticated ? (
-                        <>
-                            {/* Profile Link */}
-                            <Link
-                                href={profileNavItem.href}
-                                className={cn(
-                                    "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                    pathname === profileNavItem.href
-                                        ? "bg-primary/10 text-primary"
-                                        : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                                )}
-                            >
-                                <profileNavItem.icon className="h-4 w-4" />
-                                <span>{profileNavItem.label}</span>
-                            </Link>
-                            {/* Logout Button */}
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                onClick={handleLogout} 
-                                title="Logout"
-                                className="text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                            >
-                                <LogOut className="h-5 w-5" />
-                                <span className="sr-only">Logout</span>
+                {/* Right side elements (Profile/Login/Logout + Mobile Menu Trigger) */}
+                <div className="flex items-center space-x-2 md:space-x-4">
+                     {/* Profile/Login/Logout Buttons (visible on desktop) */}
+                    <div className="hidden md:flex items-center space-x-4">
+                        {isAuthenticated ? (
+                            <>
+                                {/* Profile Link */}
+                                <Link
+                                    href={profileNavItem.href}
+                                    className={cn(
+                                        "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                                        pathname === profileNavItem.href
+                                            ? "bg-primary/10 text-primary"
+                                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                                    )}
+                                >
+                                    <profileNavItem.icon className="h-4 w-4" />
+                                    <span>{profileNavItem.label}</span>
+                                </Link>
+                                {/* Logout Button */}
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    onClick={handleLogout} 
+                                    title="Logout"
+                                    className="text-muted-foreground hover:text-foreground hover:bg-accent/50"
+                                >
+                                    <LogOut className="h-5 w-5" />
+                                    <span className="sr-only">Logout</span>
+                                </Button>
+                            </>
+                        ) : (
+                            /* Login Button */
+                            <Button asChild variant="outline" size="sm">
+                                <Link href="/login" className="flex items-center space-x-2">
+                                    <LogIn className="h-4 w-4" />
+                                    <span>Login</span>
+                                </Link>
                             </Button>
-                        </>
-                    ) : (
-                        /* Login Button */
-                        <Button asChild variant="outline" size="sm">
-                            <Link href="/login" className="flex items-center space-x-2">
-                                <LogIn className="h-4 w-4" />
-                                <span>Login</span>
-                            </Link>
-                        </Button>
-                    )}
-                </div>
+                        )}
+                    </div>
+
+                    {/* Mobile Menu Trigger (visible only on small screens) */}
+                    <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+                        <SheetTrigger asChild>
+                            <Button variant="ghost" size="icon" className="md:hidden">
+                                <Menu className="h-6 w-6" />
+                                <span className="sr-only">Toggle Menu</span>
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="w-[280px]"> 
+                            <SheetHeader className="mb-6">
+                                <SheetTitle className="flex items-center space-x-2">
+                                    <Building2 className="h-5 w-5 text-primary" />
+                                    <span>E-Bridge Menu</span>
+                                </SheetTitle>
+                                {/* Optional Description */} 
+                                {/* <SheetDescription>Navigation</SheetDescription> */} 
+                            </SheetHeader>
+                            <nav className="flex flex-col space-y-2">
+                                 {/* Mobile Navigation Links */}
+                                {accessibleNavItems.map((item) => {
+                                    const Icon = item.icon;
+                                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
+                                    return (
+                                        <SheetClose asChild key={`mobile-${item.href}`}> 
+                                            <Link
+                                                href={item.href}
+                                                className={cn(
+                                                    "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
+                                                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                )}
+                                                onClick={closeSheet} // Close sheet on click
+                                            >
+                                                <Icon className="h-5 w-5" />
+                                                <span>{item.label}</span>
+                                            </Link>
+                                        </SheetClose>
+                                    );
+                                })}
+                                 {/* Mobile Profile/Logout/Login */} 
+                                {isAuthenticated ? (
+                                    <>
+                                        <SheetClose asChild> 
+                                            <Link
+                                                href={profileNavItem.href}
+                                                className={cn(
+                                                     "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
+                                                     pathname === profileNavItem.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                                                )}
+                                                onClick={closeSheet}
+                                            >
+                                                <profileNavItem.icon className="h-5 w-5" />
+                                                <span>{profileNavItem.label}</span>
+                                            </Link>
+                                        </SheetClose>
+                                        <Button 
+                                            variant="ghost" 
+                                            onClick={() => { handleLogout(); closeSheet(); }} 
+                                            className="flex justify-start items-center space-x-3 rounded-md px-3 py-2 text-base font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                        >
+                                            <LogOut className="h-5 w-5" />
+                                            <span>Logout</span>
+                                        </Button>
+                                    </>
+                                ) : (
+                                    <SheetClose asChild> 
+                                         <Link
+                                            href="/login"
+                                            className="flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
+                                            onClick={closeSheet}
+                                        >
+                                             <LogIn className="h-5 w-5" />
+                                            <span>Login</span>
+                                        </Link>
+                                    </SheetClose>
+                                )}
+                            </nav>
+                        </SheetContent>
+                    </Sheet>
+                </div> 
             </div>
         </header>
     );

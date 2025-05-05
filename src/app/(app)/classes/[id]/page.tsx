@@ -1,8 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import { useAuthStore } from '@/stores/authStore';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
@@ -14,14 +13,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from 'sonner';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, UserPlus, Trash2, Edit, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ArrowLeft, Trash2, Edit, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import Link from 'next/link';
 import { UserRole, UserStatus } from '@prisma/client';
 import AddStudentDialog from '@/components/classes/AddStudentDialog';
 import { EditClassDialog } from '@/components/classes/EditClassDialog';
 import { useSession } from 'next-auth/react';
-import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,27 +60,6 @@ interface ClassDetailData {
   updatedAt: string;
 }
 
-// Define the type for the data passed back from AddStudentDialog callback
-interface AddStudentEnrollmentResponse {
-    user: {
-        id: string;
-        name: string | null;
-        email: string | null;
-        role: UserRole;
-        status: string;
-    };
-}
-
-// Type definition for data coming back from EditClassDialog after successful update
-interface UpdatedClassData {
-  id: string;
-  courseCode?: string;
-  section?: string;
-  semester?: 'FIRST' | 'SECOND' | 'SUMMER';
-  isActive?: boolean;
-  ficId?: string | null; 
-}
-
 // --- Types for client-side sorting ---
 type EnrolledSortField = 'name' | 'email';
 type SortOrder = 'asc' | 'desc';
@@ -90,7 +67,6 @@ type SortOrder = 'asc' | 'desc';
 
 export default function ClassDetailPage() {
   const params = useParams();
-  const router = useRouter();
   const classId = params.id as string;
   const { data: session, status: sessionStatus } = useSession();
   const token = session?.accessToken;
@@ -142,10 +118,11 @@ export default function ClassDetailPage() {
                     } else {
             throw new Error('Invalid data received from API.');
                 }
-            } catch (err: any) {
+            } catch (err: unknown) {
         console.error("[ClassDetail] Error during refetch:", err);
-        setError(err.message || 'Failed to reload class details.');
-        toast.error(err.message || 'Failed to reload class details.');
+        const message = err instanceof Error ? err.message : 'Failed to reload class details.';
+        setError(message);
+        toast.error(message);
             } finally {
                 setIsFetchingDetails(false);
     }
@@ -181,17 +158,28 @@ export default function ClassDetailPage() {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to remove student');
+      // Check for successful 204 No Content first
+      if (response.status === 204) {
+        toast.success(`Student ${studentName || 'ID: ' + studentId} removed successfully.`);
+      } else if (!response.ok) {
+        // If not 204 and not OK, try to parse error JSON
+        const errorResult = await response.json().catch(() => ({})); // Attempt to parse error JSON
+        throw new Error(errorResult.message || `Failed to remove student (Status: ${response.status})`);
+      } else {
+        // Handle unexpected OK statuses (like 200) if they shouldn't happen
+        console.warn("Unexpected successful status code from DELETE enrollment:", response.status);
+        toast.success(`Student ${studentName || 'ID: ' + studentId} removed (Status: ${response.status}).`);
       }
-      toast.success(`Student ${studentName || 'ID: ' + studentId} removed successfully.`);
+
+      // Refetch details regardless of exact success status (if response.ok or 204)
       fetchClassDetails();
       setIsRemoveConfirmOpen(false);
       setRemovingStudent(null);
-    } catch (err: any) {
+
+    } catch (err: unknown) {
         console.error("Error removing student:", err);
-        toast.error(`Error: ${err.message || 'Could not remove student.'}`);
+        const message = err instanceof Error ? err.message : 'Could not remove student.';
+        toast.error(`Error: ${message}`);
     } finally {
         setIsRemovingStudent(false);
     }
@@ -240,7 +228,7 @@ export default function ClassDetailPage() {
       <Button
           variant="ghost"
           onClick={() => handleEnrolledSort(field)}
-          className="px-2 py-1 -ml-2 text-left text-white hover:bg-muted/30"
+          className="px-2 py-1 -ml-2 text-left hover:bg-muted/30"
       >
           {label}
           {enrolledSortBy === field ? (
@@ -320,7 +308,17 @@ export default function ClassDetailPage() {
             <div><span className="font-semibold text-muted-foreground">Course Code:</span> {classDetails.courseCode}</div>
             <div><span className="font-semibold text-muted-foreground">Section:</span> {classDetails.section}</div>
             <div><span className="font-semibold text-muted-foreground">Semester:</span> {classDetails.semester}</div>
-            <div><span className="font-semibold text-muted-foreground">Faculty in Charge:</span> {classDetails.fic?.name ?? classDetails.fic?.email ?? 'N/A'}</div>
+            <div><span className="font-semibold text-muted-foreground">Academic Year:</span> {classDetails.academicYear ?? 'N/A'}</div>
+            <div>
+              <span className="font-semibold text-muted-foreground">Faculty in Charge:</span> 
+              {classDetails.fic?.id ? (
+                <Link href={`/users/${classDetails.fic.id}/profile`} className="hover:underline text-primary">
+                  {classDetails.fic.name ?? classDetails.fic.email}
+                </Link>
+              ) : (
+                classDetails.fic?.name ?? classDetails.fic?.email ?? 'N/A'
+              )}
+            </div>
             <div><span className="font-semibold text-muted-foreground">Status:</span> {classDetails.isActive ? 'Active' : 'Inactive'}</div>
          </CardContent>
        </Card>
@@ -348,7 +346,7 @@ export default function ClassDetailPage() {
                              <TableRow>
                                  <TableHead>{renderEnrolledSortableHeader('name', 'Name')}</TableHead>
                                  <TableHead>{renderEnrolledSortableHeader('email', 'Email')}</TableHead>
-                                 <TableHead className="text-right text-white">Actions</TableHead>
+                                 <TableHead className="text-right">Actions</TableHead>
                              </TableRow>
                          </TableHeader>
                          <TableBody>

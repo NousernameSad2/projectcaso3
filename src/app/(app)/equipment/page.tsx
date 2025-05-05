@@ -1,7 +1,6 @@
 'use client';
 
-import React from 'react';
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation'; // Import useRouter
 import { Equipment, EquipmentCategory, EquipmentStatus, UserRole } from '@prisma/client';
@@ -66,8 +65,8 @@ export default function EquipmentPage() {
   const [isBulkCheckoutModalOpen, setIsBulkCheckoutModalOpen] = useState(false);
   const [isBulkStatusModalOpen, setIsBulkStatusModalOpen] = useState(false);
 
-  // Fetch equipment data from API
-  const fetchEquipment = async (currentPage = page, search = searchTerm, category = selectedCategory, status = selectedStatus, dates = appliedDateRange) => {
+  // Fetch equipment data from API - Wrapped in useCallback
+  const fetchEquipment = useCallback(async (currentPage = page, search = searchTerm, category = selectedCategory, status = selectedStatus, dates = appliedDateRange) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -86,27 +85,36 @@ export default function EquipmentPage() {
       }
       const data = await response.json();
       // Expect EquipmentWithCount from API
-      setEquipmentList(data.items || []); 
-      setTotalPages(data.totalPages || 1); 
+      setEquipmentList(data.items || []);
+      setTotalPages(data.totalPages || 1);
     } catch (err: any) {
       console.error("Error fetching equipment:", err);
       setError(err.message || "An unknown error occurred");
-      setEquipmentList([]); 
-      setTotalPages(1); 
+      setEquipmentList([]);
+      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
-  };
+  // Dependencies for useCallback: Include values from outside the function that it relies on and might change.
+  // State setters (setIsLoading, setError, etc.) and imported functions (format) are generally stable.
+  // We need page, searchTerm, selectedCategory, selectedStatus, appliedDateRange from the outer scope
+  // *if* they were not passed as arguments (but they are, so they don't need to be dependencies here).
+  // itemsPerPage is used directly and comes from outer scope.
+  }, [itemsPerPage, setEquipmentList, setError, setIsLoading, setTotalPages]); // Added dependency array for useCallback
 
   // Initial fetch and refetch on filter changes
   useEffect(() => {
-    fetchEquipment(1, searchTerm, selectedCategory, selectedStatus, appliedDateRange); 
-  }, [searchTerm, selectedCategory, selectedStatus, appliedDateRange]);
+    // Fetch page 1 whenever filters change
+    fetchEquipment(1, searchTerm, selectedCategory, selectedStatus, appliedDateRange);
+  // fetchEquipment is now stable due to useCallback
+  }, [searchTerm, selectedCategory, selectedStatus, appliedDateRange, fetchEquipment]);
 
   // Fetch equipment for pagination changes
   useEffect(() => {
+    // Fetch the current page when page changes (or filters change which might affect total pages etc.)
     fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange);
-  }, [page]);
+  // fetchEquipment is now stable due to useCallback
+  }, [page, searchTerm, selectedCategory, selectedStatus, appliedDateRange, fetchEquipment]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);

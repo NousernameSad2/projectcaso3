@@ -37,6 +37,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Trash2 } from 'lucide-react';
+import BorrowSelectorModal from '@/components/borrows/BorrowSelectorModal';
 
 // Helper to get badge variant for DeficiencyStatus
 const getDeficiencyStatusVariant = (status: DeficiencyStatus): "default" | "destructive" | "success" => {
@@ -58,8 +59,8 @@ interface UserSelectItem {
 
 // Form Component
 function CreateDeficiencyForm() {
-    const [borrowId, setBorrowId] = useState('');
-    const [userId, setUserId] = useState<string | undefined>(undefined); // Store selected user ID
+    const [borrowId, setBorrowId] = useState(''); // Reverted to string, initially empty
+    const [userId, setUserId] = useState<string | undefined>(undefined);
     const [type, setType] = useState<DeficiencyType | undefined>(undefined);
     const [description, setDescription] = useState('');
     const [ficToNotifyId, setFicToNotifyId] = useState<string | undefined>(undefined); // Store selected FIC/Staff ID
@@ -70,6 +71,9 @@ function CreateDeficiencyForm() {
     const [regularUsers, setRegularUsers] = useState<UserSelectItem[]>([]);
     const [privilegedUsers, setPrivilegedUsers] = useState<UserSelectItem[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
+
+    // State for the borrow selector modal
+    const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
 
     // Fetch users for dropdowns
     useEffect(() => {
@@ -106,7 +110,12 @@ function CreateDeficiencyForm() {
         setIsLoading(true);
         setErrors({});
 
-        // Validate dropdown selections
+        // Validate dropdown selections & borrowId input
+        if (!borrowId) {
+             setErrors(prev => ({ ...prev, borrowId: ["Borrow record must be selected via Browse."] }));
+             setIsLoading(false);
+             return;
+        }
         if (!userId) {
              setErrors(prev => ({ ...prev, userId: ["Responsible user must be selected."] }));
              setIsLoading(false);
@@ -142,7 +151,7 @@ function CreateDeficiencyForm() {
 
             toast.success('Deficiency created successfully!');
             // Reset form
-            setBorrowId('');
+            setBorrowId(''); // Clear borrowId input
             setUserId(undefined);
             setType(undefined);
             setDescription('');
@@ -157,202 +166,160 @@ function CreateDeficiencyForm() {
         }
     };
 
+    // Handler for when a borrow record is selected in the modal
+    const handleBorrowSelect = (selectedId: string) => {
+        setBorrowId(selectedId);
+        setErrors(prev => ({ ...prev, borrowId: undefined })); // Clear potential error
+        setIsBorrowModalOpen(false); // Close modal
+    };
+
     // --- Add Log ---
     console.log("[CreateDeficiencyForm] Rendering. Current 'type' state:", type);
     // --- Add Log for Enum Values --- 
     console.log("[CreateDeficiencyForm] DeficiencyType values array:", Object.values(DeficiencyType));
 
     return (
-        <Card className="max-w-2xl bg-card/60 border-border/40">
-            <CardHeader>
-                <CardTitle>Log New Deficiency</CardTitle>
-                <CardDescription>Enter details for the deficiency record. Fields marked with * are required.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                    {/* Borrow ID */}
-                    <div>
-                        <Label htmlFor="borrowId">Borrow Record ID *</Label>
-                        <Input 
-                            id="borrowId" 
-                            value={borrowId} 
-                            onChange={(e) => setBorrowId(e.target.value)} 
-                            placeholder="Enter the ID of the related borrow" 
-                            required 
-                        />
-                        {errors.borrowId && <p className="text-xs text-destructive mt-1">{errors.borrowId.join(', ')}</p>}
-                    </div>
+        <> {/* Wrap in fragment to allow modal sibling */}
+            <Card className="max-w-2xl bg-card/60 border-border/40">
+                <CardHeader>
+                    <CardTitle>Log New Deficiency</CardTitle>
+                    <CardDescription>Enter details for the deficiency record. Fields marked with * are required.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        {/* Borrow ID (Input + Browse Button) */}
+                        <div>
+                            <Label htmlFor="borrowId">Borrow Record ID *</Label>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="borrowId"
+                                    value={borrowId}
+                                    readOnly // Make it read-only, value comes from modal
+                                    placeholder="Click Browse to select..."
+                                    className="flex-grow"
+                                    required // Keep required for form semantics
+                                />
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setIsBorrowModalOpen(true)}
+                                    disabled={isLoading} // Disable if form is submitting
+                                >
+                                    Browse...
+                                </Button>
+                            </div>
+                            {errors.borrowId && <p className="text-xs text-destructive mt-1">{errors.borrowId.join(', ')}</p>}
+                        </div>
 
-                    {/* Responsible User ID (Combobox) */}
-                    <div>
-                        <Label htmlFor="userId">Responsible User (Student) *</Label>
-                        <Combobox
-                            items={regularUsers}
-                            selectedValue={userId}
-                            onSelectValue={setUserId}
-                            placeholder="Select student..."
-                            searchPlaceholder="Search students..."
-                            loading={isLoadingUsers}
-                            disabled={isLoadingUsers}
-                            triggerId="userId"
-                        />
-                         {errors.userId && <p className="text-xs text-destructive mt-1">{errors.userId.join(', ')}</p>}
-                    </div>
+                        {/* Responsible User ID (Select) - Corrected back to shadcn Select */}
+                        <div>
+                            <Label htmlFor="userId">Responsible User (Student) *</Label>
+                            <Select value={userId} onValueChange={(value) => setUserId(value ? value : undefined)}>
+                                <SelectTrigger id="userId" disabled={isLoadingUsers}>
+                                    <SelectValue placeholder="Select student..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {isLoadingUsers ? (
+                                        <div className="flex items-center justify-center p-2"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</div>
+                                    ) : regularUsers.length > 0 ? (
+                                        regularUsers.map((user) => (
+                                            <SelectItem key={user.value} value={user.value}>
+                                                {user.label}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <div className="p-2 text-sm text-muted-foreground">No students found.</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                             {errors.userId && <p className="text-xs text-destructive mt-1">{errors.userId.join(', ')}</p>}
+                        </div>
 
-                    {/* Deficiency Type */}
-                     <div>
-                        <Label htmlFor="type">Deficiency Type *</Label>
-                        <Select 
-                            value={type} 
-                            onValueChange={(value) => {
-                                console.log("[CreateDeficiencyForm] Select onValueChange. Received value:", value);
-                                const newType = value ? (value as DeficiencyType) : undefined;
-                                console.log("[CreateDeficiencyForm] Setting type state to:", newType);
-                                setType(newType); 
-                            }} 
-                        >
-                            <SelectTrigger id="type">
-                                <SelectValue placeholder="Select deficiency type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.values(DeficiencyType).map((dtype) => {
-                                    // Filter out potential non-string/empty values just in case
-                                    if (typeof dtype !== 'string' || !dtype) {
-                                      console.warn("[CreateDeficiencyForm] Skipping invalid DeficiencyType value:", dtype);
-                                      return null;
-                                    }
-                                    return (
-                                      <SelectItem key={dtype} value={dtype}>
-                                          {dtype.replace('_', ' ')}
-                                      </SelectItem>
-                                    );
-                                })}
-                            </SelectContent>
-                        </Select>
-                         {errors.type && <p className="text-xs text-destructive mt-1">{errors.type.join(', ')}</p>}
-                    </div>
+                        {/* Deficiency Type */}
+                        <div>
+                            <Label htmlFor="type">Deficiency Type *</Label>
+                            <Select 
+                                value={type} 
+                                onValueChange={(value) => {
+                                    console.log("[CreateDeficiencyForm] Select onValueChange. Received value:", value);
+                                    const newType = value ? (value as DeficiencyType) : undefined;
+                                    console.log("[CreateDeficiencyForm] Setting type state to:", newType);
+                                    setType(newType); 
+                                }} 
+                            >
+                                <SelectTrigger id="type">
+                                    <SelectValue placeholder="Select deficiency type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.values(DeficiencyType).map((dtype) => {
+                                        // Filter out potential non-string/empty values just in case
+                                        if (typeof dtype !== 'string' || !dtype) {
+                                          console.warn("[CreateDeficiencyForm] Skipping invalid DeficiencyType value:", dtype);
+                                          return null;
+                                        }
+                                        return (
+                                          <SelectItem key={dtype} value={dtype}>
+                                              {dtype.replace('_', ' ')}
+                                          </SelectItem>
+                                        );
+                                    })}
+                                </SelectContent>
+                            </Select>
+                            {errors.type && <p className="text-xs text-destructive mt-1">{errors.type.join(', ')}</p>}
+                        </div>
 
-                    {/* Description */}
-                    <div>
-                        <Label htmlFor="description">Description</Label>
-                        <Textarea 
-                            id="description"
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                            placeholder="Provide details about the deficiency (optional)"
-                        />
-                         {errors.description && <p className="text-xs text-destructive mt-1">{errors.description.join(', ')}</p>}
-                    </div>
+                        {/* Description */}
+                        <div>
+                            <Label htmlFor="description">Description</Label>
+                            <Textarea 
+                                id="description"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                placeholder="Provide details about the deficiency (optional)"
+                            />
+                            {errors.description && <p className="text-xs text-destructive mt-1">{errors.description.join(', ')}</p>}
+                        </div>
 
-                    {/* FIC to Notify ID (Combobox) */}
-                    <div>
-                        <Label htmlFor="ficToNotifyId">FIC / Staff to Notify (Optional)</Label>
-                         <Combobox
-                            items={privilegedUsers}
-                            selectedValue={ficToNotifyId}
-                            onSelectValue={setFicToNotifyId}
-                            placeholder="Select faculty/staff..."
-                            searchPlaceholder="Search faculty/staff..."
-                            loading={isLoadingUsers}
-                            disabled={isLoadingUsers}
-                            triggerId="ficToNotifyId"
-                        />
-                        {errors.ficToNotifyId && <p className="text-xs text-destructive mt-1">{errors.ficToNotifyId.join(', ')}</p>}
-                    </div>
+                        {/* FIC to Notify ID (Select) - Corrected back to shadcn Select */}
+                        <div>
+                            <Label htmlFor="ficToNotifyId">FIC / Staff to Notify (Optional)</Label>
+                             <Select value={ficToNotifyId} onValueChange={(value) => setFicToNotifyId(value ? value : undefined)}>
+                                <SelectTrigger id="ficToNotifyId" disabled={isLoadingUsers}>
+                                    <SelectValue placeholder="Select faculty/staff..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                     {isLoadingUsers ? (
+                                        <div className="flex items-center justify-center p-2"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</div>
+                                    ) : privilegedUsers.length > 0 ? (
+                                        privilegedUsers.map((user) => (
+                                            <SelectItem key={user.value} value={user.value}>
+                                                {user.label}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <div className="p-2 text-sm text-muted-foreground">No staff/faculty found.</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                            {errors.ficToNotifyId && <p className="text-xs text-destructive mt-1">{errors.ficToNotifyId.join(', ')}</p>}
+                        </div>
 
-                    <Button type="submit" disabled={isLoading || isLoadingUsers} className="w-full">
-                        {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        {isLoading ? 'Submitting...' : 'Create Deficiency Record'}
-                    </Button>
-                </form>
-            </CardContent>
-        </Card>
+                        <Button type="submit" disabled={isLoading || isLoadingUsers} className="w-full">
+                            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" /> }
+                            {isLoading ? 'Submitting...' : (isLoadingUsers ? 'Loading Users...' : 'Create Deficiency Record')}
+                        </Button>
+                    </form>
+                </CardContent>
+            </Card>
+
+            {/* Borrow Selector Modal */}
+            <BorrowSelectorModal
+                isOpen={isBorrowModalOpen}
+                onOpenChange={setIsBorrowModalOpen}
+                onBorrowSelect={handleBorrowSelect}
+            />
+        </>
     );
-}
-
-// --- Generic Combobox Component ---
-interface ComboboxProps {
-    items: UserSelectItem[];
-    selectedValue?: string;
-    onSelectValue: (value?: string) => void;
-    placeholder: string;
-    searchPlaceholder: string;
-    loading?: boolean;
-    disabled?: boolean;
-    triggerId?: string;
-}
-
-function Combobox({ 
-    items, selectedValue, onSelectValue, placeholder, searchPlaceholder, loading, disabled, triggerId 
-}: ComboboxProps) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between font-normal"
-          disabled={disabled || loading}
-          id={triggerId}
-        >
-          {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : selectedValue ? (
-              items.find((item) => item.value === selectedValue)?.label
-          ) : (
-              placeholder
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
-          <CommandList>
-              <CommandEmpty>No results found.</CommandEmpty>
-              <CommandGroup>
-                {items.map((item) => (
-                  <CommandItem
-                    key={item.value}
-                    value={item.label} // Search based on label
-                    onSelect={(currentValueLabel) => {
-                       // Find the actual value (ID) based on the selected label
-                       const selectedItem = items.find(i => i.label.toLowerCase() === currentValueLabel.toLowerCase());
-                       onSelectValue(selectedItem?.value); // Send back the ID
-                       setOpen(false);
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        selectedValue === item.value ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {item.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-              {/* Optional: Allow unselecting */}
-                <CommandGroup>
-                     <CommandItem 
-                         value="--clear--" 
-                         onSelect={() => { 
-                             onSelectValue(undefined); 
-                             setOpen(false); 
-                         }}
-                         className="text-xs text-muted-foreground italic"
-                    >
-                         (Clear Selection)
-                     </CommandItem>
-                </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 // Component to display the list of deficiencies
@@ -390,10 +357,11 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
             }
             const data = await response.json();
             setDeficiencies(data as DeficiencyAdminView[]); 
-        } catch (err) {
-             const message = err instanceof Error ? err.message : "Could not load deficiencies";
+        } catch (err: unknown) {
+             const message = err instanceof Error ? err.message : "An unknown error occurred";
              setError(message);
              console.error("Fetch Deficiencies Error:", err);
+             toast.error(`Error fetching deficiencies: ${message}`);
         } finally {
             setIsLoading(false);
         }
@@ -450,9 +418,10 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
             if (!response.ok) throw new Error(result.error || 'Failed to resolve deficiency');
             toast.success('Deficiency marked as resolved!');
             fetchDeficiencies(filter); // Refresh data
-        } catch (error) { 
-            console.error(`[handleResolveDeficiency] Failed for ID ${deficiencyId}:`, error);
-            toast.error(error instanceof Error ? error.message : 'Failed to resolve deficiency.');
+        } catch (err: unknown) {
+            console.error("Failed to resolve deficiency:", err);
+            const message = err instanceof Error ? err.message : "An unknown error occurred";
+            toast.error(`Resolution failed: ${message}`);
         } finally {
             console.log(`[handleResolveDeficiency] Finished for ID: ${deficiencyId}`);
             setIsSubmittingAction(false);

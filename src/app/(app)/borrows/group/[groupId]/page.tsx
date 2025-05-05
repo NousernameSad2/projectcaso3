@@ -102,9 +102,10 @@ export default function BorrowGroupDetailPage() {
             await queryClient.invalidateQueries({ queryKey: ['pendingBorrows'] });
 
             router.push('/');
-        } catch (err: any) {
+        } catch (err: unknown) {
             console.error("Checkout error:", err);
-            toast.error(`Checkout failed: ${err.message}`);
+            const message = err instanceof Error ? err.message : "An unknown error occurred during checkout.";
+            toast.error(`Checkout failed: ${message}`);
         } finally {
             setIsCheckingOut(false);
         }
@@ -306,7 +307,9 @@ export default function BorrowGroupDetailPage() {
                         <ul className="space-y-2 text-sm">
                             {groupMates.map((mate) => (
                                 <li key={mate.id} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                                    <span>{mate.name}</span>
+                                    <Link href={`/users/${mate.id}/profile`} passHref legacyBehavior>
+                                        <a className="font-medium hover:underline">{mate.name}</a>
+                                    </Link>
                                     <span className="text-muted-foreground text-xs">{mate.email}</span>
                                 </li>
                             ))}

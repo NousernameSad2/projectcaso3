@@ -326,7 +326,7 @@ export default function EditEquipmentPage() {
              name="condition"
              render={({ field }) => (
                <FormItem>
-                 <FormLabel>Condition Notes (Optional)</FormLabel>
+                 <FormLabel>Description</FormLabel>
                  <FormControl>
                    <Textarea
                      placeholder="Describe the current condition..."

@@ -380,14 +380,7 @@ export default function AdminUsersPage() {
             <div className="border rounded-md overflow-hidden bg-card">
                 <Table>
                     <TableHeader>
-                        <TableRow>
-                            <TableHead>{renderSortableHeader('name', 'Name')}</TableHead>
-                            <TableHead>{renderSortableHeader('email', 'Email')}</TableHead>
-                            <TableHead>{renderSortableHeader('role', 'Role')}</TableHead>
-                            <TableHead>{renderSortableHeader('status', 'Status')}</TableHead>
-                            <TableHead>{renderSortableHeader('createdAt', 'Date Added')}</TableHead> {/* Added CreatedAt sort */} 
-                            <TableHead className="text-right text-white">Actions</TableHead>
-                        </TableRow>
+                        <TableRow><TableHead>{renderSortableHeader('name', 'Name')}</TableHead><TableHead>{renderSortableHeader('email', 'Email')}</TableHead><TableHead>{renderSortableHeader('role', 'Role')}</TableHead><TableHead>{renderSortableHeader('status', 'Status')}</TableHead><TableHead>{renderSortableHeader('createdAt', 'Date Added')}</TableHead><TableHead className="text-right text-white">Actions</TableHead></TableRow>
                     </TableHeader>
                     <TableBody>
                         {!isLoading && users.length === 0 ? (

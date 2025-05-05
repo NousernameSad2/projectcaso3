@@ -138,7 +138,7 @@ export default function ProfileEditForm({
                             name="studentNumber"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Student Number (Optional)</FormLabel>
+                                    <FormLabel>Student Number</FormLabel>
                                     <FormControl>
                                         <Input placeholder="Your student number" {...field} value={field.value ?? ''} />
                                     </FormControl>
@@ -151,9 +151,9 @@ export default function ProfileEditForm({
                             name="contactNumber"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Contact Number (Optional)</FormLabel>
+                                    <FormLabel>Contact Number</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Your contact number" {...field} value={field.value ?? ''}/>
+                                        <Input placeholder="Your contact number" {...field} value={field.value ?? ''} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>
@@ -164,7 +164,7 @@ export default function ProfileEditForm({
                             name="sex"
                             render={({ field }) => (
                                 <FormItem>
-                                <FormLabel>Sex</FormLabel>
+                                <FormLabel>Sex (Optional)</FormLabel>
                                 {/* Pass the validated/typed value to the Select */}
                                 <Select onValueChange={field.onChange} value={field.value} defaultValue={field.value}> 
                                     <FormControl>

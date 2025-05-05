@@ -30,11 +30,9 @@ async function verifyStaffOrFaculty(req: NextRequest) {
 }
 
 // GET: Get a specific user by ID (STAFF or FACULTY)
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(req: NextRequest, { params: { id: userId } }: RouteContext) {
   const authResult = await verifyStaffOrFaculty(req);
   if (!authResult.authorized) return authResult.response;
-
-  const userId = params.id;
 
   try {
     const user = await prisma.user.findUnique({
@@ -65,11 +63,10 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 }
 
 // PATCH: Update a specific user (STAFF or FACULTY)
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
+export async function PATCH(req: NextRequest, { params: { id: userId } }: RouteContext) {
   const authResult = await verifyStaffOrFaculty(req);
   if (!authResult.authorized) return authResult.response;
   
-  const userId = params.id;
   const requestingUser = authResult.user; // Get user from auth result
 
   try {
@@ -120,14 +117,14 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
     if (updateData.status !== undefined) dataToUpdate.status = updateData.status;
     if (updateData.sex !== undefined) dataToUpdate.sex = updateData.sex; // Add sex
 
-    // Convert empty string to null for studentNumber if provided
+    // Assign directly, Zod validation already ensures non-empty string
     if (updateData.studentNumber !== undefined) {
-        dataToUpdate.studentNumber = updateData.studentNumber === '' ? null : updateData.studentNumber;
+        dataToUpdate.studentNumber = updateData.studentNumber;
     }
 
-    // Convert empty string to null for contactNumber if provided
+    // Assign directly, Zod validation already ensures non-empty string
     if (updateData.contactNumber !== undefined) {
-        dataToUpdate.contactNumber = updateData.contactNumber === '' ? null : updateData.contactNumber;
+        dataToUpdate.contactNumber = updateData.contactNumber;
     }
 
     // Check if there is actually anything to update
@@ -171,11 +168,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
 }
 
 // DELETE: Delete a specific user (STAFF or FACULTY)
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
+export async function DELETE(req: NextRequest, { params: { id: userId } }: RouteContext) {
   const authResult = await verifyStaffOrFaculty(req);
   if (!authResult.authorized) return authResult.response;
   
-  const userId = params.id;
   const requestingUser = authResult.user; // Get user from auth result
 
   // Prevent users from deleting themselves

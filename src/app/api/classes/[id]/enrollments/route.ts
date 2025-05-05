@@ -17,7 +17,12 @@ const EnrollmentCreateSchema = z.object({
 
 // POST: Enroll a user (student) into a specific class
 export async function POST(req: NextRequest, { params }: RouteContext) {
-  const classId = params.id;
+  // Await params - experimental based on Next.js warning
+  // It's unusual to await params directly, but let's follow the warning's suggestion
+  // We might need to adjust typing if this causes issues
+  const resolvedParams = await params;
+  const classId = resolvedParams.id;
+  
   // Verify user is STAFF or FACULTY (only they can enroll students)
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
@@ -107,50 +112,64 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 
 // DELETE: Unenroll a user (student) from a specific class
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
-  const classId = params.id;
+  // Await params - experimental based on Next.js warning
+  const resolvedParams = await params;
+  const classId = resolvedParams.id;
+
   // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can manage enrollments.' }, { status: 403 });
   }
 
+  const userId = req.nextUrl.searchParams.get('userId');
+
   if (!classId) {
-    return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
+    return NextResponse.json({ message: 'Class ID is missing in URL path' }, { status: 400 });
+  }
+  if (!userId) {
+    return NextResponse.json({ message: 'User ID (userId) is missing in query parameters' }, { status: 400 });
   }
 
-  // Get userId from query parameters
-  const { searchParams } = new URL(req.url);
-  const userId = searchParams.get('userId');
-
-  if (!userId) {
-    return NextResponse.json({ message: 'User ID is missing from query parameters.' }, { status: 400 });
+  // Basic check if userId format seems plausible (optional, Prisma handles actual validation)
+  if (typeof userId !== 'string' || userId.length < 5) { // CUIDs/ObjectIds are usually longer
+       return NextResponse.json({ message: 'Invalid User ID format provided' }, { status: 400 });
   }
 
   try {
-    // --- Delete Enrollment --- 
-    // We use deleteMany because the unique constraint is on the combination,
-    // and Prisma doesn't automatically generate a delete based on the composite key.
-    // It also gracefully handles cases where the enrollment might not exist.
-    const deleteResult = await prisma.userClassEnrollment.deleteMany({
+    // Check if the enrollment actually exists before deleting
+    const existingEnrollment = await prisma.userClassEnrollment.findUnique({
+        where: {
+            userId_classId: { // Use the compound key defined in schema
+                userId: userId,
+                classId: classId, // Use destructured classId
+            }
+        }
+    });
+
+    if (!existingEnrollment) {
+        return NextResponse.json({ message: 'Enrollment not found' }, { status: 404 });
+    }
+
+    // Proceed with deletion
+    await prisma.userClassEnrollment.delete({
       where: {
-        classId: classId,
-        userId: userId,
+        userId_classId: { // Use the compound key
+          userId: userId,
+          classId: classId, // Use destructured classId
+        },
       },
     });
 
-    if (deleteResult.count === 0) {
-        // Although not strictly an error if the goal is removal, 
-        // inform client the target didn't exist.
-        return NextResponse.json({ message: 'Enrollment record not found.' }, { status: 404 });
-    }
-
     console.log(`User ${userId} unenrolled from class ${classId} by ${payload.email}`);
-    // Return success with No Content status
-    return new NextResponse(null, { status: 204 }); 
+    return new NextResponse(null, { status: 204 }); // Success, No Content
 
   } catch (error: any) {
-    console.error(`API Error - DELETE /api/classes/${classId}/enrollments?userId=${userId}:`, error);
-    // Handle potential errors
-    return NextResponse.json({ message: 'Internal Server Error unenrolling user' }, { status: 500 });
+    console.error(`API Error - DELETE /api/classes/${classId}/enrollments for user ${userId}:`, error);
+    if (error.code === 'P2025') {
+        // Error specific to record not found during delete operation
+        return NextResponse.json({ message: 'Enrollment not found or already deleted' }, { status: 404 });
+    }
+    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 } 
