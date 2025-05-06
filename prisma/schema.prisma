@@ -55,6 +55,7 @@ enum BorrowStatus {
   REJECTED_STAFF
   CANCELLED
   OVERDUE
+  REJECTED_AUTOMATIC
 }
 
 enum DeficiencyType {

@@ -121,22 +121,86 @@ export async function GET(req: NextRequest) {
     // Fetch paginated items
     const items = await prisma.equipment.findMany({
       where: whereClause,
-      include: { // Include count of related borrows
+      include: {
         _count: {
-          select: { borrowRecords: true }, // Correct relation name?
+          select: { borrowRecords: true },
         },
+        // Also include minimal borrow record data to find next reservation
+        borrowRecords: {
+          where: {
+            borrowStatus: { in: [BorrowStatus.APPROVED, BorrowStatus.PENDING] },
+            OR: [
+              { approvedEndTime: { gte: new Date() } }, // Approved and ends in the future
+              { approvedEndTime: null, requestedEndTime: { gte: new Date() } } // Pending and ends in the future
+            ]
+          },
+          select: {
+            requestedStartTime: true,
+            approvedStartTime: true,
+            requestedEndTime: true,
+            approvedEndTime: true,
+          },
+          orderBy: [
+            { approvedStartTime: 'asc' },
+            { requestedStartTime: 'asc' },
+          ],
+        }
       },
       orderBy: {
-        name: 'asc', // Default sort order
+        name: 'asc',
       },
       skip: skip,
       take: limit,
     });
 
-    return NextResponse.json({ 
-      items, 
-      totalPages, 
-      currentPage: page 
+    // Process items to add nextUpcomingReservationStart and availableUnitsInFilterRange
+    const processedItems = items.map(item => {
+      let nextUpcomingReservationStart: Date | null = null;
+      let availableUnitsInFilterRange: number | null = null;
+
+      // Calculate nextUpcomingReservationStart from pre-fetched borrowRecords
+      if (item.borrowRecords && item.borrowRecords.length > 0) {
+        const firstUpcoming = item.borrowRecords[0]; // Already ordered by date
+        nextUpcomingReservationStart = firstUpcoming.approvedStartTime || firstUpcoming.requestedStartTime;
+      }
+
+      // Calculate availableUnitsInFilterRange if a date filter is active
+      if (hasDateFilter && startDate && endDate) {
+        // item.borrowRecords are already future PENDING/APPROVED ones.
+        // We need to count how many of these specifically overlap the *filter's* date range.
+        const conflictingBorrowsCount = item.borrowRecords.filter(borrow => {
+          const bStart = borrow.approvedStartTime || borrow.requestedStartTime;
+          const bEnd = borrow.approvedEndTime || borrow.requestedEndTime; // Need approvedEndTime for this too
+          // Check if the borrow period (bStart to bEnd) overlaps with the filter period (startDate to endDate)
+          return bStart < endDate! && bEnd > startDate!;
+        }).length;
+        availableUnitsInFilterRange = Math.max(0, item.stockCount - conflictingBorrowsCount);
+      }
+
+      const { borrowRecords, ...itemData } = item; // Exclude raw borrowRecords from final response
+      return { ...itemData, nextUpcomingReservationStart, availableUnitsInFilterRange };
+    });
+
+    // If date filter is active, we might want to further filter out items where availableUnitsInFilterRange is 0
+    // This depends on whether the initial SQL query for `items` was already precise enough.
+    // The current SQL `whereClause.NOT` for date range tries to exclude items with ANY conflict,
+    // which is too strict for stockCount > 1. So, a post-filter here is necessary.
+
+    let finalFilteredItems = processedItems;
+    if (hasDateFilter && statusParam === EquipmentStatus.AVAILABLE) { // Only filter if user explicitly asked for AVAILABLE
+        finalFilteredItems = processedItems.filter(item => 
+            item.availableUnitsInFilterRange !== null && item.availableUnitsInFilterRange > 0
+        );
+    }
+     // Re-paginate if post-filtering occurred. This is complex. 
+     // For simplicity, the current pagination is on a potentially larger pre-list if SQL filter was not perfect.
+     // A better approach is to fetch all matching core criteria, then filter, then paginate the result.
+     // Given the current structure, this re-filter might lead to fewer items on a page than `limit`.
+
+    return NextResponse.json({
+      items: finalFilteredItems, 
+      totalPages, // This totalPages is based on the pre-filtered list, might be inaccurate if post-filter reduces items significantly
+      currentPage: page
     });
 
   } catch (error) {

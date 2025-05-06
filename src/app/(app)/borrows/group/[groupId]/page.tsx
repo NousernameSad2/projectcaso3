@@ -173,7 +173,7 @@ export default function BorrowGroupDetailPage() {
     if (isLoading) {
         return (
             <div className="flex justify-center items-center min-h-[60vh]">
-                <LoadingSpinner size="lg" /> Loading Group Details...
+                <LoadingSpinner size="lg" /> Loading Borrow Details...
             </div>
         );
     }
@@ -231,7 +231,7 @@ export default function BorrowGroupDetailPage() {
             </div>
             <Card className="bg-card/80 border-border">
                 <CardHeader>
-                    <CardTitle>Group Details</CardTitle>
+                    <CardTitle>Borrow Details</CardTitle>
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
@@ -278,7 +278,7 @@ export default function BorrowGroupDetailPage() {
             </Card>
             <Card className="bg-card/80 border-border">
                 <CardHeader>
-                    <CardTitle>Items in this Group ({borrowItems.length})</CardTitle>
+                    <CardTitle>Items in this Borrow ({borrowItems.length})</CardTitle>
                 </CardHeader>
                 <CardContent>
                      <div className="border rounded-md overflow-hidden">

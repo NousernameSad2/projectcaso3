@@ -134,7 +134,7 @@ export default function LoginPage() {
                       <DialogHeader>
                         <DialogTitle>Password Reset</DialogTitle>
                         <DialogDescription>
-                          Please contact the DGE administrator at dge@up.edu.ph for password assistance.
+                          Please contact the DGE administrator at facilities.dge@up.edu.ph for password assistance.
                         </DialogDescription>
                       </DialogHeader>
                        {/* Optional: Add a close button if needed, DialogClose is often used */}

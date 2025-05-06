@@ -554,7 +554,7 @@ export default function ProfilePage() {
                       {/* Add link to group details if applicable? */}
                       {borrow.borrowGroupId && (
                            <Link href={`/borrows/group/${borrow.borrowGroupId}`} className="text-xs text-blue-400 hover:underline block mt-1">
-                               View Group Details
+                               View Borrow Details
                            </Link>
                       )}
                   </div>

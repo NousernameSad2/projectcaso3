@@ -1,190 +1,216 @@
-import React from 'react';
+'use client';
+
+import React, { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Equipment, EquipmentStatus, EquipmentCategory, UserRole } from '@prisma/client'; // Use standard path
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox"; // Import Checkbox
-import { cn } from "@/lib/utils"; // For conditional classes
-import { useSession } from 'next-auth/react'; // Added useSession
-import { toast } from 'sonner'; // Import toast
-import { Eye } from 'lucide-react'; // Import Eye icon for View Details
+import { Equipment, EquipmentStatus as PrismaEquipmentStatus } from '@prisma/client'; // Renamed to avoid conflict
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+// If you use useRouter, uncomment the import:
+// import { useRouter } from 'next/navigation';
 
-// Define the structure of the _count object expected from the API
-interface EquipmentWithCount extends Equipment {
-  _count: {
-    borrowRecords: number; // Note: This count includes ALL borrows, not just active.
-  };
-}
+// Using PrismaEquipmentStatus to avoid conflict if this file defines its own EquipmentStatus
+const EquipmentStatus = PrismaEquipmentStatus;
 
-// Update props to expect the enhanced equipment type
-interface EquipmentCardProps {
-  equipment: EquipmentWithCount; 
-  isSelected: boolean; // Add isSelected prop
-  onSelectToggle: (id: string) => void; // Add callback for selection toggle
-  onReservationSuccess?: () => void; // Add optional callback prop
-}
-
-// Helper function to get badge color based on status
-const getStatusVariant = (status: EquipmentStatus): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
+// Helper function to get badge variant based on EquipmentStatus
+// Replace with your actual implementation if it differs
+const getEquipmentStatusVariant = (status: PrismaEquipmentStatus): "default" | "secondary" | "destructive" | "outline" | "success" | "warning" => {
   switch (status) {
-    case EquipmentStatus.AVAILABLE:
-      return "success"; // Assuming 'success' variant exists or is added
-    case EquipmentStatus.BORROWED:
-    case EquipmentStatus.RESERVED:
-      return "secondary";
-    case EquipmentStatus.UNDER_MAINTENANCE:
-      return "warning"; // Assuming 'warning' variant exists or is added
-    case EquipmentStatus.DEFECTIVE:
-    case EquipmentStatus.OUT_OF_COMMISSION:
-      return "destructive";
-    default:
-      return "default";
+    case EquipmentStatus.AVAILABLE: return 'success';
+    case EquipmentStatus.RESERVED: return 'warning';
+    case EquipmentStatus.BORROWED: return 'destructive';
+    case EquipmentStatus.UNDER_MAINTENANCE: return 'secondary';
+    case EquipmentStatus.DEFECTIVE: return 'destructive';
+    case EquipmentStatus.OUT_OF_COMMISSION: return 'destructive';
+    default: return 'outline';
   }
 };
 
-// Helper function to format category names (optional)
-const formatCategory = (category: EquipmentCategory) => {
-  switch (category) {
-    case EquipmentCategory.INSTRUMENTS: return 'Instruments';
-    case EquipmentCategory.ACCESSORIES: return 'Accessories';
-    case EquipmentCategory.TOOLS: return 'Tools';
-    case EquipmentCategory.CONSUMABLES: return 'Consumables';
-    case EquipmentCategory.OTHER: return 'Other';
-    default: return category;
-  }
-};
+// Interface for the equipment data, ensuring all necessary fields are present
+export interface EquipmentWithAvailability extends Equipment { // `Equipment` from prisma/client should have most fields
+  // Ensure fields from the API not directly on Prisma's Equipment are here:
+  _count: {
+    borrowRecords: number;
+  };
+  nextUpcomingReservationStart: string | null;
+  availableUnitsInFilterRange: number | null;
+  // Explicitly list fields from `Equipment` if your base `Equipment` type is minimal
+  // For example: id, name, images, stockCount, status, equipmentId, condition etc.
+}
 
-// Helper function to format status text (optional, but good for consistency)
-const formatStatusText = (status: EquipmentStatus) => {
-  return status.toLowerCase().replace('_', ' ');
-};
+export interface EquipmentCardProps {
+  equipment: EquipmentWithAvailability;
+  isSelected: boolean;
+  onSelectToggle: (id: string) => void;
+  isDateFilterActive: boolean;
+  // Example: onReserveClick?: (equipmentId: string) => void;
+}
 
 export default function EquipmentCard({
   equipment,
   isSelected,
   onSelectToggle,
-  onReservationSuccess,
+  isDateFilterActive,
+  // onReserveClick
 }: EquipmentCardProps) {
-  const { data: session, status: sessionStatus } = useSession(); // Get session
-  const imageUrl = equipment.images?.[0] || '/images/placeholder-default.png'; // Use first image or default
-  
-  // --- CORRECTED STATUS CALCULATION --- 
-  // Rely directly on the equipment's status field managed by the backend.
-  const effectiveStatus = equipment.status;
-  // --- END CORRECTION ---
+  // const router = useRouter(); // Uncomment if using router.push
 
-  // Get variant based on the calculated effective status
-  const statusVariant = getStatusVariant(effectiveStatus);
-  const isAvailable = effectiveStatus === EquipmentStatus.AVAILABLE;
+  const { displayStatus, statusLabel, statusVariant } = useMemo(() => {
+    const now = new Date();
+    let currentDisplayStatus = equipment.status; // This is PrismaEquipmentStatus
+    let label = equipment.status.replace(/_/g, ' '); // Basic formatting
 
-  // Determine if the user can see details (not REGULAR)
-  const canViewDetails = sessionStatus === 'authenticated' && !!session?.user && session.user.role !== UserRole.REGULAR;
-
-  // Click handler for the entire card (for selection)
-  const handleCardClick = () => {
-    if (isAvailable) {
-      onSelectToggle(equipment.id);
-    } else {
-      // Optional: Add a toast or visual feedback if clicking unavailable item for selection
-      // toast.info("This item is currently unavailable for reservation.");
+    if (
+      equipment.status === EquipmentStatus.RESERVED &&
+      equipment.nextUpcomingReservationStart &&
+      new Date(equipment.nextUpcomingReservationStart) > now
+    ) {
+      currentDisplayStatus = EquipmentStatus.AVAILABLE;
+      label = `Available (Reserved from ${format(new Date(equipment.nextUpcomingReservationStart), 'MMM d, p')})`;
+    } else if (equipment.status === EquipmentStatus.RESERVED) {
+      label = 'Reserved';
+    } else if (equipment.status === EquipmentStatus.BORROWED) {
+      label = 'Borrowed';
     }
+    // You can add more specific labels for other statuses here
+
+    const variant = getEquipmentStatusVariant(currentDisplayStatus);
+    return { displayStatus: currentDisplayStatus, statusLabel: label, statusVariant: variant };
+  }, [equipment.status, equipment.nextUpcomingReservationStart]);
+
+  const displayedStockInfo = useMemo(() => {
+    if (isDateFilterActive && typeof equipment.availableUnitsInFilterRange === 'number') {
+      if (equipment.availableUnitsInFilterRange > 0) {
+        return `${equipment.availableUnitsInFilterRange} unit(s) available for selected dates`;
+      }
+      return "0 units available for selected dates";
+    }
+
+    if (displayStatus === EquipmentStatus.AVAILABLE) {
+      return `${equipment.stockCount} unit(s) in stock`;
+    }
+    
+    const isEffectivelyReservedOrBorrowed = 
+      displayStatus === EquipmentStatus.BORROWED ||
+      (displayStatus === EquipmentStatus.RESERVED && 
+       !(equipment.nextUpcomingReservationStart && new Date(equipment.nextUpcomingReservationStart) > new Date()));
+
+    if (isEffectivelyReservedOrBorrowed) {
+      return "0 units currently available";
+    }
+
+    if (
+      displayStatus === EquipmentStatus.UNDER_MAINTENANCE ||
+      displayStatus === EquipmentStatus.DEFECTIVE ||
+      displayStatus === EquipmentStatus.OUT_OF_COMMISSION
+    ) {
+      return "Currently unavailable";
+    }
+    return `${equipment.stockCount} total unit(s)`; // Fallback
+  }, [
+    equipment.stockCount,
+    equipment.availableUnitsInFilterRange,
+    isDateFilterActive,
+    displayStatus,
+    equipment.nextUpcomingReservationStart,
+  ]);
+
+  const canReserve = useMemo(() => {
+    if (isDateFilterActive && typeof equipment.availableUnitsInFilterRange === 'number' && equipment.availableUnitsInFilterRange === 0) {
+      return false;
+    }
+    // Check if item is in a state that generally prevents reservation
+    const nonReservableStatus = 
+      displayStatus === EquipmentStatus.BORROWED ||
+      displayStatus === EquipmentStatus.UNDER_MAINTENANCE ||
+      displayStatus === EquipmentStatus.DEFECTIVE ||
+      displayStatus === EquipmentStatus.OUT_OF_COMMISSION ||
+      (displayStatus === EquipmentStatus.RESERVED && 
+       !(equipment.nextUpcomingReservationStart && new Date(equipment.nextUpcomingReservationStart) > new Date()));
+    
+    return !nonReservableStatus;
+  }, [isDateFilterActive, equipment.availableUnitsInFilterRange, displayStatus, equipment.nextUpcomingReservationStart]);
+
+  const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).closest('.interactive-element')) {
+      return;
+    }
+    // Example: router.push(`/equipment/${equipment.id}`);
   };
-  
-  // Prevent click propagation from interactive elements like the details button
-  const stopPropagation = (e: React.MouseEvent) => {
-    e.stopPropagation();
-  };
+
+  const imageUrl = equipment.images && equipment.images.length > 0 
+    ? equipment.images[0] 
+    : '/images/placeholder-default.png'; // Adjust your placeholder path
 
   return (
-    // Add onClick handler and conditional cursor to the Card
     <Card 
-      className={cn(
-        "overflow-hidden flex flex-col h-full bg-card/60 border-border/40 transition-colors duration-200 relative",
-        // Apply hover effect only when available
-        isAvailable ? "hover:border-border/80 cursor-pointer" : "opacity-50 grayscale cursor-not-allowed",
-        // Remove separate isAvailable && "cursor-pointer" as it's handled above
-      )}
-      onClick={handleCardClick}
+      className={cn("overflow-hidden flex flex-col", isSelected && "ring-2 ring-primary")}
+      // onClick={handleCardClick} // Optional: make whole card clickable
     >
-      {/* Selection Checkbox - remains the same */}
-      <div 
-        className={cn(
-          "absolute bottom-2 left-2 z-20 bg-background/80 p-1 rounded",
-          !isAvailable && "opacity-50 cursor-not-allowed" 
-        )}
-        onClick={stopPropagation} // Prevent card click when clicking checkbox area
-      >
-        <Checkbox
-          id={`select-${equipment.id}`}
-          checked={isSelected}
-          // Use onCheckedChange, but it effectively mirrors the card click logic
-          onCheckedChange={() => { 
-            // We could call handleCardClick here, or just let the card click handle it
-            // Since the card click stops propagation from this area, we might not need this
-            // but let's keep it for potential direct checkbox interaction if needed.
-            handleCardClick(); 
-          }}
-          disabled={!isAvailable} 
-          aria-label={`Select ${equipment.name}`}
-          className={cn(!isAvailable && "cursor-not-allowed")} 
-        />
-      </div>
-      {/* Remove Link and Div wrappers */}
-      {/* Card content is now directly inside Card */}
-      <CardHeader 
-        className="p-0 relative aspect-video" 
-        aria-hidden="true" // Hide from accessibility tree as card itself is focusable/clickable
-      >
-        <Image
-          src={imageUrl}
-          alt="" // Alt text handled by card level if needed, empty for decorative image part
-          fill
-          style={{ objectFit: 'cover' }}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-          priority={false}
-          onError={(e) => { // Add basic error handling for image
-            e.currentTarget.srcset = '/images/placeholder-default.png';
-            e.currentTarget.src = '/images/placeholder-default.png';
-          }}
-        />
-        <Badge variant={statusVariant} className="absolute top-2 right-2 z-10 capitalize">
-          {formatStatusText(effectiveStatus)}
-        </Badge>
+      <CardHeader className="p-0 relative">
+        <Link href={`/equipment/${equipment.id}`} passHref legacyBehavior>
+          <a className="aspect-video w-full relative block cursor-pointer group">
+            <Image
+              src={imageUrl}
+              alt={equipment.name}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="object-cover transition-transform group-hover:scale-105"
+              priority={false}
+            />
+          </a>
+        </Link>
+        <div className="absolute top-2 right-2 interactive-element z-10">
+          <Checkbox
+            checked={isSelected}
+            onCheckedChange={() => onSelectToggle(equipment.id)}
+            aria-label={`Select ${equipment.name}`}
+            className="bg-background/70 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground border-border/50 hover:bg-background/90 transition-colors"
+          />
+        </div>
       </CardHeader>
-      <CardContent 
-        className="p-4 flex-grow" 
-        aria-hidden="true" // Hide from accessibility tree
-      >
-        <h3 className="font-semibold text-lg text-foreground mb-1 leading-tight">{equipment.name}</h3>
-        <p className="text-sm text-muted-foreground mb-2 capitalize">
-          {formatCategory(equipment.category)}
-        </p>
-        <p className="text-xs text-muted-foreground truncate" title={equipment.condition || 'No condition specified'}>
-          {equipment.condition || 'N/A'}
+      <CardContent className="p-4 flex-grow">
+        <Link href={`/equipment/${equipment.id}`} passHref legacyBehavior>
+            <a className="hover:underline">
+                <CardTitle className="text-lg font-semibold line-clamp-2 mb-1" title={equipment.name}>
+                    {equipment.name}
+                </CardTitle>
+            </a>
+        </Link>
+        {equipment.equipmentId && (
+          <p className="text-xs text-muted-foreground mb-2">ID: {equipment.equipmentId}</p>
+        )}
+        <div className="mb-3">
+          <Badge variant={statusVariant} className="text-xs capitalize whitespace-nowrap">
+            {statusLabel}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground line-clamp-3" title={equipment.condition || 'No condition specified'}>
+          {displayedStockInfo}
         </p>
       </CardContent>
-      {/* Keep CardFooter, remove ReservationModal, add View Details button */}
-      <CardFooter className="p-4 pt-0 flex justify-end items-center mt-auto">
-        {canViewDetails && (
-          <Button 
-            asChild 
+      <CardFooter className="p-4 pt-0 flex justify-end gap-2">
+        {/* The Reserve button could be here or handled by the BulkReservationModal trigger on the parent page */}
+        {/* If you want a reserve button per card that triggers a single item reservation modal: */}
+        {/*
+        <Button 
             variant="outline" 
             size="sm"
-            onClick={stopPropagation} // Prevent card click when clicking button
-          >
-            <Link
-              href={`/equipment/${equipment.id}`}
-              aria-label={`View details for ${equipment.name}`}
-              >
-               <Eye className="mr-2 h-4 w-4" /> View Details
-            </Link>
-          </Button>
-        )}
-        {/* Ensure footer has content or takes space if needed, add placeholder if button might not render? */}
-        {!canViewDetails && <div className="h-9"></div>} {/* Placeholder to maintain height */} 
+            // onClick={() => onReserveClick && onReserveClick(equipment.id)}
+            disabled={!canReserve}
+            className="interactive-element"
+           >
+          Reserve
+        </Button>
+        */}
+        <Button asChild size="sm" className="interactive-element">
+          <Link href={`/equipment/${equipment.id}`}>View Details</Link>
+        </Button>
       </CardFooter>
     </Card>
   );
-} 
+}

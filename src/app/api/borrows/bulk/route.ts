@@ -150,17 +150,17 @@ export async function POST(request: Request) {
 
         // 5b. *** NEW: Update Equipment Status to RESERVED ***
         // Update status only for AVAILABLE equipment being reserved
-        const updateEquipmentStatus = await tx.equipment.updateMany({
-            where: {
-                id: { in: equipmentIds },
-                status: EquipmentStatus.AVAILABLE, // Only update if currently available
-                // Add stock check? Maybe not needed here as availability check was done before.
-            },
-            data: {
-                status: EquipmentStatus.RESERVED,
-            },
-        });
-        console.log(`[API Bulk POST - Group ${borrowGroupId}] Updated status to RESERVED for ${updateEquipmentStatus.count} equipment items.`);
+        // const updateEquipmentStatus = await tx.equipment.updateMany({
+        //     where: {
+        //         id: { in: equipmentIds },
+        //         status: EquipmentStatus.AVAILABLE, // Only update if currently available
+        //         // Add stock check? Maybe not needed here as availability check was done before.
+        //     },
+        //     data: {
+        //         status: EquipmentStatus.RESERVED,
+        //     },
+        // });
+        // console.log(`[API Bulk POST - Group ${borrowGroupId}] Updated status to RESERVED for ${updateEquipmentStatus.count} equipment items.`);
         // Note: It's possible updateEquipmentStatus.count is less than borrowResult.count
         // if some equipment was already RESERVED/BORROWED (though pre-check should prevent this)
         // or if multiple borrow requests targeted the same equipment item within this bulk request.
@@ -331,6 +331,43 @@ export async function PATCH(request: NextRequest) {
                     // 4. Auto-reject logic (if needed, seems commented out/removed in original)
                     // ... (Keep existing auto-reject logic if present) ...
                     let autoRejectedCountTx = 0; 
+
+                    // New Auto-Reject Logic Starts
+                    if (approvedResult.count > 0 && borrowsToApprove.length > 0) {
+                        const approvedStartTime = borrowsToApprove[0].requestedStartTime; // Assuming all have same time
+                        const approvedEndTime = borrowsToApprove[0].requestedEndTime;   // Assuming all have same time
+
+                        // Find other PENDING reservations for the same equipment that overlap
+                        const overlappingPendingBorrows = await tx.borrow.findMany({
+                            where: {
+                                NOT: {
+                                    // Exclude the borrows we just approved
+                                    id: { in: borrowIdsToApprove }
+                                },
+                                equipmentId: { in: equipmentIdsToApprove },
+                                borrowStatus: BorrowStatus.PENDING,
+                                // Overlap condition:
+                                // Requested start is before approved end AND Requested end is after approved start
+                                requestedStartTime: { lt: approvedEndTime }, 
+                                requestedEndTime: { gt: approvedStartTime },
+                            },
+                            select: { id: true }
+                        });
+
+                        if (overlappingPendingBorrows.length > 0) {
+                            const idsToReject = overlappingPendingBorrows.map(b => b.id);
+                            const rejectionResult = await tx.borrow.updateMany({
+                                where: { id: { in: idsToReject } },
+                                data: {
+                                    borrowStatus: BorrowStatus.REJECTED_AUTOMATIC, // Use the new status
+                                    // remarks: "Automatically rejected due to conflict with an approved reservation." // Removed remarks
+                                }
+                            });
+                            autoRejectedCountTx = rejectionResult.count;
+                            console.log(`[API Bulk PATCH - Group ${groupId}] Auto-rejected ${autoRejectedCountTx} conflicting PENDING reservations using REJECTED_AUTOMATIC.`);
+                        }
+                    }
+                    // New Auto-Reject Logic Ends
                     
                     return { approvedCount: approvedResult.count, rejectedCount: autoRejectedCountTx };
                 });

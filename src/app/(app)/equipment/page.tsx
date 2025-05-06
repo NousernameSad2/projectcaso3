@@ -22,11 +22,13 @@ import BulkReservationModal from '@/components/equipment/BulkReservationModal'; 
 import Link from 'next/link'; // Keep Link
 import { toast } from 'sonner'; // Keep toast
 
-// Make _count required if EquipmentCard needs it
+// Update EquipmentWithCount to include new fields from the API
 interface EquipmentWithCount extends Equipment {
-  _count: { // <<< Made required
+  _count: { 
     borrowRecords: number;
   };
+  nextUpcomingReservationStart: string | null; // Added from API
+  availableUnitsInFilterRange: number | null;  // Added from API
 }
 
 // Define category options including 'ALL'
@@ -337,8 +339,8 @@ export default function EquipmentPage() {
                {canManageEquipment && (
                    <Button size="sm" variant="outline" onClick={handleOpenBulkStatus}>Bulk Edit Status</Button>
                )}
-               {/* Bulk Reservation Modal & Trigger (shown if >= 2 items selected) */}
-               {selectedEquipmentIds.length >= 2 && (
+               {/* Bulk Reservation Modal & Trigger (shown if >= 1 item selected) */}
+               {selectedEquipmentIds.length >= 1 && (
                  <BulkReservationModal
                    selectedEquipmentIds={selectedEquipmentIds}
                    onReservationSuccess={handleBulkReservationSuccess}
@@ -387,6 +389,7 @@ export default function EquipmentPage() {
               equipment={item} 
               isSelected={selectedEquipmentIds.includes(item.id)} 
               onSelectToggle={handleSelectToggle} 
+              isDateFilterActive={!!appliedDateRange}
             />
           ))}
         </div>
