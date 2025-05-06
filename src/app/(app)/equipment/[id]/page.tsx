@@ -720,7 +720,10 @@ export default function EquipmentDetailPage() {
                 <div className="flex justify-between items-center">
                    <p className="text-sm font-medium">
                        <UserIcon className="inline h-4 w-4 mr-1.5 text-muted-foreground"/> 
-                       Borrowed by: <Link href={`/users/${borrow.borrower.id}/profile`} className="hover:underline">{borrow.borrower.name ?? borrow.borrower.email}</Link>
+                       Borrowed by: <Link
+                     href={`/users/${borrow.borrower.id}/profile`}
+                     className="hover:underline"
+                     legacyBehavior>{borrow.borrower.name ?? borrow.borrower.email}</Link>
                    </p>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                         {/* Reservation Type Badge */}
@@ -765,8 +768,8 @@ export default function EquipmentDetailPage() {
              </div>
            ))}
          </div>
-       </div>
-     );
+      </div>
+    );
    };
   // *** END NEW ***
 
@@ -776,7 +779,7 @@ export default function EquipmentDetailPage() {
         <Link
           href="/equipment"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
-          >
+          legacyBehavior>
           <ArrowLeft className="h-4 w-4" />
           Back to Equipment List
         </Link>
@@ -812,7 +815,7 @@ export default function EquipmentDetailPage() {
               {/* Commented out the individual ReservationModal trigger above */}
               {canManage && (
                 <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                  <Link href={`/equipment/${id}/edit`}>
+                  <Link href={`/equipment/${id}/edit`} legacyBehavior>
                     <Edit className="h-4 w-4" /> Edit Equipment
                   </Link>
                 </Button>

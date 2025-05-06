@@ -370,7 +370,7 @@ export default function ProfilePage() {
     // --- NEW: Render using grouped cards --- 
     return (
         <div className="space-y-6">
-            {/* Render Grouped History */} 
+            {/* Render Grouped History */}
             {groupHistoryIds.map((groupId) => {
                 const groupItems = groupedBorrowHistory[groupId];
                 const representativeItem = groupItems[0]; 
@@ -380,64 +380,63 @@ export default function ProfilePage() {
                 // ---- END Logging ----
 
                 return (
-                <Link 
-                    href={`/borrows/group/${groupId}`} 
-                    key={groupId} 
-                    className="block hover:bg-muted/10 transition-colors rounded-lg"
-                >
-                    <Card className="overflow-hidden bg-card/60 border">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-base">
-                                <Users className="h-5 w-5"/> Group Borrow (Returned {formatDateSafe(representativeItem.actualReturnTime, 'PP')})
-                            </CardTitle>
-                             <CardDescription className="text-xs mt-1">
-                               Borrow ID: {groupId}
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0">
-                            <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
-                            <ul className="space-y-2 text-sm">
-                                {groupItems.map(item => {
-                                    // ---- START Logging ----
-                                    console.log(`[Profile History Render Group Item ${item.id}] Data passed to calculation:`, JSON.stringify({ 
-                                      checkoutTime: item.checkoutTime, 
-                                      actualReturnTime: item.actualReturnTime, 
-                                      approvedStartTime: item.approvedStartTime 
-                                    }, null, 2));
-                                    // ---- END Logging ----
-                                    return (
-                                    <li key={item.id} className="flex items-center gap-2">
-                                        <Image 
-                                            src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                            alt={item.equipment.name}
-                                            width={32}
-                                            height={32}
-                                            className="rounded object-cover aspect-square"
-                                        />
-                                        <div className='flex-grow'>
-                                            <span className='font-medium'>{item.equipment.name}</span>
-                                            {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
-                                            <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                                <Clock className='h-3 w-3'/> 
-                                                Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
-                                                (Returned: {formatDateSafe(item.actualReturnTime, 'Pp')})
-                                            </span>
-                                        </div>
-                                        <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90 whitespace-nowrap">
-                                            {item.borrowStatus.toLowerCase().replace('_', ' ')}
-                                        </Badge>
-                                    </li>
-                                    );
-                                })}
-                            </ul>
-                        </CardContent>
-                        {/* No footer actions for history */}
-                    </Card>
-                </Link>
+                    <Link
+                        href={`/borrows/group/${groupId}`}
+                        key={groupId}
+                        className="block hover:bg-muted/10 transition-colors rounded-lg"
+                        legacyBehavior>
+                        <Card className="overflow-hidden bg-card/60 border">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    <Users className="h-5 w-5"/> Group Borrow (Returned {formatDateSafe(representativeItem.actualReturnTime, 'PP')})
+                                </CardTitle>
+                                 <CardDescription className="text-xs mt-1">
+                                   Borrow ID: {groupId}
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent className="p-4 pt-0">
+                                <h4 className="text-sm font-medium mb-2 text-muted-foreground">Items ({groupItems.length}):</h4>
+                                <ul className="space-y-2 text-sm">
+                                    {groupItems.map(item => {
+                                        // ---- START Logging ----
+                                        console.log(`[Profile History Render Group Item ${item.id}] Data passed to calculation:`, JSON.stringify({ 
+                                          checkoutTime: item.checkoutTime, 
+                                          actualReturnTime: item.actualReturnTime, 
+                                          approvedStartTime: item.approvedStartTime 
+                                        }, null, 2));
+                                        // ---- END Logging ----
+                                        return (
+                                        <li key={item.id} className="flex items-center gap-2">
+                                            <Image 
+                                                src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                                alt={item.equipment.name}
+                                                width={32}
+                                                height={32}
+                                                className="rounded object-cover aspect-square"
+                                            />
+                                            <div className='flex-grow'>
+                                                <span className='font-medium'>{item.equipment.name}</span>
+                                                {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                                <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                    <Clock className='h-3 w-3'/> 
+                                                    Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
+                                                    (Returned: {formatDateSafe(item.actualReturnTime, 'Pp')})
+                                                </span>
+                                            </div>
+                                            <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 capitalize text-xs scale-90 whitespace-nowrap">
+                                                {item.borrowStatus.toLowerCase().replace('_', ' ')}
+                                            </Badge>
+                                        </li>
+                                        );
+                                    })}
+                                </ul>
+                            </CardContent>
+                            {/* No footer actions for history */}
+                        </Card>
+                    </Link>
                 );
             })}
-
-            {/* Render Individual History */} 
+            {/* Render Individual History */}
             {individualHistoryItems.map((borrow) => {
                 // ---- START Logging ----
                  console.log(`[Profile History Render Individual Item ${borrow.id}] Data passed to calculation:`, JSON.stringify({ 
@@ -493,76 +492,86 @@ export default function ProfilePage() {
       
       // *** CHANGE Scrollable Container Height ***
       return (
-        <div className="max-h-[800px] overflow-y-auto pr-1"> {/* Changed 400px to 800px */}
-          {/* Existing space-y container */}
-          <div className="space-y-3">
-            {facultyBorrows.map((borrow) => (
-              <Card key={borrow.id} className="overflow-hidden bg-card/70 border">
-                <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
-                  <Link href={`/equipment/${borrow.equipment.id}`} className="block flex-shrink-0">
-                    <Image 
-                      src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'} 
-                      alt={borrow.equipment.name}
-                      width={80} 
-                      height={80} 
-                      className="rounded border aspect-square object-contain bg-background p-1"
-                      onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
-                    />
-                  </Link>
-                  <div className="flex-grow space-y-1 text-sm">
-                     <div className="flex justify-between items-start gap-1">
-                         <Link href={`/equipment/${borrow.equipment.id}`} className="font-semibold hover:underline flex-shrink min-w-0 mr-2" title={borrow.equipment.name}>
-                             <span className="truncate">{borrow.equipment.name}</span>
-                         </Link>
-                         {/* --- Badge Container --- */}
-                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                             {/* Reservation Type Badge */}
-                             <Badge
-                                 variant={getReservationTypeVariant(borrow.reservationType)}
-                                 className="capitalize text-xs whitespace-nowrap"
-                                 title={`Reservation Type: ${formatReservationType(borrow.reservationType)}`}
-                             >
-                                 {formatReservationType(borrow.reservationType)}
-                             </Badge>
-                             {/* Status Badge */}
-                             <Badge variant={getBorrowStatusVariant(borrow.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
-                                 {formatBorrowStatus(borrow.borrowStatus)}
-                             </Badge>
+          <div className="max-h-[800px] overflow-y-auto pr-1"> {/* Changed 400px to 800px */}
+              {/* Existing space-y container */}
+              <div className="space-y-3">
+                {facultyBorrows.map((borrow) => (
+                  <Card key={borrow.id} className="overflow-hidden bg-card/70 border">
+                    <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
+                      <Link
+                          href={`/equipment/${borrow.equipment.id}`}
+                          className="block flex-shrink-0"
+                          legacyBehavior>
+                        <Image 
+                          src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'} 
+                          alt={borrow.equipment.name}
+                          width={80} 
+                          height={80} 
+                          className="rounded border aspect-square object-contain bg-background p-1"
+                          onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                        />
+                      </Link>
+                      <div className="flex-grow space-y-1 text-sm">
+                         <div className="flex justify-between items-start gap-1">
+                             <Link
+                                 href={`/equipment/${borrow.equipment.id}`}
+                                 className="font-semibold hover:underline flex-shrink min-w-0 mr-2"
+                                 title={borrow.equipment.name}
+                                 legacyBehavior>
+                                 <span className="truncate">{borrow.equipment.name}</span>
+                             </Link>
+                             {/* --- Badge Container --- */}
+                             <div className="flex items-center gap-1.5 flex-shrink-0">
+                                 {/* Reservation Type Badge */}
+                                 <Badge
+                                     variant={getReservationTypeVariant(borrow.reservationType)}
+                                     className="capitalize text-xs whitespace-nowrap"
+                                     title={`Reservation Type: ${formatReservationType(borrow.reservationType)}`}
+                                 >
+                                     {formatReservationType(borrow.reservationType)}
+                                 </Badge>
+                                 {/* Status Badge */}
+                                 <Badge variant={getBorrowStatusVariant(borrow.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
+                                     {formatBorrowStatus(borrow.borrowStatus)}
+                                 </Badge>
+                             </div>
                          </div>
-                     </div>
-                     <p className="text-xs text-muted-foreground">
-                         Borrowed by: <Link href={`/users/${borrow.borrower.id}/profile`} className="hover:underline">{borrow.borrower.name ?? borrow.borrower.email}</Link>
-                     </p>
-                     {borrow.class && (
-                       <p className="text-xs text-muted-foreground">
-                         Class: {borrow.class.courseCode} {borrow.class.section}
-                       </p>
-                     )}
-                     <p className="text-xs text-muted-foreground">
-                        Requested: {formatDateSafe(borrow.requestedStartTime, 'PPp')} - {formatDateSafe(borrow.requestedEndTime, 'PPp')}
-                     </p>
-                     {borrow.approvedStartTime && borrow.approvedEndTime && (
                          <p className="text-xs text-muted-foreground">
-                           Approved: {formatDateSafe(borrow.approvedStartTime, 'PPp')} - {formatDateSafe(borrow.approvedEndTime, 'PPp')}
+                             Borrowed by: <Link
+                             href={`/users/${borrow.borrower.id}/profile`}
+                             className="hover:underline"
+                             legacyBehavior>{borrow.borrower.name ?? borrow.borrower.email}</Link>
                          </p>
-                     )}
-                     {borrow.checkoutTime && (
-                       <p className="text-xs text-muted-foreground">
-                           Checked Out: {formatDateSafe(borrow.checkoutTime, 'PPp')}
-                       </p>
-                     )}
-                      {/* Add link to group details if applicable? */}
-                      {borrow.borrowGroupId && (
-                           <Link href={`/borrows/group/${borrow.borrowGroupId}`} className="text-xs text-blue-400 hover:underline block mt-1">
-                               View Borrow Details
-                           </Link>
-                      )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                         {borrow.class && (
+                           <p className="text-xs text-muted-foreground">
+                             Class: {borrow.class.courseCode} {borrow.class.section}
+                           </p>
+                         )}
+                         <p className="text-xs text-muted-foreground">
+                            Requested: {formatDateSafe(borrow.requestedStartTime, 'PPp')} - {formatDateSafe(borrow.requestedEndTime, 'PPp')}
+                         </p>
+                         {borrow.approvedStartTime && borrow.approvedEndTime && (
+                             <p className="text-xs text-muted-foreground">
+                               Approved: {formatDateSafe(borrow.approvedStartTime, 'PPp')} - {formatDateSafe(borrow.approvedEndTime, 'PPp')}
+                             </p>
+                         )}
+                         {borrow.checkoutTime && (
+                           <p className="text-xs text-muted-foreground">
+                               Checked Out: {formatDateSafe(borrow.checkoutTime, 'PPp')}
+                           </p>
+                         )}
+                          {/* Add link to group details if applicable? */}
+                          {borrow.borrowGroupId && (
+                               <Link href={`/borrows/group/${borrow.borrowGroupId}`} className="text-xs text-blue-400 hover:underline block mt-1">
+                                   View Borrow Details
+                               </Link>
+                          )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
           </div>
-        </div>
       );
   };
   // *** END NEW ***

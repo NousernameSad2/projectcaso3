@@ -85,7 +85,7 @@ export default function AddEquipmentPage() {
       <Link
         href="/equipment"
         className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4"
-        >
+        legacyBehavior>
         <ArrowLeft className="h-4 w-4" />
         Back to Equipment List
       </Link>

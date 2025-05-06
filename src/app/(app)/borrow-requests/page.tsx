@@ -436,63 +436,66 @@ export default function BorrowRequestsPage() {
       if (sortedGroupLogIds.length === 0) return <p className="text-muted-foreground italic">No group borrow records found.</p>;
 
       return (
-          <div className="max-h-[600px] overflow-y-auto pr-1 space-y-4">
-              {sortedGroupLogIds.map((groupId) => {
-                  const groupItems = groupedGroupLogs[groupId];
-                  if (!groupItems || groupItems.length === 0) return null;
-                  const representativeItem = groupItems[0];
-                  
-                  return (
-                      <Card key={groupId} className="bg-card/60 border">
-                          <CardHeader className='pb-3'>
-                              <CardTitle className="text-base flex items-center justify-between">
-                                  <Link href={`/borrows/group/${groupId}`} className='hover:underline flex items-center gap-2'>
-                                      <Users className="h-4 w-4 text-muted-foreground"/> Group: {groupId}
-                                  </Link>
-                                  <div className="flex items-center gap-2">
-                                      <Badge 
-                                          variant={getReservationTypeVariant(representativeItem.reservationType)}
-                                          className="capitalize text-[10px] scale-95 whitespace-nowrap font-normal"
-                                      >
-                                          {formatReservationType(representativeItem.reservationType)}
-                                      </Badge>
-                                      <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
-                                          {formatBorrowStatus(representativeItem.borrowStatus)}
-                                      </Badge>
-                                  </div>
-                              </CardTitle>
-                              <CardDescription className='text-xs mt-1 space-y-0.5'>
-                                  <span>Requested by {representativeItem.borrower.name ?? representativeItem.borrower.email} on {formatDateSafe(representativeItem.requestSubmissionTime, 'PP')}</span>
-                                  <span className='block'>Requested Time: {formatDateSafe(representativeItem.requestedStartTime, 'Pp')} - {formatDateSafe(representativeItem.requestedEndTime, 'Pp')}</span>
-                                  {representativeItem.class ? <span className='block'>Class: {representativeItem.class.courseCode} {representativeItem.class.section}</span> : ''}
-                              </CardDescription>
-                          </CardHeader>
-                          <CardContent className='pt-0 pb-4 px-4'>
-                              <p className='text-sm font-medium mb-2 text-muted-foreground'>Items ({groupItems.length}):</p>
-                              <ul className="space-y-1.5 text-xs pl-2">
-                                  {groupItems.map(item => (
-                                      <li key={item.id} className='flex items-center gap-2'>
-                                         <Image 
-                                             src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                             alt={item.equipment.name}
-                                             width={24} height={24} 
-                                             className="rounded object-contain aspect-square bg-background border"
-                                         />
-                                         <span className='flex-grow truncate' title={`${item.equipment.name} (${item.equipment.equipmentId ?? 'N/A'})`}>
-                                            {item.equipment.name} 
-                                            <span className="text-muted-foreground/80 text-[10px] ml-1">({item.equipment.equipmentId ?? 'N/A'})</span>
-                                         </span>
-                                         <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="capitalize text-[10px] scale-90 whitespace-nowrap">
-                                              {formatBorrowStatus(item.borrowStatus)}
-                                          </Badge>
-                                      </li>
-                                  ))}
-                              </ul>
-                          </CardContent>
-                      </Card>
-                  );
-              })}
-          </div>
+        <div className="max-h-[600px] overflow-y-auto pr-1 space-y-4">
+          {sortedGroupLogIds.map((groupId) => {
+              const groupItems = groupedGroupLogs[groupId];
+              if (!groupItems || groupItems.length === 0) return null;
+              const representativeItem = groupItems[0];
+              
+              return (
+                <Card key={groupId} className="bg-card/60 border">
+                  <CardHeader className='pb-3'>
+                      <CardTitle className="text-base flex items-center justify-between">
+                          <Link
+                            href={`/borrows/group/${groupId}`}
+                            className='hover:underline flex items-center gap-2'
+                            legacyBehavior>
+                              <Users className="h-4 w-4 text-muted-foreground"/> Group: {groupId}
+                          </Link>
+                          <div className="flex items-center gap-2">
+                              <Badge 
+                                  variant={getReservationTypeVariant(representativeItem.reservationType)}
+                                  className="capitalize text-[10px] scale-95 whitespace-nowrap font-normal"
+                              >
+                                  {formatReservationType(representativeItem.reservationType)}
+                              </Badge>
+                              <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
+                                  {formatBorrowStatus(representativeItem.borrowStatus)}
+                              </Badge>
+                          </div>
+                      </CardTitle>
+                      <CardDescription className='text-xs mt-1 space-y-0.5'>
+                          <span>Requested by {representativeItem.borrower.name ?? representativeItem.borrower.email} on {formatDateSafe(representativeItem.requestSubmissionTime, 'PP')}</span>
+                          <span className='block'>Requested Time: {formatDateSafe(representativeItem.requestedStartTime, 'Pp')} - {formatDateSafe(representativeItem.requestedEndTime, 'Pp')}</span>
+                          {representativeItem.class ? <span className='block'>Class: {representativeItem.class.courseCode} {representativeItem.class.section}</span> : ''}
+                      </CardDescription>
+                  </CardHeader>
+                  <CardContent className='pt-0 pb-4 px-4'>
+                      <p className='text-sm font-medium mb-2 text-muted-foreground'>Items ({groupItems.length}):</p>
+                      <ul className="space-y-1.5 text-xs pl-2">
+                          {groupItems.map(item => (
+                              <li key={item.id} className='flex items-center gap-2'>
+                                 <Image 
+                                     src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                     alt={item.equipment.name}
+                                     width={24} height={24} 
+                                     className="rounded object-contain aspect-square bg-background border"
+                                 />
+                                 <span className='flex-grow truncate' title={`${item.equipment.name} (${item.equipment.equipmentId ?? 'N/A'})`}>
+                                    {item.equipment.name} 
+                                    <span className="text-muted-foreground/80 text-[10px] ml-1">({item.equipment.equipmentId ?? 'N/A'})</span>
+                                 </span>
+                                 <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="capitalize text-[10px] scale-90 whitespace-nowrap">
+                                      {formatBorrowStatus(item.borrowStatus)}
+                                  </Badge>
+                              </li>
+                          ))}
+                      </ul>
+                  </CardContent>
+                </Card>
+              );
+          })}
+        </div>
       );
   };
 
@@ -503,7 +506,6 @@ export default function BorrowRequestsPage() {
   return (
     <div className="container mx-auto py-10 space-y-8">
       <h1 className="text-3xl font-bold text-white">Borrow Requests & Logs</h1>
-
       <Card className="bg-card/80 border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -515,7 +517,6 @@ export default function BorrowRequestsPage() {
           <p className="text-muted-foreground italic">Data request functionality is under development.</p>
         </CardContent>
       </Card>
-
       <Card className="bg-card/80 border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -589,7 +590,6 @@ export default function BorrowRequestsPage() {
           </div>
         </CardContent>
       </Card>
-
       <Card className="bg-card/80 border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center">
@@ -601,7 +601,6 @@ export default function BorrowRequestsPage() {
           {renderGroupBorrowLogs()}
         </CardContent>
       </Card>
-
       <ConfirmReturnModal
           isOpen={isReturnModalOpen}
           onOpenChange={setIsReturnModalOpen}

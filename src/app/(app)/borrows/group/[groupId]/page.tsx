@@ -183,7 +183,7 @@ export default function BorrowGroupDetailPage() {
             <div className="text-center py-10">
                 <p className="text-destructive mb-4">Error: {error.message}</p>
                 <Button variant="outline" asChild>
-                    <Link href="/">
+                    <Link href="/" legacyBehavior>
                         <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
                     </Link>
                 </Button>
@@ -196,7 +196,7 @@ export default function BorrowGroupDetailPage() {
             <div className="text-center py-10">
                 <p className="text-muted-foreground mb-4">Borrow group not found or has no borrowable items.</p>
                 <Button variant="outline" asChild>
-                    <Link href="/">
+                    <Link href="/" legacyBehavior>
                         <ArrowLeft className="mr-2 h-4 w-4"/> Back to Dashboard
                     </Link>
                 </Button>
@@ -209,7 +209,7 @@ export default function BorrowGroupDetailPage() {
             <div className="flex items-center justify-between flex-wrap gap-4">
                 <div className="flex items-center gap-2">
                     <Button variant="outline" size="icon" asChild>
-                        <Link href="/">
+                        <Link href="/" legacyBehavior>
                             <ArrowLeft className="h-4 w-4"/>
                             <span className="sr-only">Back to Dashboard</span>
                         </Link>
@@ -266,7 +266,10 @@ export default function BorrowGroupDetailPage() {
                         <div>
                             <span className="font-semibold text-muted-foreground">Faculty in Charge:</span>{' '}
                             {(session?.user?.role === UserRole.STAFF || session?.user?.role === UserRole.FACULTY) && representativeItem.class.fic.id ? (
-                                <Link href={`/users/${representativeItem.class.fic.id}/profile`} className="hover:underline text-primary">
+                                <Link
+                                    href={`/users/${representativeItem.class.fic.id}/profile`}
+                                    className="hover:underline text-primary"
+                                    legacyBehavior>
                                     {representativeItem.class.fic.name || representativeItem.class.fic.email || 'N/A'}
                                 </Link>
                             ) : (
@@ -326,7 +329,7 @@ export default function BorrowGroupDetailPage() {
                                                         href={`/equipment/${item.equipment.id}`}
                                                         className="relative flex h-16 w-16 items-center justify-center bg-background rounded overflow-hidden border p-2"
                                                         aria-label={`View details for ${item.equipment.name}`}
-                                                    >
+                                                        legacyBehavior>
                                                         <Image
                                                             src={imageSrc}
                                                             alt={item.equipment.name}
@@ -360,7 +363,7 @@ export default function BorrowGroupDetailPage() {
                                                         href={`/equipment/${item.equipment.id}`}
                                                         className="font-medium hover:underline"
                                                         aria-label={`View details for ${item.equipment.name}`}
-                                                    >
+                                                        legacyBehavior>
                                                         {item.equipment.name}
                                                     </Link>
                                                 ) : (
@@ -401,7 +404,10 @@ export default function BorrowGroupDetailPage() {
                         <ul className="space-y-2 text-sm">
                             {groupMates.map((mate) => (
                                 <li key={mate.id} className="flex justify-between items-center p-2 rounded hover:bg-muted/50">
-                                    <Link href={`/users/${mate.id}/profile`} className="font-medium hover:underline">
+                                    <Link
+                                        href={`/users/${mate.id}/profile`}
+                                        className="font-medium hover:underline"
+                                        legacyBehavior>
                                         {mate.name}
                                     </Link>
                                     <span className="text-muted-foreground text-xs">{mate.email}</span>

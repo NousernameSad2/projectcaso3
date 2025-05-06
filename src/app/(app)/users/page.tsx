@@ -400,7 +400,7 @@ export default function AdminUsersPage() {
                                             <Link
                                                 href={`/users/${user.id}/profile`}
                                                 className="hover:underline"
-                                                >
+                                                legacyBehavior>
                                                 {user.name || '-'}
                                             </Link>
                                         </TableCell>

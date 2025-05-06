@@ -363,7 +363,7 @@ export default function EquipmentPage() {
            {/* Add Equipment Button - Show when NO items selected AND user is Staff/Faculty */} 
            {!hasSelection && canManageEquipment && (
              <Button size="sm" asChild>
-               <Link href="/equipment/new">
+               <Link href="/equipment/new" legacyBehavior>
                  <PlusCircle className="mr-2 h-4 w-4" /> Add Equipment
                </Link>
              </Button>

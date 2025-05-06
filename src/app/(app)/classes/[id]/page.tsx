@@ -390,14 +390,14 @@ export default function ClassDetailPage() {
 
   if (error) {
     return (
-      <div className="text-center py-10">
-        <p className="text-destructive mb-4">Error: {error}</p>
-        <Button variant="outline" asChild>
-            <Link href="/classes">
-                <ArrowLeft className="mr-2 h-4 w-4"/> Go back to Classes
-            </Link>
-        </Button>
-      </div>
+        <div className="text-center py-10">
+            <p className="text-destructive mb-4">Error: {error}</p>
+            <Button variant="outline" asChild>
+                <Link href="/classes" legacyBehavior>
+                    <ArrowLeft className="mr-2 h-4 w-4"/> Go back to Classes
+                </Link>
+            </Button>
+        </div>
     );
   }
 
@@ -410,7 +410,7 @@ export default function ClassDetailPage() {
         <div className="text-center py-10">
             <p className="text-muted-foreground mb-4">Class not found.</p>
             <Button asChild variant="outline">
-                <Link href="/classes">
+                <Link href="/classes" legacyBehavior>
                     <ArrowLeft className="mr-2 h-4 w-4"/> Back to Classes List
                 </Link>
             </Button>
@@ -433,239 +433,238 @@ export default function ClassDetailPage() {
   } : null;
 
   return (
-    <div className="container mx-auto py-10 space-y-6">
-      <div className="flex items-center justify-between">
-         <Button variant="outline" size="icon" asChild>
-           <Link href="/classes">
-               <ArrowLeft className="h-4 w-4"/>
-               <span className="sr-only">Back to Classes</span>
-           </Link>
-         </Button>
-         <h1 className="text-2xl font-bold text-white text-center flex-1 mx-4 truncate">
-           {classDetails.courseCode} - {classDetails.section} ({classDetails.semester})
-         </h1>
-         {canEditClass && (
-            <Button variant="outline" size="icon" onClick={handleEditClass}>
-               <Edit className="h-4 w-4"/>
-               <span className="sr-only">Edit Class</span>
-           </Button>
-         )}
-      </div>
-      <Card className="bg-card/80 border-border">
-        <CardHeader>
-           <CardTitle>Class Information</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-           <div><span className="font-semibold text-muted-foreground">Course Code:</span> {classDetails.courseCode}</div>
-           <div><span className="font-semibold text-muted-foreground">Section:</span> {classDetails.section}</div>
-           <div><span className="font-semibold text-muted-foreground">Semester:</span> {classDetails.semester}</div>
-           <div><span className="font-semibold text-muted-foreground">Academic Year:</span> {classDetails.academicYear ?? 'N/A'}</div>
-           <div>
-             <span className="font-semibold text-muted-foreground">Faculty in Charge:</span> 
-             {classDetails.fic?.id ? (
-               <Link
-                 href={`/users/${classDetails.fic.id}/profile`}
-                 className="hover:underline text-primary"
-                 >
-                 {classDetails.fic.name ?? classDetails.fic.email}
+      <div className="container mx-auto py-10 space-y-6">
+          <div className="flex items-center justify-between">
+             <Button variant="outline" size="icon" asChild>
+               <Link href="/classes" legacyBehavior>
+                   <ArrowLeft className="h-4 w-4"/>
+                   <span className="sr-only">Back to Classes</span>
                </Link>
-             ) : (
-               classDetails.fic?.name ?? classDetails.fic?.email ?? 'N/A'
+             </Button>
+             <h1 className="text-2xl font-bold text-white text-center flex-1 mx-4 truncate">
+               {classDetails.courseCode} - {classDetails.section} ({classDetails.semester})
+             </h1>
+             {canEditClass && (
+                <Button variant="outline" size="icon" onClick={handleEditClass}>
+                   <Edit className="h-4 w-4"/>
+                   <span className="sr-only">Edit Class</span>
+               </Button>
              )}
-           </div>
-           <div><span className="font-semibold text-muted-foreground">Status:</span> {classDetails.isActive ? 'Active' : 'Inactive'}</div>
-           {/* <<< Add Schedule Display >>> */}
-           {classDetails.schedule && (
-             <div className="flex items-center">
-               <Clock className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-               <span className="text-foreground/90">{classDetails.schedule}</span>
-             </div>
-           )}
-           {/* <<< Add Venue Display >>> */}
-           {classDetails.venue && (
-             <div className="flex items-center">
-               <MapPin className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
-               <span className="text-foreground/90">{classDetails.venue}</span>
-             </div>
-           )}
-        </CardContent>
-      </Card>
-      <Card className="bg-card/80 border-border">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle>Enrolled Students ({sortedEnrolledStudents.length})</CardTitle>
-            {canManageEnrollments && (
-              <AddStudentDialog 
-                classId={classId} 
-                enrolledStudentIds={classDetails.enrollments.map(e => e.user.id)}
-                onStudentsAdded={handleStudentsAdded}
-              />
-            )}
-          </CardHeader>
-          <CardContent>
-            {isFetchingDetails ? (
-                 <div className="text-center py-4"><LoadingSpinner /></div>
-            ) : sortedEnrolledStudents.length === 0 ? (
-                 <p className="text-center text-muted-foreground py-6">No students enrolled in this class yet.</p>
-            ) : (
-                <div className="border rounded-md overflow-hidden">
-                     <Table>
-                         <TableHeader>
-                             <TableRow>
-                                 <TableHead>{renderEnrolledSortableHeader('name', 'Name')}</TableHead>
-                                 <TableHead>{renderEnrolledSortableHeader('email', 'Email')}</TableHead>
-                                 <TableHead className="text-right">Actions</TableHead>
-                             </TableRow>
-                         </TableHeader>
-                         <TableBody>
-                             {sortedEnrolledStudents.map(({ user }) => (
-                                 <TableRow key={user.id}>
-                                     <TableCell className="font-medium">{user.name || "-"}</TableCell>
-                                     <TableCell>{user.email || "-"}</TableCell>
-                                     <TableCell className="text-right">
-                                         {canManageEnrollments && (
-                                             <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                className="text-destructive hover:bg-destructive/10" 
-                                                onClick={() => openRemoveConfirmation(user.id, user.name)}
-                                                disabled={isRemovingStudent && removingStudent?.id === user.id}
-                                                title="Remove Student"
-                                                >
-                                                {(isRemovingStudent && removingStudent?.id === user.id) ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
-                                                <span className="sr-only">Remove</span>
-                                             </Button>
-                                         )}
-                                     </TableCell>
-                                 </TableRow>
-                             ))}
-                         </TableBody>
-                     </Table>
-                 </div>
-            )}
-          </CardContent>
-        </Card>
-      {canEditClass && isEditOpen && editDialogData && (
-          <EditClassDialog 
-             classData={editDialogData} 
-             isOpen={isEditOpen}
-             onOpenChange={setIsEditOpen} 
-             onClassUpdated={handleClassUpdated}
-          />
-      )}
-      {/* --- Remove Student Confirmation Dialog --- */}
-      <AlertDialog open={isRemoveConfirmOpen} onOpenChange={setIsRemoveConfirmOpen}>
-          <AlertDialogContent>
-              <AlertDialogHeader>
-                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                      This action will remove the student 
-                      <strong>{removingStudent?.name || removingStudent?.id}</strong> 
-                      from this class. They will need to be added again manually if this was a mistake.
-                  </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                  <AlertDialogCancel disabled={isRemovingStudent}>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                      onClick={performRemoveStudent}
-                      disabled={isRemovingStudent}
-                      className="bg-destructive hover:bg-destructive/90"
-                  >
-                      {isRemovingStudent ? <LoadingSpinner size="sm" className="mr-2" /> : null}
-                      Confirm Remove
-                  </AlertDialogAction>
-              </AlertDialogFooter>
-          </AlertDialogContent>
-      </AlertDialog>
-      {/* --- End Remove Student Dialog --- */}
-      
-      {/* --- START: RENDER GROUP BORROW HISTORY CARD (Conditional) --- */}
-      {(user?.role === UserRole.STAFF || user?.role === UserRole.FACULTY) && (
-        <Card className="bg-card/80 border-border">
+          </div>
+          <Card className="bg-card/80 border-border">
             <CardHeader>
-                <CardTitle>Class Group Borrow History</CardTitle>
-                <CardDescription>History of group borrows associated with this class.</CardDescription>
+               <CardTitle>Class Information</CardTitle>
             </CardHeader>
-            <CardContent>
-                {isLoadingHistory && <LoadingSpinner />}
-                {historyError && (
-                    <p className="text-destructive flex items-center gap-1"><AlertCircle className="h-4 w-4"/> Error loading history: {historyError.message}</p>
-                )}
-                {!isLoadingHistory && !historyError && sortedGroupHistoryIds.length === 0 && (
-                    <p className="text-muted-foreground italic">No group borrow history found for this class.</p>
-                )}
-                {!isLoadingHistory && !historyError && sortedGroupHistoryIds.length > 0 && (
-                    <div className="space-y-4 max-h-[1200px] overflow-y-auto p-1">
-                        {sortedGroupHistoryIds.map((groupId) => {
-                            const groupItems = groupedBorrowHistory[groupId];
-                            const representativeItem = groupItems[0];
-                            // Determine representative date (Return > Checkout > Request)
-                            const representativeDate = representativeItem.actualReturnTime 
-                                ?? representativeItem.checkoutTime 
-                                ?? representativeItem.requestSubmissionTime;
-                            const dateLabel = representativeItem.actualReturnTime ? 'Returned' 
-                                : representativeItem.checkoutTime ? 'Checked Out' 
-                                : 'Requested';
-
-                            return (
-                                <Link href={`/borrows/group/${groupId}`} key={groupId} passHref>
-                                    <div className="block hover:bg-muted/10 transition-colors rounded-lg border p-4 cursor-pointer">
-                                        <div className="flex justify-between items-start mb-2">
-                                            <div>
-                                                <h4 className="font-semibold text-base flex items-center gap-2">
-                                                    <Users className="h-5 w-5"/> 
-                                                    Group Borrow
-                                                </h4>
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    {dateLabel}: {formatDateSafe(representativeDate, 'PPp')}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground mt-0.5">
-                                                    Borrower: {representativeItem.borrower.name ?? representativeItem.borrower.email}
-                                                </p>
-                                            </div>
-                                            {/* Container for Badges */}
-                                            <div className="flex flex-col items-end gap-1">
-                                                {/* Status Badge */}
-                                                <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs scale-95 whitespace-nowrap">
-                                                    {representativeItem.borrowStatus.toLowerCase().replace(/_/g, ' ')}
-                                                </Badge>
-                                                {/* Purpose Badge */}
-                                                {representativeItem.reservationType && (
-                                                  <Badge variant={getReservationTypeVariant(representativeItem.reservationType)} className="capitalize text-xs scale-95 whitespace-nowrap">
-                                                      {formatReservationType(representativeItem.reservationType)}
-                                                  </Badge>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <ul className="space-y-2 mt-3">
-                                            {groupItems.slice(0, 3).map(item => ( // Show first 3 items
-                                                <li key={item.id} className="flex items-center gap-2 text-sm">
-                                                    <Image
-                                                        src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                                        alt={item.equipment.name}
-                                                        width={24}
-                                                        height={24}
-                                                        className="rounded object-cover aspect-square"
-                                                    />
-                                                    <div className="flex-grow">
-                                                        <span className="font-medium">{item.equipment.name}</span>
-                                                        {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
-                                                    </div>
-                                                </li>
-                                            ))}
-                                            {groupItems.length > 3 && (
-                                                <li className="text-xs text-muted-foreground italic ml-8">...and {groupItems.length - 3} more item(s)</li>
-                                            )}
-                                        </ul>
-                                    </div>
-                                </Link>
-                            );
-                        })}
-                    </div>
-                )}
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+               <div><span className="font-semibold text-muted-foreground">Course Code:</span> {classDetails.courseCode}</div>
+               <div><span className="font-semibold text-muted-foreground">Section:</span> {classDetails.section}</div>
+               <div><span className="font-semibold text-muted-foreground">Semester:</span> {classDetails.semester}</div>
+               <div><span className="font-semibold text-muted-foreground">Academic Year:</span> {classDetails.academicYear ?? 'N/A'}</div>
+               <div>
+                 <span className="font-semibold text-muted-foreground">Faculty in Charge:</span> 
+                 {classDetails.fic?.id ? (
+                   <Link
+                       href={`/users/${classDetails.fic.id}/profile`}
+                       className="hover:underline text-primary"
+                       legacyBehavior>
+                     {classDetails.fic.name ?? classDetails.fic.email}
+                   </Link>
+                 ) : (
+                   classDetails.fic?.name ?? classDetails.fic?.email ?? 'N/A'
+                 )}
+               </div>
+               <div><span className="font-semibold text-muted-foreground">Status:</span> {classDetails.isActive ? 'Active' : 'Inactive'}</div>
+               {/* <<< Add Schedule Display >>> */}
+               {classDetails.schedule && (
+                 <div className="flex items-center">
+                   <Clock className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
+                   <span className="text-foreground/90">{classDetails.schedule}</span>
+                 </div>
+               )}
+               {/* <<< Add Venue Display >>> */}
+               {classDetails.venue && (
+                 <div className="flex items-center">
+                   <MapPin className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
+                   <span className="text-foreground/90">{classDetails.venue}</span>
+                 </div>
+               )}
             </CardContent>
-        </Card>
-      )}
-      {/* --- END: RENDER GROUP BORROW HISTORY CARD --- */}
-    </div>
+          </Card>
+          <Card className="bg-card/80 border-border">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>Enrolled Students ({sortedEnrolledStudents.length})</CardTitle>
+                {canManageEnrollments && (
+                  <AddStudentDialog 
+                    classId={classId} 
+                    enrolledStudentIds={classDetails.enrollments.map(e => e.user.id)}
+                    onStudentsAdded={handleStudentsAdded}
+                  />
+                )}
+              </CardHeader>
+              <CardContent>
+                {isFetchingDetails ? (
+                     <div className="text-center py-4"><LoadingSpinner /></div>
+                ) : sortedEnrolledStudents.length === 0 ? (
+                     <p className="text-center text-muted-foreground py-6">No students enrolled in this class yet.</p>
+                ) : (
+                    <div className="border rounded-md overflow-hidden">
+                         <Table>
+                             <TableHeader>
+                                 <TableRow>
+                                     <TableHead>{renderEnrolledSortableHeader('name', 'Name')}</TableHead>
+                                     <TableHead>{renderEnrolledSortableHeader('email', 'Email')}</TableHead>
+                                     <TableHead className="text-right">Actions</TableHead>
+                                 </TableRow>
+                             </TableHeader>
+                             <TableBody>
+                                 {sortedEnrolledStudents.map(({ user }) => (
+                                     <TableRow key={user.id}>
+                                         <TableCell className="font-medium">{user.name || "-"}</TableCell>
+                                         <TableCell>{user.email || "-"}</TableCell>
+                                         <TableCell className="text-right">
+                                             {canManageEnrollments && (
+                                                 <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="text-destructive hover:bg-destructive/10" 
+                                                    onClick={() => openRemoveConfirmation(user.id, user.name)}
+                                                    disabled={isRemovingStudent && removingStudent?.id === user.id}
+                                                    title="Remove Student"
+                                                    >
+                                                    {(isRemovingStudent && removingStudent?.id === user.id) ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                                                    <span className="sr-only">Remove</span>
+                                                 </Button>
+                                             )}
+                                         </TableCell>
+                                     </TableRow>
+                                 ))}
+                             </TableBody>
+                         </Table>
+                     </div>
+                )}
+              </CardContent>
+            </Card>
+          {canEditClass && isEditOpen && editDialogData && (
+              <EditClassDialog 
+                 classData={editDialogData} 
+                 isOpen={isEditOpen}
+                 onOpenChange={setIsEditOpen} 
+                 onClassUpdated={handleClassUpdated}
+              />
+          )}
+          {/* --- Remove Student Confirmation Dialog --- */}
+          <AlertDialog open={isRemoveConfirmOpen} onOpenChange={setIsRemoveConfirmOpen}>
+              <AlertDialogContent>
+                  <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                          This action will remove the student 
+                          <strong>{removingStudent?.name || removingStudent?.id}</strong> 
+                          from this class. They will need to be added again manually if this was a mistake.
+                      </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                      <AlertDialogCancel disabled={isRemovingStudent}>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                          onClick={performRemoveStudent}
+                          disabled={isRemovingStudent}
+                          className="bg-destructive hover:bg-destructive/90"
+                      >
+                          {isRemovingStudent ? <LoadingSpinner size="sm" className="mr-2" /> : null}
+                          Confirm Remove
+                      </AlertDialogAction>
+                  </AlertDialogFooter>
+              </AlertDialogContent>
+          </AlertDialog>
+          {/* --- End Remove Student Dialog --- */}
+          {/* --- START: RENDER GROUP BORROW HISTORY CARD (Conditional) --- */}
+          {(user?.role === UserRole.STAFF || user?.role === UserRole.FACULTY) && (
+            <Card className="bg-card/80 border-border">
+                <CardHeader>
+                    <CardTitle>Class Group Borrow History</CardTitle>
+                    <CardDescription>History of group borrows associated with this class.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {isLoadingHistory && <LoadingSpinner />}
+                    {historyError && (
+                        <p className="text-destructive flex items-center gap-1"><AlertCircle className="h-4 w-4"/> Error loading history: {historyError.message}</p>
+                    )}
+                    {!isLoadingHistory && !historyError && sortedGroupHistoryIds.length === 0 && (
+                        <p className="text-muted-foreground italic">No group borrow history found for this class.</p>
+                    )}
+                    {!isLoadingHistory && !historyError && sortedGroupHistoryIds.length > 0 && (
+                        <div className="space-y-4 max-h-[1200px] overflow-y-auto p-1">
+                            {sortedGroupHistoryIds.map((groupId) => {
+                                const groupItems = groupedBorrowHistory[groupId];
+                                const representativeItem = groupItems[0];
+                                // Determine representative date (Return > Checkout > Request)
+                                const representativeDate = representativeItem.actualReturnTime 
+                                    ?? representativeItem.checkoutTime 
+                                    ?? representativeItem.requestSubmissionTime;
+                                const dateLabel = representativeItem.actualReturnTime ? 'Returned' 
+                                    : representativeItem.checkoutTime ? 'Checked Out' 
+                                    : 'Requested';
+
+                                return (
+                                    <Link href={`/borrows/group/${groupId}`} key={groupId} passHref legacyBehavior>
+                                        <div className="block hover:bg-muted/10 transition-colors rounded-lg border p-4 cursor-pointer">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <div>
+                                                    <h4 className="font-semibold text-base flex items-center gap-2">
+                                                        <Users className="h-5 w-5"/> 
+                                                        Group Borrow
+                                                    </h4>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        {dateLabel}: {formatDateSafe(representativeDate, 'PPp')}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                                        Borrower: {representativeItem.borrower.name ?? representativeItem.borrower.email}
+                                                    </p>
+                                                </div>
+                                                {/* Container for Badges */}
+                                                <div className="flex flex-col items-end gap-1">
+                                                    {/* Status Badge */}
+                                                    <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs scale-95 whitespace-nowrap">
+                                                        {representativeItem.borrowStatus.toLowerCase().replace(/_/g, ' ')}
+                                                    </Badge>
+                                                    {/* Purpose Badge */}
+                                                    {representativeItem.reservationType && (
+                                                      <Badge variant={getReservationTypeVariant(representativeItem.reservationType)} className="capitalize text-xs scale-95 whitespace-nowrap">
+                                                          {formatReservationType(representativeItem.reservationType)}
+                                                      </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <ul className="space-y-2 mt-3">
+                                                {groupItems.slice(0, 3).map(item => ( // Show first 3 items
+                                                    (<li key={item.id} className="flex items-center gap-2 text-sm">
+                                                        <Image
+                                                            src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                                            alt={item.equipment.name}
+                                                            width={24}
+                                                            height={24}
+                                                            className="rounded object-cover aspect-square"
+                                                        />
+                                                        <div className="flex-grow">
+                                                            <span className="font-medium">{item.equipment.name}</span>
+                                                            {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                                        </div>
+                                                    </li>)
+                                                ))}
+                                                {groupItems.length > 3 && (
+                                                    <li className="text-xs text-muted-foreground italic ml-8">...and {groupItems.length - 3} more item(s)</li>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    </Link>
+                                );
+                            })}
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+          )}
+          {/* --- END: RENDER GROUP BORROW HISTORY CARD --- */}
+      </div>
   );
 } 

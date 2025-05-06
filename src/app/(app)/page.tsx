@@ -629,7 +629,7 @@ function StaffActionPanel() {
                           href={href}
                           key={groupId}
                           className="block hover:bg-muted/10 transition-colors rounded-lg"
-                          >
+                          legacyBehavior>
                           <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup ? 'opacity-50' : ''}`}>
                               <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                   <div>
@@ -756,7 +756,7 @@ function StaffActionPanel() {
                               href={href}
                               key={groupId}
                               className="block hover:bg-muted/10 transition-colors rounded-lg"
-                              >
+                              legacyBehavior>
                               <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup || isRejectingThisApprovedGroup ? 'opacity-50' : ''}`}>
                                   <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                       <div>
@@ -876,7 +876,7 @@ function StaffActionPanel() {
                                    href={href}
                                    key={groupId}
                                    className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                                   >
+                                   legacyBehavior>
                                    <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors overflow-hidden">
                                        <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                            <div className="flex justify-between items-center gap-2">
@@ -993,7 +993,7 @@ function StaffActionPanel() {
                               href={href}
                               key={groupId}
                               className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                              >
+                              legacyBehavior>
                               <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors">
                                   <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                       <div className="flex justify-between items-center gap-2">
@@ -1204,7 +1204,7 @@ export default function DashboardPage() {
               )}
             </div>
             <Button asChild size="lg">
-               <Link href="/equipment" className="flex items-center gap-2" >
+               <Link href="/equipment" className="flex items-center gap-2" legacyBehavior>
                  <PlusCircle className="h-5 w-5" /> New Reservation
                </Link>
             </Button>

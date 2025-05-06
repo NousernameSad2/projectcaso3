@@ -280,7 +280,7 @@ export default function MyBorrowsPage() {
                                    Time Checked Out: {calculateDuration(representativeItem.checkoutTime, currentTime)}
                                 </CardDescription>
                             </div>
-                            <Link href={`/borrows/group/${groupId}`} passHref>
+                            <Link href={`/borrows/group/${groupId}`} passHref legacyBehavior>
                                <Button variant="outline" size="sm" asChild>
                                    <span>View Details</span>
                                </Button>
