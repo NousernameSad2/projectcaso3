@@ -646,7 +646,7 @@ function StaffActionPanel() {
                                           {/* --- END: Render Request Timing Badge --- */}
                                           {/* --- START: Render Reservation Type Badge --- */}
                                           {representativeItem.reservationType && (
-                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="ml-2 text-xs font-normal">
+                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="ml-2 text-xs">
                                                   {formatReservationType(representativeItem.reservationType)}
                                               </Badge>
                                           )}
@@ -770,7 +770,7 @@ function StaffActionPanel() {
                                           </CardDescription>
                                           {/* --- START: Render Reservation Type Badge (Approved) --- */}
                                           {representativeItem.reservationType && (
-                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs font-normal">
+                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs">
                                                   {formatReservationType(representativeItem.reservationType)}
                                               </Badge>
                                           )}
@@ -889,7 +889,7 @@ function StaffActionPanel() {
                                                    </p>
                                                    {/* --- START: Render Reservation Type Badge (Returns) --- */}
                                                    {representativeItem.reservationType && (
-                                                       <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs font-normal">
+                                                       <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs">
                                                            {formatReservationType(representativeItem.reservationType)}
                                                        </Badge>
                                                    )}
@@ -1006,7 +1006,7 @@ function StaffActionPanel() {
                                               </p>
                                                {/* --- START: Render Reservation Type Badge (Active) --- */}
                                                {representativeItem.reservationType && (
-                                                   <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs font-normal">
+                                                   <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs">
                                                        {formatReservationType(representativeItem.reservationType)}
                                                    </Badge>
                                                )}

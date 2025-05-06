@@ -74,6 +74,8 @@ const ClassUpdateSchema = z.object({
   academicYear: z.string().regex(/^\d{4}-\d{4}$/, { message: "Must be in YYYY-YYYY format (e.g., 2023-2024)." }),
   ficId: z.string().optional(),
   isActive: z.boolean(),
+  schedule: z.string().optional(),
+  venue: z.string().optional(),
 });
 
 type ClassUpdateInput = z.infer<typeof ClassUpdateSchema>;
@@ -91,6 +93,8 @@ interface ClassData {
     email?: string | null;
   } | null;
   isActive: boolean;
+  schedule?: string | null;
+  venue?: string | null;
 }
 
 interface UpdatedClassData {
@@ -100,6 +104,8 @@ interface UpdatedClassData {
   academicYear?: string;
   ficId?: string | null;
   isActive?: boolean;
+  schedule?: string;
+  venue?: string;
 }
 
 interface EditClassDialogProps {
@@ -132,6 +138,8 @@ export function EditClassDialog({
       academicYear: '',
       ficId: '',
       isActive: true,
+      schedule: '',
+      venue: '',
     },
   });
 
@@ -140,10 +148,12 @@ export function EditClassDialog({
       form.reset({
         courseCode: classData.courseCode,
         section: classData.section,
-        semester: classData.semester,
+        semester: classData.semester ?? 'FIRST',
         academicYear: classData.academicYear,
-        ficId: classData.ficId ?? undefined,
+        ficId: classData.ficId || undefined,
         isActive: classData.isActive,
+        schedule: classData.schedule || '',
+        venue: classData.venue || '',
       });
     } else {
       // Optionally reset to defaults if classData becomes null
@@ -154,6 +164,8 @@ export function EditClassDialog({
         academicYear: '',
         ficId: '',
         isActive: true,
+        schedule: '',
+        venue: '',
       });
     }
   }, [classData, form]);
@@ -215,6 +227,12 @@ export function EditClassDialog({
     }
     if (values.isActive !== classData.isActive) {
       changedValues.isActive = values.isActive;
+    }
+    if (values.schedule !== classData.schedule) {
+      changedValues.schedule = values.schedule;
+    }
+    if (values.venue !== classData.venue) {
+      changedValues.venue = values.venue;
     }
 
     // Prevent non-staff from changing FIC unless it's assigning to themselves
@@ -468,6 +486,34 @@ export function EditClassDialog({
                 <Input value="Not Assigned" disabled />
               </FormItem>
             )}
+
+            <FormField
+              control={form.control}
+              name="schedule"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Class Schedule (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., MWF 10:00-11:30" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="venue"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Venue (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Rm 301, Engg Bldg" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <FormField
               control={form.control}

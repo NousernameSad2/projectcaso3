@@ -13,6 +13,8 @@ const ClassCreateSchema = z.object({
   semester: z.string().min(5, { message: "Semester format incorrect (e.g., 'AY23-24 1st')." }), // Basic check
   academicYear: z.string().regex(/^\d{4}-\d{4}$/, { message: "Academic Year must be in YYYY-YYYY format." }), // Added academic year
   ficId: z.string().min(1, { message: "Faculty ID (ficId) is required."}), // <<< Made required
+  schedule: z.string().optional(), // <<< Add schedule
+  venue: z.string().optional(),    // <<< Add venue
 });
 
 // GET: List classes based on user role

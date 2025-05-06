@@ -11,13 +11,15 @@ interface RouteContext {
 }
 
 // GET: Get a specific class by ID, including enrolled students
-export async function GET(req: NextRequest, { params: { id: classId } }: RouteContext) {
+export async function GET(req: NextRequest, context: RouteContext) {
   // Allow any authenticated user to view class details
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload) { 
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ message: 'Authentication required or Forbidden' }, { status: 401 });
   }
   
+  const classId = context.params.id;
+
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
   }
@@ -31,6 +33,8 @@ export async function GET(req: NextRequest, { params: { id: classId } }: RouteCo
         section: true,
         semester: true,
         academicYear: true,
+        schedule: true,
+        venue: true,
         isActive: true,
         createdAt: true,
         updatedAt: true,
@@ -64,9 +68,7 @@ export async function GET(req: NextRequest, { params: { id: classId } }: RouteCo
       return NextResponse.json({ message: 'Class not found' }, { status: 404 });
     }
 
-    // We can reshape the data slightly if needed, e.g., pull users directly
-    // const enrolledStudents = classDetails.enrollments.map(e => e.user);
-    // return NextResponse.json({ ...classDetails, enrolledStudents });
+    console.log("Fetched classDetails:", JSON.stringify(classDetails, null, 2));
 
     return NextResponse.json(classDetails);
 
@@ -84,10 +86,12 @@ const ClassUpdateSchema = z.object({
   ficId: z.string().optional(),
   isActive: z.boolean().optional(),
   academicYear: z.string().optional(),
+  schedule: z.string().optional(),
+  venue: z.string().optional(),
 });
 
 // PATCH: Update class details
-export async function PATCH(req: NextRequest, { params: { id: classId } }: RouteContext) {
+export async function PATCH(req: NextRequest, context: RouteContext) {
   // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
@@ -95,25 +99,15 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
   }
   const { userId, role } = payload;
 
+  const classId = context.params.id;
+
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
   }
 
   try {
-    let body;
-    try {
-      body = await req.json();
-    } catch (error) {
-      return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
-    }
-
-    const parsedData = ClassUpdateSchema.safeParse(body);
-
-    if (!parsedData.success) {
-      return NextResponse.json({ message: 'Invalid input', errors: parsedData.error.flatten().fieldErrors }, { status: 400 });
-    }
-    
-    const updateData = parsedData.data;
+    const body = await req.json();
+    const validatedData = ClassUpdateSchema.parse(body);
 
     // *** NEW: Authorization Check for FACULTY ***
     if (role === UserRole.FACULTY) {
@@ -132,14 +126,14 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
     // *** END NEW: Authorization Check ***
 
     // Ensure at least one field is being updated
-    if (Object.keys(updateData).length === 0) {
+    if (Object.keys(validatedData).length === 0) {
       return NextResponse.json({ message: 'No update data provided' }, { status: 400 });
     }
     
     // If ficId is being updated, validate the new FIC
-    if (updateData.ficId) {
+    if (validatedData.ficId) {
         const facultyUser = await prisma.user.findUnique({
-            where: { id: updateData.ficId },
+            where: { id: validatedData.ficId },
             select: { id: true, role: true },
         });
         if (!facultyUser || facultyUser.role !== UserRole.FACULTY) {
@@ -148,17 +142,17 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
     }
 
     // Check for duplicate class ONLY if courseCode, section, or semester is changed
-    if (updateData.courseCode || updateData.section || updateData.semester) {
+    if (validatedData.courseCode || validatedData.section || validatedData.semester) {
         // Get current class details to check against
         const currentClass = await prisma.class.findUnique({ where: { id: classId } });
         if (!currentClass) {
              return NextResponse.json({ message: 'Class not found' }, { status: 404 }); // Should not happen if initial check passed
         }
-        const checkCode = updateData.courseCode ?? currentClass.courseCode;
-        const checkSection = updateData.section ?? currentClass.section;
-        const checkSemester = updateData.semester ?? currentClass.semester;
+        const checkCode = validatedData.courseCode ?? currentClass.courseCode;
+        const checkSection = validatedData.section ?? currentClass.section;
+        const checkSemester = validatedData.semester ?? currentClass.semester;
         // academicYear is optional, handle null case gracefully
-        const checkAcademicYear = updateData.academicYear ?? currentClass.academicYear ?? ''; // Use empty string if null
+        const checkAcademicYear = validatedData.academicYear ?? currentClass.academicYear ?? ''; // Use empty string if null
         
         // Check against the correct composite unique constraint including academicYear
         const existingClass = await prisma.class.findUnique({
@@ -178,9 +172,13 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
     }
 
     // --- Update Class --- 
+    // Prepare data, removing schedule if it's not in the model - NO LONGER NEEDED
+    // const { schedule, ...updateData } = validatedData; // Exclude schedule for now - REMOVED
+
     const updatedClass = await prisma.class.update({
       where: { id: classId },
-      data: updateData,
+      // data: updateData, // Use validatedData directly now - REMOVED
+      data: validatedData,
       include: { // Include details needed for UI update
         fic: { 
           select: { id: true, name: true, email: true },
@@ -207,13 +205,15 @@ export async function PATCH(req: NextRequest, { params: { id: classId } }: Route
 }
 
 // DELETE: Delete a class (sets classId to null in related records)
-export async function DELETE(req: NextRequest, { params: { id: classId } }: RouteContext) {
+export async function DELETE(req: NextRequest, context: RouteContext) {
   // Verify user is STAFF or FACULTY 
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can delete classes.' }, { status: 403 });
   }
   const { userId, role } = payload;
+
+  const classId = context.params.id;
 
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });

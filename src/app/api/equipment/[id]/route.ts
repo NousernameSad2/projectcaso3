@@ -63,6 +63,7 @@ export async function GET(
               requestedEndTime: true,
               approvedStartTime: true,
               approvedEndTime: true,
+              reservationType: true,
               borrower: {
                  select: { id: true, name: true, email: true }
               },

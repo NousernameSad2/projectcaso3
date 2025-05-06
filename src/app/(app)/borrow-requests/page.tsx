@@ -519,9 +519,9 @@ export default function BorrowRequestsPage() {
       <Card className="bg-card/80 border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center">
-            <FileText className="mr-2 h-5 w-5" /> Inventory Logs / Borrow Requests
+            <FileText className="mr-2 h-5 w-5" /> Inventory Logs
           </CardTitle>
-          <CardDescription>Overview of individual borrow requests and their status.</CardDescription>
+          <CardDescription>Track all inventory movement.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-6">

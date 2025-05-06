@@ -519,7 +519,7 @@ export default function ProfilePage() {
                              {/* Reservation Type Badge */}
                              <Badge
                                  variant={getReservationTypeVariant(borrow.reservationType)}
-                                 className="capitalize text-[10px] scale-90 whitespace-nowrap font-normal"
+                                 className="capitalize text-xs whitespace-nowrap"
                                  title={`Reservation Type: ${formatReservationType(borrow.reservationType)}`}
                              >
                                  {formatReservationType(borrow.reservationType)}

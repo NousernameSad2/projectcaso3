@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { PlusCircle } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Update schema to use enum for semester and add academicYear
 const ClassCreateSchema = z.object({
@@ -33,6 +34,8 @@ const ClassCreateSchema = z.object({
   academicYear: z.string().regex(/^\d{4}-\d{4}$/, { message: "Must be in YYYY-YYYY format (e.g., 2023-2024)." }), // Added academic year
   // FIC is optional for FACULTY, required for STAFF
   ficId: z.string().optional(), 
+  schedule: z.string().optional(),
+  venue: z.string().optional(),
 });
 
 type ClassCreateInput = z.infer<typeof ClassCreateSchema>;
@@ -77,6 +80,8 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
       semester: undefined, // Default to undefined for enum select
       academicYear: '', // Added default value
       ficId: '',
+      schedule: '',
+      venue: '',
     },
   });
 
@@ -273,6 +278,42 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
                 )}
               />
             )}
+
+            {/* <<< Add Schedule Field >>> */}
+            <FormField
+              control={form.control}
+              name="schedule"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Class Schedule (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., MWF 10:00-11:30 / TTh 1:00-2:30" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Enter the meeting days and times.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            {/* <<< Add Venue Field >>> */}
+            <FormField
+              control={form.control}
+              name="venue"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Venue (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., Rm 301, Engg Bldg / Online" {...field} />
+                  </FormControl>
+                  <FormDescription>
+                    Enter the location where the class meets.
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setIsOpen(false)} disabled={isLoading}>

@@ -162,7 +162,7 @@ export default function EquipmentCard({
           {formatCategory(equipment.category)}
         </p>
         <p className="text-xs text-muted-foreground truncate" title={equipment.condition || 'No condition specified'}>
-          Condition: {equipment.condition || 'N/A'}
+          {equipment.condition || 'N/A'}
         </p>
       </CardContent>
       {/* Keep CardFooter, remove ReservationModal, add View Details button */}

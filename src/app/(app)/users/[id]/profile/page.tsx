@@ -4,14 +4,15 @@ import React, { useState, useEffect, useMemo, use } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation'; // Import for redirection
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { User, Borrow, Equipment, UserRole, UserStatus, BorrowStatus } from '@prisma/client';
+import { User, Borrow, Equipment, UserRole, UserStatus, BorrowStatus, Class, ReservationType } from '@prisma/client';
 import { format, isValid, formatDistanceStrict } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { AlertCircle, Users, Clock } from 'lucide-react'; // Removed Edit, KeyRound
+import { AlertCircle, Users, Clock, BookUser } from 'lucide-react'; // Added BookUser, Removed Edit, KeyRound
 import Image from 'next/image';
 import { toast } from "sonner"; // Added toast import
 import Link from 'next/link'; // Ensure Link is imported
+import { useQuery } from '@tanstack/react-query'; // Import useQuery
 // Removed cn, ProfileEditForm, ChangePasswordForm imports
 
 // UserProfile type remains the same
@@ -25,6 +26,24 @@ type BorrowWithEquipment = Borrow & {
     actualReturnTime: Date | null;
     checkoutTime: Date | null; // Ensure checkoutTime is fetched
     approvedStartTime?: Date | null; // Add if needed by calculateDuration fallback
+};
+
+// NEW: Borrow type including equipment, borrower, and class details for Faculty Borrows
+type BorrowWithDetails = Borrow & {
+    equipment: Pick<Equipment, 'name' | 'equipmentId' | 'images' | 'id'>;
+    borrower: Pick<User, 'id' | 'name' | 'email'>;
+    class: Pick<Class, 'id' | 'courseCode' | 'section' | 'academicYear' | 'semester'> | null;
+    expectedReturnTime?: Date | null;
+    borrowGroupId?: string | null;
+    actualReturnTime?: Date | null;
+    checkoutTime?: Date | null;
+    _count?: { deficiencies: number };
+    reservationType?: ReservationType | null;
+    // Add other fields from prisma.borrow if needed for display
+    requestedStartTime: Date;
+    requestedEndTime: Date;
+    approvedStartTime?: Date | null;
+    approvedEndTime?: Date | null;
 };
 
 // Grouped borrows structure remains the same
@@ -95,7 +114,25 @@ const calculateDuration = (
         return "Calculation error";
     }
 };
-// --- End Helper Functions ---
+
+// NEW: Helpers for Reservation Type Display (copied from profile/page.tsx)
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    // Ensure OUT_OF_CLASS is handled correctly if it's a possible value from your enum
+    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
+};
+const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
+    if (!type) return 'secondary';
+    return type === 'IN_CLASS' ? 'success' : 'destructive'; // Assuming OUT_OF_CLASS should be destructive, or adjust as needed
+};
+
+const formatBorrowStatus = (status: BorrowStatus): string => {
+    if (!status) return "N/A";
+    return status.replace(/_/g, ' ').toLowerCase()
+        .split(' ')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' ');
+};
 
 // Define Props with params as a Promise
 interface AdminViewUserProfilePageProps {
@@ -118,6 +155,42 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
   const [borrowHistory, setBorrowHistory] = useState<BorrowWithEquipment[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // NEW: State for faculty-related borrows
+  const isFacultyUser = useMemo(() => profile?.role === UserRole.FACULTY, [profile?.role]);
+
+  // NEW: Fetch function for faculty borrows for a specific user
+  const fetchFacultyBorrowsForUser = async (facultyId: string): Promise<BorrowWithDetails[]> => {
+    if (!token) {
+        console.log("[fetchFacultyBorrowsForUser] No token available.");
+        return []; // Or throw error, depending on how you want to handle
+    }
+    // IMPORTANT: This endpoint /api/users/${facultyId}/faculty-borrows needs to be created.
+    const response = await fetch(`/api/users/${facultyId}/faculty-borrows`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+    });
+    if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+            console.log(`[fetchFacultyBorrowsForUser] Unauthorized (${response.status}) for user ${facultyId}`);
+            return [];
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Failed to fetch faculty borrows for user ${facultyId}: ${response.statusText}`);
+    }
+    const data = await response.json();
+    return data as BorrowWithDetails[];
+  };
+
+  const {
+      data: facultyBorrows,
+      isLoading: isLoadingFacultyBorrows,
+      error: facultyBorrowsError,
+  } = useQuery<BorrowWithDetails[], Error>({
+      queryKey: ['facultyBorrows', targetUserId], // Use targetUserId in key
+      queryFn: () => fetchFacultyBorrowsForUser(targetUserId),
+      enabled: !!token && !!targetUserId && isFacultyUser && !!profile, // Enable only if token, targetUserId, profile exist and user is faculty
+      staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+  });
 
   // Authorization Check Effect
   useEffect(() => {
@@ -237,7 +310,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
   });
   // --- END Borrow History Grouping ---
 
-  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory;
+  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory || (isFacultyUser && isLoadingFacultyBorrows);
 
   // Handle initial loading or unauthenticated state
   if (sessionStatus === 'loading') {
@@ -387,6 +460,91 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
     );
   };
 
+  // NEW: Render Faculty Related Borrows
+  const renderFacultyRelatedBorrows = () => {
+      if (!isFacultyUser) return null; // Should not be called if not faculty, but defensive check.
+      if (!profile) return null; // Ensure profile is loaded
+
+      if (isLoadingFacultyBorrows) return <LoadingSpinner>Loading Faculty Related Borrows...</LoadingSpinner>;
+      if (facultyBorrowsError) return <p className="text-destructive">Error loading faculty borrows: {facultyBorrowsError.message}</p>;
+      if (!facultyBorrows || facultyBorrows.length === 0) {
+        return <p className="text-muted-foreground italic">No borrow records found related to the classes managed by this faculty member.</p>;
+      }
+
+      // Sort borrows by request submission time, newest first.
+      const sortedBorrows = [...facultyBorrows].sort((a, b) =>
+        new Date(b.requestSubmissionTime).getTime() - new Date(a.requestSubmissionTime).getTime()
+      );
+
+      return (
+        <div className="max-h-[600px] overflow-y-auto pr-1 space-y-3"> {/* Adjusted height and added space-y-3 */}
+            {sortedBorrows.map((borrow) => (
+              <Card key={borrow.id} className="overflow-hidden bg-card/70 border">
+                <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
+                  <Link href={`/equipment/${borrow.equipment.id}`} className="block flex-shrink-0">
+                    <Image
+                      src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'}
+                      alt={borrow.equipment.name}
+                      width={80}
+                      height={80}
+                      className="rounded border aspect-square object-contain bg-background p-1"
+                      onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                    />
+                  </Link>
+                  <div className="flex-grow space-y-1 text-sm">
+                     <div className="flex justify-between items-start gap-1">
+                         <Link href={`/equipment/${borrow.equipment.id}`} className="font-semibold hover:underline flex-shrink min-w-0 mr-2" title={borrow.equipment.name}>
+                             <span className="truncate">{borrow.equipment.name}</span>
+                         </Link>
+                         <div className="flex items-center gap-1.5 flex-shrink-0">
+                             {borrow.reservationType && (
+                                 <Badge
+                                     variant={getReservationTypeVariant(borrow.reservationType)}
+                                     className="capitalize text-xs whitespace-nowrap"
+                                     title={`Reservation Type: ${formatReservationType(borrow.reservationType)}`}
+                                 >
+                                     {formatReservationType(borrow.reservationType)}
+                                 </Badge>
+                             )}
+                             <Badge variant={getBorrowStatusVariant(borrow.borrowStatus)} className="capitalize text-xs whitespace-nowrap">
+                                 {formatBorrowStatus(borrow.borrowStatus)}
+                             </Badge>
+                         </div>
+                     </div>
+                     <p className="text-xs text-muted-foreground">
+                         Borrowed by: <Link href={`/users/${borrow.borrower.id}/profile`} className="hover:underline">{borrow.borrower.name ?? borrow.borrower.email}</Link>
+                     </p>
+                     {borrow.class && (
+                       <p className="text-xs text-muted-foreground">
+                         Class: {borrow.class.courseCode} {borrow.class.section}
+                       </p>
+                     )}
+                     <p className="text-xs text-muted-foreground">
+                        Requested: {formatDateSafe(borrow.requestedStartTime, 'PPp')} - {formatDateSafe(borrow.requestedEndTime, 'PPp')}
+                     </p>
+                     {borrow.approvedStartTime && borrow.approvedEndTime && (
+                         <p className="text-xs text-muted-foreground">
+                           Approved: {formatDateSafe(borrow.approvedStartTime, 'PPp')} - {formatDateSafe(borrow.approvedEndTime, 'PPp')}
+                         </p>
+                     )}
+                     {borrow.checkoutTime && (
+                       <p className="text-xs text-muted-foreground">
+                           Checked Out: {formatDateSafe(borrow.checkoutTime, 'PPp')}
+                       </p>
+                     )}
+                     {borrow.borrowGroupId && (
+                           <Link href={`/borrows/group/${borrow.borrowGroupId}`} className="text-xs text-blue-400 hover:underline block mt-1">
+                               View Group Details
+                           </Link>
+                      )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+        </div>
+      );
+  };
+
   // Render the main page layout
   return (
     <div className="container mx-auto px-4 py-8">
@@ -417,6 +575,21 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                 {renderBorrowHistory()}
             </CardContent>
         </Card>
+
+        {/* NEW: Faculty Related Borrows Card (conditionally rendered) */}
+        {isFacultyUser && profile && (
+          <Card className="bg-card/80 border border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center">
+                <BookUser className="mr-2 h-5 w-5" /> Faculty Related Borrows
+              </CardTitle>
+              <CardDescription>Borrow requests from students in classes managed by this faculty member.</CardDescription>
+            </CardHeader>
+            <CardContent>
+               {renderFacultyRelatedBorrows()}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Removed Edit/Password Dialogs */}

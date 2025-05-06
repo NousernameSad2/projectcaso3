@@ -60,7 +60,19 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
                     select: { id: true, name: true, email: true }
                 },
                 class: { 
-                  select: { courseCode: true, section: true, semester: true, academicYear: true }
+                  select: {
+                    courseCode: true,
+                    section: true,
+                    semester: true,
+                    academicYear: true,
+                    fic: {
+                      select: {
+                        id: true,
+                        name: true,
+                        email: true
+                      }
+                    }
+                  }
                 }
             },
             orderBy: {

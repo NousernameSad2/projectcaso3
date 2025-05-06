@@ -723,10 +723,10 @@ export default function EquipmentDetailPage() {
                        Borrowed by: <Link href={`/users/${borrow.borrower.id}/profile`} className="hover:underline">{borrow.borrower.name ?? borrow.borrower.email}</Link>
                    </p>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
-                        {/* *** Reservation Type Badge *** */}
+                        {/* Reservation Type Badge */}
                         <Badge 
                             variant={getReservationTypeVariant(borrow.reservationType)}
-                            className="capitalize text-[10px] scale-95 whitespace-nowrap font-normal"
+                            className="capitalize text-xs whitespace-nowrap"
                         >
                             {formatReservationType(borrow.reservationType)}
                         </Badge>

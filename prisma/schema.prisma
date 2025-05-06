@@ -136,6 +136,8 @@ model Class {
   section          String
   semester         String
   academicYear     String?               // Added Academic Year - Made Optional
+  schedule         String?               // Added Schedule field
+  venue            String?               // Added Venue field
   isActive         Boolean               @default(true)
   ficId            String                @db.ObjectId
   fic              User                  @relation("ClassesTaught", fields: [ficId], references: [id])

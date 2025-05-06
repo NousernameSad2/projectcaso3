@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ArrowLeft, Trash2, Edit, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, Users } from 'lucide-react';
+import { ArrowLeft, Trash2, Edit, ArrowUpDown, ArrowUp, ArrowDown, AlertCircle, Users, Clock, MapPin } from 'lucide-react';
 import Link from 'next/link';
 import { UserRole, UserStatus } from '@prisma/client';
 import AddStudentDialog from '@/components/classes/AddStudentDialog';
@@ -34,7 +34,7 @@ import { format, isValid } from 'date-fns';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
-import { Prisma, BorrowStatus as PrismaBorrowStatus } from '@prisma/client';
+import { Prisma, BorrowStatus as PrismaBorrowStatus, ReservationType } from '@prisma/client';
 
 // Define the structure for enrolled user data within the class details
 interface EnrolledUser {
@@ -63,6 +63,21 @@ interface ClassDetailData {
   enrollments: { user: EnrolledUser }[];
   createdAt: string;
   updatedAt: string;
+  schedule?: string | null;
+  venue?: string | null;
+}
+
+// Define ClassData explicitly to override inference issues
+interface ClassData {
+  id: string;
+  courseCode: string;
+  section: string;
+  semester: string;
+  academicYear: string;
+  isActive: boolean;
+  ficId: string | null;
+  schedule?: string | null | undefined; // <<< Explicitly allow null/undefined
+  venue?: string | null | undefined;    // <<< Explicitly allow null/undefined
 }
 
 // --- Types for client-side sorting ---
@@ -126,6 +141,18 @@ const getBorrowStatusVariant = (status?: PrismaBorrowStatus): "default" | "secon
     case PrismaBorrowStatus.CANCELLED: return "default";
     default: return "default";
   }
+};
+
+// Helper function to get badge variant based on reservation type
+const getReservationTypeVariant = (type?: ReservationType | null): "success" | "secondary" => {
+    if (!type) return 'secondary';
+    return type === 'IN_CLASS' ? 'success' : 'secondary'; // Use success for IN_CLASS, secondary for OUT_OF_CLASS
+};
+
+// Helper function to format reservation type text
+const formatReservationType = (type: ReservationType | null | undefined): string => {
+    if (!type) return 'N/A';
+    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
 };
 
 // -------------------------------------
@@ -401,6 +428,8 @@ export default function ClassDetailPage() {
      academicYear: classDetails.academicYear ?? '',
      isActive: classDetails.isActive,
      ficId: classDetails.fic?.id ?? null,
+     schedule: classDetails.schedule,
+     venue: classDetails.venue,
   } : null;
 
   return (
@@ -445,6 +474,20 @@ export default function ClassDetailPage() {
              )}
            </div>
            <div><span className="font-semibold text-muted-foreground">Status:</span> {classDetails.isActive ? 'Active' : 'Inactive'}</div>
+           {/* <<< Add Schedule Display >>> */}
+           {classDetails.schedule && (
+             <div className="flex items-center">
+               <Clock className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
+               <span className="text-foreground/90">{classDetails.schedule}</span>
+             </div>
+           )}
+           {/* <<< Add Venue Display >>> */}
+           {classDetails.venue && (
+             <div className="flex items-center">
+               <MapPin className="h-4 w-4 mr-2 text-muted-foreground flex-shrink-0" />
+               <span className="text-foreground/90">{classDetails.venue}</span>
+             </div>
+           )}
         </CardContent>
       </Card>
       <Card className="bg-card/80 border-border">
@@ -579,9 +622,19 @@ export default function ClassDetailPage() {
                                                     Borrower: {representativeItem.borrower.name ?? representativeItem.borrower.email}
                                                 </p>
                                             </div>
-                                            <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs scale-95 whitespace-nowrap">
-                                                {representativeItem.borrowStatus.toLowerCase().replace(/_/g, ' ')}
-                                            </Badge>
+                                            {/* Container for Badges */}
+                                            <div className="flex flex-col items-end gap-1">
+                                                {/* Status Badge */}
+                                                <Badge variant={getBorrowStatusVariant(representativeItem.borrowStatus)} className="capitalize text-xs scale-95 whitespace-nowrap">
+                                                    {representativeItem.borrowStatus.toLowerCase().replace(/_/g, ' ')}
+                                                </Badge>
+                                                {/* Purpose Badge */}
+                                                {representativeItem.reservationType && (
+                                                  <Badge variant={getReservationTypeVariant(representativeItem.reservationType)} className="capitalize text-xs scale-95 whitespace-nowrap">
+                                                      {formatReservationType(representativeItem.reservationType)}
+                                                  </Badge>
+                                                )}
+                                            </div>
                                         </div>
                                         <ul className="space-y-2 mt-3">
                                             {groupItems.slice(0, 3).map(item => ( // Show first 3 items

@@ -45,7 +45,19 @@ const borrowGroupItemSelect = Prisma.validator<Prisma.BorrowSelect>()({
         select: { id: true, name: true, email: true }
     },
     class: { 
-        select: { courseCode: true, section: true, semester: true, academicYear: true }
+        select: {
+            courseCode: true,
+            section: true,
+            semester: true,
+            academicYear: true,
+            fic: {
+                select: {
+                    id: true,
+                    name: true,
+                    email: true
+                }
+            }
+        }
     }
 });
 
@@ -249,6 +261,18 @@ export default function BorrowGroupDetailPage() {
                          <div>
                              <span className="font-semibold text-muted-foreground">Class:</span> {representativeItem.class.courseCode} {representativeItem.class.section} ({representativeItem.class.semester})
                          </div>
+                    )}
+                    {representativeItem.class && representativeItem.class.fic && (
+                        <div>
+                            <span className="font-semibold text-muted-foreground">Faculty in Charge:</span>{' '}
+                            {(session?.user?.role === UserRole.STAFF || session?.user?.role === UserRole.FACULTY) && representativeItem.class.fic.id ? (
+                                <Link href={`/users/${representativeItem.class.fic.id}/profile`} className="hover:underline text-primary">
+                                    {representativeItem.class.fic.name || representativeItem.class.fic.email || 'N/A'}
+                                </Link>
+                            ) : (
+                                representativeItem.class.fic.name || representativeItem.class.fic.email || 'N/A'
+                            )}
+                        </div>
                     )}
                 </CardContent>
             </Card>
