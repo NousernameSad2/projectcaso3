@@ -102,15 +102,34 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
                   // @ts-ignore
                   const approvedEndTime = newStatus === BorrowStatus.APPROVED ? (borrowToUpdate.approvedEndTime || borrowToUpdate.requestedEndTime) : undefined;
                   
+                  const updateData: Prisma.BorrowUpdateInput = {
+                      borrowStatus: newStatus,
+                      approvedStartTime: approvedStartTime,
+                      approvedEndTime: approvedEndTime,
+                  };
+
+                  // Clear any existing approver/rejecter relations first, then set the new one if applicable.
+                  updateData.approvedByFic = { disconnect: true };
+                  updateData.approvedByStaff = { disconnect: true };
+
+                  if (newStatus === BorrowStatus.APPROVED) {
+                      if (actorRole === UserRole.FACULTY) {
+                          updateData.approvedByFic = { connect: { id: actorId } };
+                      } else if (actorRole === UserRole.STAFF) {
+                          updateData.approvedByStaff = { connect: { id: actorId } };
+                      }
+                  } else if (newStatus === BorrowStatus.REJECTED_STAFF) {
+                      updateData.approvedByStaff = { connect: { id: actorId } };
+                      // approvedByFic is already disconnected
+                  } else if (newStatus === BorrowStatus.REJECTED_FIC) {
+                      updateData.approvedByFic = { connect: { id: actorId } };
+                      // approvedByStaff is already disconnected
+                  }
+                  // For any other status, both remain disconnected (cleared).
+                                    
                   const updateResult = await tx.borrow.update({
                       where: { id: borrowId },
-                      data: {
-                          borrowStatus: newStatus,
-                          approvedStartTime: approvedStartTime,
-                          approvedEndTime: approvedEndTime,
-                          approvedByFicId: newStatus === BorrowStatus.APPROVED && actorRole === UserRole.FACULTY ? actorId : undefined,
-                          approvedByStaffId: newStatus === BorrowStatus.APPROVED && actorRole === UserRole.STAFF ? actorId : undefined,
-                      },
+                      data: updateData,
                   });
 
                   // *** NEW: Update Equipment Status on Approval ***

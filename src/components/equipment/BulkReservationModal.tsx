@@ -7,7 +7,7 @@ import { z } from "zod";
 import { Equipment, Class, User, ReservationType } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { toast } from "sonner";
-import { format, parseISO, isAfter } from 'date-fns';
+import { format, parseISO, isAfter, addHours } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -90,6 +90,15 @@ export default function BulkReservationModal({
       classId: "",
     },
   });
+  
+  const watchedStartTime = form.watch('requestedStartTime');
+
+  useEffect(() => {
+    if (watchedStartTime) {
+      const newEndTime = addHours(watchedStartTime, 1);
+      form.setValue('requestedEndTime', newEndTime, { shouldValidate: true, shouldDirty: true });
+    }
+  }, [watchedStartTime, form]);
   
   const { isSubmitting } = form.formState;
 

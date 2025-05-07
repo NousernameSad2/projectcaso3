@@ -184,24 +184,47 @@ export async function POST(request: Request) {
                const equipment = await tx.equipment.findUnique({ where: { id: equipmentId }, select: { stockCount: true, status: true }});
                if (!equipment) {
                    console.warn(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Equipment ${equipmentId} not found during status update. Skipping.`);
-                   continue; // Skip to next equipment if not found
+                   continue; 
                }
 
-               const activeBorrowsCount = await tx.borrow.count({
+               // Count remaining commitments: ACTIVE, OVERDUE, or APPROVED borrows for this equipment,
+               // EXCLUDING the items being returned in this specific transaction.
+               const outstandingCommitmentsCount = await tx.borrow.count({
                    where: {
                        equipmentId: equipmentId,
-                       id: { notIn: itemIdsToUpdate }, // Exclude items just returned in this bulk op
-                       borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.PENDING, BorrowStatus.APPROVED] },
+                       id: { notIn: itemIdsToUpdate }, // Exclude items just processed in this return operation
+                       borrowStatus: { in: [
+                           BorrowStatus.ACTIVE, 
+                           BorrowStatus.OVERDUE, 
+                           BorrowStatus.APPROVED 
+                       ] },
                    },
                });
-               console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] Active count: ${activeBorrowsCount}, Stock: ${equipment.stockCount}`);
+               console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] Outstanding commitments (Active, Overdue, Approved): ${outstandingCommitmentsCount}, Stock: ${equipment.stockCount}`);
 
-               if (activeBorrowsCount < equipment.stockCount && equipment.status === EquipmentStatus.BORROWED) {
-                   console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] Updating Equipment to AVAILABLE.`);
-                   await tx.equipment.update({
-                       where: { id: equipmentId },
-                       data: { status: EquipmentStatus.AVAILABLE },
-                   });
+               // If there are no outstanding commitments, the equipment can become AVAILABLE
+               // unless it's in a terminal state (e.g., maintenance, defective).
+               if (outstandingCommitmentsCount === 0) {
+                   if (
+                       equipment.status !== EquipmentStatus.AVAILABLE &&
+                       equipment.status !== EquipmentStatus.UNDER_MAINTENANCE &&
+                       equipment.status !== EquipmentStatus.DEFECTIVE &&
+                       equipment.status !== EquipmentStatus.OUT_OF_COMMISSION &&
+                       equipment.status !== EquipmentStatus.ARCHIVED
+                   ) {
+                       console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] No outstanding commitments. Updating Equipment to AVAILABLE from ${equipment.status}.`);
+                       await tx.equipment.update({
+                           where: { id: equipmentId },
+                           data: { status: EquipmentStatus.AVAILABLE },
+                       });
+                   }
+               } else {
+                   // Optional: If there are still commitments, but fewer than stockCount, 
+                   // and current status is BORROWED (implying all were out), 
+                   // it might revert to RESERVED if all remaining commitments are APPROVED, or stay AVAILABLE if some are active borrows.
+                   // For now, we primarily focus on making it AVAILABLE when fully free.
+                   // The EquipmentCard will handle the display nuance.
+                   console.log(`[API /borrows/bulk/return TX - Equip ${equipmentId}] Still ${outstandingCommitmentsCount} outstanding commitments. Equipment status ${equipment.status} unchanged by this logic block.`);
                }
            }
            // *** END NEW ***

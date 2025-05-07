@@ -66,7 +66,7 @@ const calculateDuration = (start: Date | string | null | undefined, end: Date | 
 // *** NEW: Helpers for Reservation Type Display ***
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS';
 };
 const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
     if (!type) return 'secondary';
@@ -219,10 +219,10 @@ export default function MyBorrowsPage() {
                           <span className="font-medium text-sm text-foreground truncate" title={item.equipment.name}>{item.equipment.name}</span>
                           {/* Badges: Status & Type */}
                           <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-                              {/* *** Reservation Type Badge *** */}
+                              {/* Reservation Type Badge - MODIFIED className */}
                               <Badge 
                                   variant={getReservationTypeVariant(item.reservationType)}
-                                  className="capitalize text-[10px] scale-90 whitespace-nowrap font-normal"
+                                  className="text-xs whitespace-nowrap"
                                   title={`Reservation Type: ${formatReservationType(item.reservationType)}`}
                               >
                                   {formatReservationType(item.reservationType)}
@@ -280,7 +280,7 @@ export default function MyBorrowsPage() {
                                    Time Checked Out: {calculateDuration(representativeItem.checkoutTime, currentTime)}
                                 </CardDescription>
                             </div>
-                            <Link href={`/borrows/group/${groupId}`} passHref legacyBehavior>
+                            <Link href={`/borrows/group/${groupId}`} passHref >
                                <Button variant="outline" size="sm" asChild>
                                    <span>View Details</span>
                                </Button>

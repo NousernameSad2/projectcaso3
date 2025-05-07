@@ -15,6 +15,7 @@ interface SessionUser {
 // Validation schema for creating a deficiency
 const CreateDeficiencySchema = z.object({
   borrowId: z.string().min(1, "Borrow ID is required"),
+  userId: z.string().optional(), // Add userId as an optional field
   type: z.nativeEnum(DeficiencyType),
   description: z.string().optional(),
   ficToNotifyId: z.string().optional(), // Optional FIC to notify
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Invalid input', errors: parsedData.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    const { borrowId, type, description, ficToNotifyId } = parsedData.data;
+    const { borrowId, type, description, ficToNotifyId, userId } = parsedData.data;
 
     // --- Add Validation for borrowId format ---
     const objectIdRegex = /^[0-9a-fA-F]{24}$/;
@@ -75,9 +76,9 @@ export async function POST(req: NextRequest) {
         const newDeficiency = await prisma.deficiency.create({
             data: {
                 borrowId: borrowId,
-                userId: borrowInfo.borrowerId,    // User responsible for the deficiency (the borrower)
+                userId: userId || borrowInfo.borrowerId,    // Use provided userId or fallback to borrowerId
                 taggedById: loggedInUserId,       // The user who submitted this POST request
-                ficToNotifyId: borrowInfo.ficId,  // Notify the FIC associated with the borrow (if any)
+                ficToNotifyId: ficToNotifyId || undefined,  // Use ficToNotifyId from form, or undefined if not provided
                 type: type,
                 status: DeficiencyStatus.UNRESOLVED,
                 description: description || undefined,
@@ -141,7 +142,7 @@ export async function GET(request: NextRequest) {
               equipment: { select: { id: true, name: true, equipmentId: true }} 
            }
          },
-         // ficToNotify: { select: { id: true, name: true } } // Optional
+         ficToNotify: { select: { id: true, name: true } } // Include FIC to notify
        },
        orderBy: {
          createdAt: 'desc', // Show newest first

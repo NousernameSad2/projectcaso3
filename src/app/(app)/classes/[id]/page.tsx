@@ -144,15 +144,15 @@ const getBorrowStatusVariant = (status?: PrismaBorrowStatus): "default" | "secon
 };
 
 // Helper function to get badge variant based on reservation type
-const getReservationTypeVariant = (type?: ReservationType | null): "success" | "secondary" => {
+const getReservationTypeVariant = (type?: ReservationType | null): "success" | "destructive" | "secondary" => {
     if (!type) return 'secondary';
-    return type === 'IN_CLASS' ? 'success' : 'secondary'; // Use success for IN_CLASS, secondary for OUT_OF_CLASS
+    return type === 'IN_CLASS' ? 'success' : 'destructive'; // Use success for IN_CLASS, destructive for OUT_OF_CLASS
 };
 
 // Helper function to format reservation type text
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS'; // MODIFIED
 };
 
 // -------------------------------------
@@ -393,7 +393,7 @@ export default function ClassDetailPage() {
         <div className="text-center py-10">
             <p className="text-destructive mb-4">Error: {error}</p>
             <Button variant="outline" asChild>
-                <Link href="/classes" legacyBehavior>
+                <Link href="/classes" >
                     <ArrowLeft className="mr-2 h-4 w-4"/> Go back to Classes
                 </Link>
             </Button>
@@ -410,7 +410,7 @@ export default function ClassDetailPage() {
         <div className="text-center py-10">
             <p className="text-muted-foreground mb-4">Class not found.</p>
             <Button asChild variant="outline">
-                <Link href="/classes" legacyBehavior>
+                <Link href="/classes" >
                     <ArrowLeft className="mr-2 h-4 w-4"/> Back to Classes List
                 </Link>
             </Button>
@@ -436,7 +436,7 @@ export default function ClassDetailPage() {
       <div className="container mx-auto py-10 space-y-6">
           <div className="flex items-center justify-between">
              <Button variant="outline" size="icon" asChild>
-               <Link href="/classes" legacyBehavior>
+               <Link href="/classes" >
                    <ArrowLeft className="h-4 w-4"/>
                    <span className="sr-only">Back to Classes</span>
                </Link>
@@ -466,7 +466,7 @@ export default function ClassDetailPage() {
                    <Link
                        href={`/users/${classDetails.fic.id}/profile`}
                        className="hover:underline text-primary"
-                       legacyBehavior>
+                       >
                      {classDetails.fic.name ?? classDetails.fic.email}
                    </Link>
                  ) : (
@@ -606,7 +606,7 @@ export default function ClassDetailPage() {
                                     : 'Requested';
 
                                 return (
-                                    <Link href={`/borrows/group/${groupId}`} key={groupId} passHref legacyBehavior>
+                                    <Link href={`/borrows/group/${groupId}`} key={groupId} passHref >
                                         <div className="block hover:bg-muted/10 transition-colors rounded-lg border p-4 cursor-pointer">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div>
@@ -629,7 +629,7 @@ export default function ClassDetailPage() {
                                                     </Badge>
                                                     {/* Purpose Badge */}
                                                     {representativeItem.reservationType && (
-                                                      <Badge variant={getReservationTypeVariant(representativeItem.reservationType)} className="capitalize text-xs scale-95 whitespace-nowrap">
+                                                      <Badge variant={getReservationTypeVariant(representativeItem.reservationType)} className="text-xs scale-95 whitespace-nowrap">
                                                           {formatReservationType(representativeItem.reservationType)}
                                                       </Badge>
                                                     )}

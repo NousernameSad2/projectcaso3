@@ -72,6 +72,7 @@ export default function DeficiencyDetailsModal({
                         <DetailItem label="Borrow ID" value={deficiency.borrowId} />
                         <DetailItem label="User Responsible" value={`${deficiency.user.name} (${deficiency.user.email})`} />
                         <DetailItem label="Tagged By" value={deficiency.taggedBy?.name || 'N/A'} />
+                        <DetailItem label="FIC to Notify" value={deficiency.ficToNotify?.name || 'N/A'} />
                         <DetailItem label="Created At" value={format(new Date(deficiency.createdAt), 'PPpp')} />
                         <DetailItem label="Last Updated At" value={format(new Date(deficiency.updatedAt), 'PPpp')} />
                     </div>

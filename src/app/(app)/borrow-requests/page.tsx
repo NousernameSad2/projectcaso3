@@ -57,7 +57,7 @@ const formatDateSafe = (dateInput: string | Date | null | undefined, formatStrin
 // Helper for Reservation Type Display
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS';
 };
 
 const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
@@ -449,7 +449,7 @@ export default function BorrowRequestsPage() {
                           <Link
                             href={`/borrows/group/${groupId}`}
                             className='hover:underline flex items-center gap-2'
-                            legacyBehavior>
+                            >
                               <Users className="h-4 w-4 text-muted-foreground"/> Group: {groupId}
                           </Link>
                           <div className="flex items-center gap-2">
@@ -585,6 +585,8 @@ export default function BorrowRequestsPage() {
                      openConfirmReturnModalHandler: openConfirmReturnModal, 
                      isSubmittingAction: isSubmittingAction,
                   }}
+                  columnFilters={columnFilters}
+                  onColumnFiltersChange={setColumnFilters}
                />
             )}
           </div>

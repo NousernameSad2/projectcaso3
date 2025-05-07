@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
+import { Eye } from 'lucide-react';
 // If you use useRouter, uncomment the import:
 // import { useRouter } from 'next/navigation';
 
@@ -23,7 +24,7 @@ const getEquipmentStatusVariant = (status: PrismaEquipmentStatus): "default" | "
     case EquipmentStatus.AVAILABLE: return 'success';
     case EquipmentStatus.RESERVED: return 'warning';
     case EquipmentStatus.BORROWED: return 'destructive';
-    case EquipmentStatus.UNDER_MAINTENANCE: return 'secondary';
+    case EquipmentStatus.UNDER_MAINTENANCE: return 'warning';
     case EquipmentStatus.DEFECTIVE: return 'destructive';
     case EquipmentStatus.OUT_OF_COMMISSION: return 'destructive';
     default: return 'outline';
@@ -38,6 +39,7 @@ export interface EquipmentWithAvailability extends Equipment { // `Equipment` fr
   };
   nextUpcomingReservationStart: string | null;
   availableUnitsInFilterRange: number | null;
+  activeBorrowCount: number;
   // Explicitly list fields from `Equipment` if your base `Equipment` type is minimal
   // For example: id, name, images, stockCount, status, equipmentId, condition etc.
 }
@@ -47,7 +49,8 @@ export interface EquipmentCardProps {
   isSelected: boolean;
   onSelectToggle: (id: string) => void;
   isDateFilterActive: boolean;
-  // Example: onReserveClick?: (equipmentId: string) => void;
+  canSelect: boolean;
+  canManageEquipment: boolean;
 }
 
 export default function EquipmentCard({
@@ -55,34 +58,93 @@ export default function EquipmentCard({
   isSelected,
   onSelectToggle,
   isDateFilterActive,
-  // onReserveClick
+  canSelect,
+  canManageEquipment,
 }: EquipmentCardProps) {
   // const router = useRouter(); // Uncomment if using router.push
 
   const { displayStatus, statusLabel, statusVariant } = useMemo(() => {
     const now = new Date();
-    let currentDisplayStatus = equipment.status; // This is PrismaEquipmentStatus
-    let label = equipment.status.replace(/_/g, ' '); // Basic formatting
+    const prismaStatus = equipment.status; // The actual status from the database
+    const currentlyEffectivelyAvailableUnits = equipment.stockCount - equipment.activeBorrowCount;
 
+    let derivedStatus: PrismaEquipmentStatus = prismaStatus;
+    let detailedLabel: string = prismaStatus.replace(/_/g, ' '); // Default label
+
+    // 1. Terminal statuses (these are definitive)
     if (
-      equipment.status === EquipmentStatus.RESERVED &&
-      equipment.nextUpcomingReservationStart &&
-      new Date(equipment.nextUpcomingReservationStart) > now
+      prismaStatus === EquipmentStatus.UNDER_MAINTENANCE ||
+      prismaStatus === EquipmentStatus.DEFECTIVE ||
+      prismaStatus === EquipmentStatus.OUT_OF_COMMISSION ||
+      prismaStatus === EquipmentStatus.ARCHIVED
     ) {
-      currentDisplayStatus = EquipmentStatus.AVAILABLE;
-      label = `Available (Reserved from ${format(new Date(equipment.nextUpcomingReservationStart), 'MMM d, p')})`;
-    } else if (equipment.status === EquipmentStatus.RESERVED) {
-      label = 'Reserved';
-    } else if (equipment.status === EquipmentStatus.BORROWED) {
-      label = 'Borrowed';
+      derivedStatus = prismaStatus;
+      detailedLabel = prismaStatus.replace(/_/g, ' ');
+    } 
+    // 2. All units are actively borrowed (ACTIVE or OVERDUE borrows)
+    else if (currentlyEffectivelyAvailableUnits <= 0 && equipment.stockCount > 0) {
+      derivedStatus = EquipmentStatus.BORROWED;
+      detailedLabel = 'Borrowed (All units out)';
+    } 
+    // 3. Equipment has a future reservation, but some units are available NOW
+    else if (
+      prismaStatus === EquipmentStatus.RESERVED &&
+      equipment.nextUpcomingReservationStart &&
+      new Date(equipment.nextUpcomingReservationStart) > now &&
+      currentlyEffectivelyAvailableUnits > 0
+    ) {
+      derivedStatus = EquipmentStatus.AVAILABLE; // Show as AVAILABLE for filtering
+      detailedLabel = `Available (Reserved from ${format(new Date(equipment.nextUpcomingReservationStart), 'MMM d, p')})`;
+    } 
+    // 4. Equipment is RESERVED, and no units are effectively available NOW (either all reserved for now or borrowed)
+    else if (prismaStatus === EquipmentStatus.RESERVED && currentlyEffectivelyAvailableUnits <= 0) {
+      derivedStatus = EquipmentStatus.RESERVED;
+      detailedLabel = 'Reserved (All units committed)';
     }
-    // You can add more specific labels for other statuses here
+    // 5. Equipment is RESERVED, but some units ARE effectively available now (meaning the reservation is for a subset or future)
+    // This case is largely covered by point 3 if reservation is future. If reservation is current for SOME units.
+    else if (prismaStatus === EquipmentStatus.RESERVED && currentlyEffectivelyAvailableUnits > 0) {
+        derivedStatus = EquipmentStatus.AVAILABLE; // If some are free NOW, it's effectively AVAILABLE for immediate interaction
+        detailedLabel = `Available (Some units reserved)`; 
+    }
+    // 6. Equipment is marked AVAILABLE in DB, and units are effectively available.
+    else if (prismaStatus === EquipmentStatus.AVAILABLE && currentlyEffectivelyAvailableUnits > 0) {
+      derivedStatus = EquipmentStatus.AVAILABLE;
+      detailedLabel = 'Available';
+    }
+    // 7. Fallback if DB says AVAILABLE but all units are out (e.g. active borrows not yet fully synced to status)
+    // This is covered by point 2 already.
 
-    const variant = getEquipmentStatusVariant(currentDisplayStatus);
-    return { displayStatus: currentDisplayStatus, statusLabel: label, statusVariant: variant };
-  }, [equipment.status, equipment.nextUpcomingReservationStart]);
+    // If after all this, derivedStatus is still, for example, RESERVED, but units are available,
+    // we prefer to show AVAILABLE if the user can interact with it now.
+    if (derivedStatus !== EquipmentStatus.BORROWED && 
+        derivedStatus !== EquipmentStatus.UNDER_MAINTENANCE && 
+        derivedStatus !== EquipmentStatus.DEFECTIVE && 
+        derivedStatus !== EquipmentStatus.OUT_OF_COMMISSION && 
+        derivedStatus !== EquipmentStatus.ARCHIVED && 
+        currentlyEffectivelyAvailableUnits > 0) {
+            // If it's not a terminal/borrowed state, and units are free, reflect that it's AVAILABLE
+            // The detailedLabel will give context if there are upcoming reservations.
+            if(derivedStatus === EquipmentStatus.RESERVED && equipment.nextUpcomingReservationStart && new Date(equipment.nextUpcomingReservationStart) > now){
+                 // This is case 3, already handled.
+            } else if (derivedStatus === EquipmentStatus.RESERVED) {
+                detailedLabel = `Available (Some units reserved for now/later)`;
+            }
+            derivedStatus = EquipmentStatus.AVAILABLE;
+    }
+
+    const variant = getEquipmentStatusVariant(derivedStatus);
+    return { displayStatus: derivedStatus, statusLabel: detailedLabel, statusVariant: variant };
+  }, [
+    equipment.status, 
+    equipment.nextUpcomingReservationStart, 
+    equipment.stockCount, 
+    equipment.activeBorrowCount
+  ]);
 
   const displayedStockInfo = useMemo(() => {
+    const effectivelyAvailableNow = equipment.stockCount - equipment.activeBorrowCount;
+
     if (isDateFilterActive && typeof equipment.availableUnitsInFilterRange === 'number') {
       if (equipment.availableUnitsInFilterRange > 0) {
         return `${equipment.availableUnitsInFilterRange} unit(s) available for selected dates`;
@@ -90,56 +152,77 @@ export default function EquipmentCard({
       return "0 units available for selected dates";
     }
 
-    if (displayStatus === EquipmentStatus.AVAILABLE) {
-      return `${equipment.stockCount} unit(s) in stock`;
+    // Use the derived displayStatus for these checks
+    if (displayStatus === EquipmentStatus.BORROWED) {
+      return "0 units currently available (all out)";
+    }
+    if (
+      displayStatus === EquipmentStatus.UNDER_MAINTENANCE ||
+      displayStatus === EquipmentStatus.DEFECTIVE ||
+      displayStatus === EquipmentStatus.OUT_OF_COMMISSION ||
+      displayStatus === EquipmentStatus.ARCHIVED
+    ) {
+      return "Unavailable"; // More direct for terminal states
     }
     
-    const isEffectivelyReservedOrBorrowed = 
-      displayStatus === EquipmentStatus.BORROWED ||
-      (displayStatus === EquipmentStatus.RESERVED && 
-       !(equipment.nextUpcomingReservationStart && new Date(equipment.nextUpcomingReservationStart) > new Date()));
-
-    if (isEffectivelyReservedOrBorrowed) {
-      return "0 units currently available";
+    // If it's considered RESERVED by displayStatus, but all units are committed
+    if (displayStatus === EquipmentStatus.RESERVED && effectivelyAvailableNow <= 0) {
+        return "0 units currently available (all committed)";
     }
 
+    // If it's displayStatus is AVAILABLE (which now has more nuanced logic)
+    if (displayStatus === EquipmentStatus.AVAILABLE) {
+        if (equipment.status === EquipmentStatus.RESERVED) { // DB is RESERVED but we show AVAILABLE
+            return `${effectivelyAvailableNow} unit(s) currently available`; // Detailed label on badge gives reservation context
+        } 
+        return `${effectivelyAvailableNow} unit(s) currently available`;
+    }
+    
+    // Fallback for displayStatus === EquipmentStatus.RESERVED (and some units are available)
+    if (displayStatus === EquipmentStatus.RESERVED) {
+        return `${effectivelyAvailableNow} unit(s) currently available (others reserved)`;
+    }
+
+    return `${equipment.stockCount} total unit(s)`; // Should be rare with new logic
+  }, [
+    equipment.stockCount,
+    equipment.activeBorrowCount,
+    equipment.availableUnitsInFilterRange,
+    isDateFilterActive,
+    displayStatus, // This is the derived status from the first useMemo
+    equipment.status // Original DB status for comparison
+  ]);
+
+  const canReserve = useMemo(() => {
+    const currentlyAvailableUnits = equipment.stockCount - equipment.activeBorrowCount;
+
+    if (isDateFilterActive) {
+      return typeof equipment.availableUnitsInFilterRange === 'number' && equipment.availableUnitsInFilterRange > 0;
+    }
+
+    // Check if item is in a state that generally prevents reservation
     if (
       displayStatus === EquipmentStatus.UNDER_MAINTENANCE ||
       displayStatus === EquipmentStatus.DEFECTIVE ||
       displayStatus === EquipmentStatus.OUT_OF_COMMISSION
     ) {
-      return "Currently unavailable";
-    }
-    return `${equipment.stockCount} total unit(s)`; // Fallback
-  }, [
-    equipment.stockCount,
-    equipment.availableUnitsInFilterRange,
-    isDateFilterActive,
-    displayStatus,
-    equipment.nextUpcomingReservationStart,
-  ]);
-
-  const canReserve = useMemo(() => {
-    if (isDateFilterActive && typeof equipment.availableUnitsInFilterRange === 'number' && equipment.availableUnitsInFilterRange === 0) {
       return false;
     }
-    // Check if item is in a state that generally prevents reservation
-    const nonReservableStatus = 
-      displayStatus === EquipmentStatus.BORROWED ||
-      displayStatus === EquipmentStatus.UNDER_MAINTENANCE ||
-      displayStatus === EquipmentStatus.DEFECTIVE ||
-      displayStatus === EquipmentStatus.OUT_OF_COMMISSION ||
-      (displayStatus === EquipmentStatus.RESERVED && 
-       !(equipment.nextUpcomingReservationStart && new Date(equipment.nextUpcomingReservationStart) > new Date()));
     
-    return !nonReservableStatus;
-  }, [isDateFilterActive, equipment.availableUnitsInFilterRange, displayStatus, equipment.nextUpcomingReservationStart]);
+    return currentlyAvailableUnits > 0; // Can reserve if at least one unit is actually available now
+
+  }, [
+    isDateFilterActive, 
+    equipment.availableUnitsInFilterRange, 
+    displayStatus, 
+    equipment.stockCount, 
+    equipment.activeBorrowCount
+  ]);
 
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if ((e.target as HTMLElement).closest('.interactive-element')) {
-      return;
+    if (canSelect && !(e.target as HTMLElement).closest('.interactive-element')) {
+      onSelectToggle(equipment.id);
     }
-    // Example: router.push(`/equipment/${equipment.id}`);
   };
 
   const imageUrl = equipment.images && equipment.images.length > 0 
@@ -148,12 +231,16 @@ export default function EquipmentCard({
 
   return (
     <Card 
-      className={cn("overflow-hidden flex flex-col", isSelected && "ring-2 ring-primary")}
-      // onClick={handleCardClick} // Optional: make whole card clickable
+      className={cn(
+        "overflow-hidden flex flex-col h-full",
+        canSelect && "cursor-pointer",
+        isSelected && "ring-2 ring-primary shadow-lg"
+      )}
+      onClick={handleCardClick}
     >
       <CardHeader className="p-0 relative">
-        <Link href={`/equipment/${equipment.id}`} passHref legacyBehavior>
-          <a className="aspect-video w-full relative block cursor-pointer group">
+        {canManageEquipment ? (
+          <Link href={`/equipment/${equipment.id}`} className="aspect-video w-full relative block group interactive-element" aria-label={`View details for ${equipment.name}`}>
             <Image
               src={imageUrl}
               alt={equipment.name}
@@ -162,54 +249,82 @@ export default function EquipmentCard({
               className="object-cover transition-transform group-hover:scale-105"
               priority={false}
             />
-          </a>
-        </Link>
-        <div className="absolute top-2 right-2 interactive-element z-10">
-          <Checkbox
-            checked={isSelected}
-            onCheckedChange={() => onSelectToggle(equipment.id)}
-            aria-label={`Select ${equipment.name}`}
-            className="bg-background/70 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground border-border/50 hover:bg-background/90 transition-colors"
-          />
-        </div>
-      </CardHeader>
-      <CardContent className="p-4 flex-grow">
-        <Link href={`/equipment/${equipment.id}`} passHref legacyBehavior>
-            <a className="hover:underline">
-                <CardTitle className="text-lg font-semibold line-clamp-2 mb-1" title={equipment.name}>
-                    {equipment.name}
-                </CardTitle>
-            </a>
-        </Link>
-        {equipment.equipmentId && (
-          <p className="text-xs text-muted-foreground mb-2">ID: {equipment.equipmentId}</p>
+          </Link>
+        ) : (
+          <div className="aspect-video w-full relative block">
+             <Image
+              src={imageUrl}
+              alt={equipment.name}
+              fill
+              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+              className="object-cover"
+              priority={false}
+            />
+          </div>
         )}
-        <div className="mb-3">
-          <Badge variant={statusVariant} className="text-xs capitalize whitespace-nowrap">
-            {statusLabel}
-          </Badge>
+        {canSelect && (
+          <div className="absolute top-2 right-2 interactive-element z-10">
+            <Checkbox
+              checked={isSelected}
+              onClick={(e) => e.stopPropagation()}
+              onCheckedChange={() => onSelectToggle(equipment.id)}
+              aria-label={`Select ${equipment.name}`}
+              className="bg-background/70 data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground border-border/50 hover:bg-background/90 transition-colors"
+            />
+          </div>
+        )}
+      </CardHeader>
+      <CardContent className="p-4 flex flex-col flex-grow">
+        {canManageEquipment ? (
+          <Link href={`/equipment/${equipment.id}`} className="hover:underline interactive-element mb-1" title={equipment.name}>
+              <CardTitle className="text-lg font-semibold line-clamp-2">
+                  {equipment.name}
+              </CardTitle>
+          </Link>
+        ) : (
+          <CardTitle className="text-lg font-semibold line-clamp-2 mb-1" title={equipment.name}>
+              {equipment.name}
+          </CardTitle>
+        )}
+        {equipment.equipmentId && (
+          <p className="text-xs text-muted-foreground mb-3">ID: {equipment.equipmentId}</p>
+        )}
+        <div className="space-y-1.5 text-sm mt-1 flex-grow mb-3">
+          <div className="flex items-center">
+            <span className="font-medium text-muted-foreground w-[70px] shrink-0">Status:</span>
+            <Badge variant={statusVariant} className="text-xs capitalize whitespace-nowrap">
+              {statusLabel}
+            </Badge>
+          </div>
+          <div className="flex items-start">
+            <span className="font-medium text-muted-foreground w-[70px] shrink-0">Available:</span>
+            <span className="text-foreground/90">{displayedStockInfo}</span>
+          </div>
+          <div className="flex items-center">
+            <span className="font-medium text-muted-foreground w-[70px] shrink-0">Category:</span>
+            <span className="text-foreground/90 capitalize">{(equipment.category || 'N/A').toLowerCase().replace(/_/g, ' ')}</span>
+          </div>
+          {equipment.condition && (
+            <div className="flex items-start pt-1">
+              <span className="font-medium text-muted-foreground w-[70px] shrink-0">Desc:</span>
+              <p className="text-foreground/90 line-clamp-2" title={equipment.condition}> 
+                {equipment.condition}
+              </p>
+            </div>
+          )}
         </div>
-        <p className="text-sm text-muted-foreground line-clamp-3" title={equipment.condition || 'No condition specified'}>
-          {displayedStockInfo}
-        </p>
       </CardContent>
-      <CardFooter className="p-4 pt-0 flex justify-end gap-2">
-        {/* The Reserve button could be here or handled by the BulkReservationModal trigger on the parent page */}
-        {/* If you want a reserve button per card that triggers a single item reservation modal: */}
-        {/*
-        <Button 
-            variant="outline" 
-            size="sm"
-            // onClick={() => onReserveClick && onReserveClick(equipment.id)}
-            disabled={!canReserve}
-            className="interactive-element"
-           >
-          Reserve
-        </Button>
-        */}
-        <Button asChild size="sm" className="interactive-element">
-          <Link href={`/equipment/${equipment.id}`}>View Details</Link>
-        </Button>
+      <CardFooter className="p-4 pt-2 flex justify-end items-center">
+        {canManageEquipment ? (
+          <Button asChild size="sm" className="interactive-element">
+            <Link href={`/equipment/${equipment.id}`}>
+              <Eye className="mr-2 h-4 w-4" />
+              View Details
+            </Link>
+          </Button>
+        ) : (
+           <div className="h-9 w-full"></div>
+        )}
       </CardFooter>
     </Card>
   );

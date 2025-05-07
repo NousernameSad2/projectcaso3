@@ -161,7 +161,7 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
     cell: ({ row }) => {
        const type = row.original.reservationType;
        return (
-         <Badge variant={getReservationTypeVariant(type)} className="capitalize text-xs whitespace-nowrap font-normal">
+         <Badge variant={getReservationTypeVariant(type)} className="text-xs whitespace-nowrap">
            {formatReservationType(type)}
          </Badge>
        );
@@ -385,8 +385,7 @@ export const columns: ColumnDef<BorrowRequestAdminView>[] = [
 // *** NEW: Helpers for Reservation Type Column ***
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    // Make sure the function handles potential null/undefined explicitly
-    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS';
 };
 
 // Make sure variant helper also handles null/undefined explicitly

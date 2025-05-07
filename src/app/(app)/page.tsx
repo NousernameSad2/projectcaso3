@@ -143,7 +143,7 @@ const formatDateSafe = (dateInput: string | Date | null | undefined, formatStrin
 // <<< ADDED: Helper function to format reservation type >>>
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    return type === 'IN_CLASS' ? 'In Class' : type === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS';
 };
 
 // Placeholder Panel Component (Can be moved to separate file later)
@@ -629,7 +629,7 @@ function StaffActionPanel() {
                           href={href}
                           key={groupId}
                           className="block hover:bg-muted/10 transition-colors rounded-lg"
-                          legacyBehavior>
+                          >
                           <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup ? 'opacity-50' : ''}`}>
                               <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                   <div>
@@ -646,7 +646,7 @@ function StaffActionPanel() {
                                           {/* --- END: Render Request Timing Badge --- */}
                                           {/* --- START: Render Reservation Type Badge --- */}
                                           {representativeItem.reservationType && (
-                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="ml-2 text-xs">
+                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
                                                   {formatReservationType(representativeItem.reservationType)}
                                               </Badge>
                                           )}
@@ -756,7 +756,7 @@ function StaffActionPanel() {
                               href={href}
                               key={groupId}
                               className="block hover:bg-muted/10 transition-colors rounded-lg"
-                              legacyBehavior>
+                              >
                               <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup || isRejectingThisApprovedGroup ? 'opacity-50' : ''}`}>
                                   <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                       <div>
@@ -770,7 +770,7 @@ function StaffActionPanel() {
                                           </CardDescription>
                                           {/* --- START: Render Reservation Type Badge (Approved) --- */}
                                           {representativeItem.reservationType && (
-                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs">
+                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
                                                   {formatReservationType(representativeItem.reservationType)}
                                               </Badge>
                                           )}
@@ -876,7 +876,7 @@ function StaffActionPanel() {
                                    href={href}
                                    key={groupId}
                                    className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                                   legacyBehavior>
+                                   >
                                    <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors overflow-hidden">
                                        <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                            <div className="flex justify-between items-center gap-2">
@@ -889,7 +889,7 @@ function StaffActionPanel() {
                                                    </p>
                                                    {/* --- START: Render Reservation Type Badge (Returns) --- */}
                                                    {representativeItem.reservationType && (
-                                                       <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs">
+                                                       <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
                                                            {formatReservationType(representativeItem.reservationType)}
                                                        </Badge>
                                                    )}
@@ -944,7 +944,7 @@ function StaffActionPanel() {
                                                                          <Badge variant="destructive" className="text-xs px-1.5 py-0.5 whitespace-nowrap">Deficiency</Badge>
                                                                      )}
                                                                      {/* --- ADDED EquipmentStatus Badge --- */}
-                                                                     <Badge variant={getEquipmentStatusVariant(item.equipment.status)} className="text-xs px-1.5 py-0.5 capitalize whitespace-nowrap">
+                                                                     <Badge variant={getEquipmentStatusVariant(item.equipment.status)} className="text-xs px-1.5 py-0.5 whitespace-nowrap">
                                                                          {formatEquipmentStatus(item.equipment.status)}
                                                                      </Badge>
                                                                    </div>
@@ -993,7 +993,7 @@ function StaffActionPanel() {
                               href={href}
                               key={groupId}
                               className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                              legacyBehavior>
+                              >
                               <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors">
                                   <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                       <div className="flex justify-between items-center gap-2">
@@ -1006,7 +1006,7 @@ function StaffActionPanel() {
                                               </p>
                                                {/* --- START: Render Reservation Type Badge (Active) --- */}
                                                {representativeItem.reservationType && (
-                                                   <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'secondary'} className="mt-1 text-xs">
+                                                   <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
                                                        {formatReservationType(representativeItem.reservationType)}
                                                    </Badge>
                                                )}
@@ -1039,7 +1039,7 @@ function StaffActionPanel() {
                                                           <span className="font-medium text-foreground">{item.equipment.name}</span>
                                                           <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId || 'N/A'})</span>
                                                           {/* --- ADDED EquipmentStatus Badge --- */}
-                                                          <Badge variant={getEquipmentStatusVariant(item.equipment.status)} className="ml-2 text-xs px-1.5 py-0.5 capitalize whitespace-nowrap">
+                                                          <Badge variant={getEquipmentStatusVariant(item.equipment.status)} className="ml-2 text-xs whitespace-nowrap">
                                                               {formatEquipmentStatus(item.equipment.status)}
                                                           </Badge>
                                                       </div>
@@ -1204,7 +1204,7 @@ export default function DashboardPage() {
               )}
             </div>
             <Button asChild size="lg">
-               <Link href="/equipment" className="flex items-center gap-2" legacyBehavior>
+               <Link href="/equipment" className="flex items-center gap-2" >
                  <PlusCircle className="h-5 w-5" /> New Reservation
                </Link>
             </Button>

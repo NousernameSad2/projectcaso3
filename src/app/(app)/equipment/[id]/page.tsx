@@ -9,7 +9,7 @@ import { useSession } from 'next-auth/react';
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ArrowLeft, Edit, Trash2, Loader2, CalendarDays, AlertCircle, Wrench, History, PackagePlus, ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, MessageSquare, User as UserIcon, School } from 'lucide-react';
+import { ArrowLeft, Edit, Trash2, Loader2, CalendarDays, AlertCircle, Wrench, History, PackagePlus, ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, MessageSquare, User as UserIcon, School, FilePenLine } from 'lucide-react';
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
@@ -176,7 +176,7 @@ const formatBorrowStatus = (status: BorrowStatus) => {
 // *** NEW: Helpers for Reservation Type Display ***
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS';
 };
 const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
     if (!type) return 'secondary';
@@ -432,21 +432,21 @@ export default function EquipmentDetailPage() {
       }
       // --- Add Rejection Logs ---
       if (borrow.borrowStatus === BorrowStatus.REJECTED_FIC) {
+        const rejector = borrow.approvedByFic;
         logEntries.push({
-          // Use updatedAt as the best guess for event time
           timestamp: new Date(borrow.updatedAt || borrow.requestSubmissionTime),
           type: 'BORROW_REJECTED',
-          user: undefined, // Cannot know who rejected from data model
-          details: `Rejected by FIC.` // Add remarks if available later
+          user: rejector || undefined,
+          details: `Rejected by FIC${rejector ? `: ${rejector.name || rejector.email || 'Unknown'}` : '.'}`
         });
       }
       if (borrow.borrowStatus === BorrowStatus.REJECTED_STAFF) {
+        const rejector = borrow.approvedByStaff;
          logEntries.push({
-          // Use updatedAt as the best guess for event time
           timestamp: new Date(borrow.updatedAt || borrow.requestSubmissionTime),
           type: 'BORROW_REJECTED',
-          user: undefined, // Cannot know who rejected from data model
-          details: `Rejected by Staff.` // Add remarks if available later
+          user: rejector || undefined,
+          details: `Rejected by Staff${rejector ? `: ${rejector.name || rejector.email || 'Unknown'}` : '.'}`
         });
       }
       
@@ -723,13 +723,13 @@ export default function EquipmentDetailPage() {
                        Borrowed by: <Link
                      href={`/users/${borrow.borrower.id}/profile`}
                      className="hover:underline"
-                     legacyBehavior>{borrow.borrower.name ?? borrow.borrower.email}</Link>
+                     >{borrow.borrower.name ?? borrow.borrower.email}</Link>
                    </p>
                     <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                         {/* Reservation Type Badge */}
                         <Badge 
                             variant={getReservationTypeVariant(borrow.reservationType)}
-                            className="capitalize text-xs whitespace-nowrap"
+                            className="text-xs whitespace-nowrap"
                         >
                             {formatReservationType(borrow.reservationType)}
                         </Badge>
@@ -779,9 +779,11 @@ export default function EquipmentDetailPage() {
         <Link
           href="/equipment"
           className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6"
-          legacyBehavior>
-          <ArrowLeft className="h-4 w-4" />
-          Back to Equipment List
+          >
+          <>
+            <ArrowLeft className="h-4 w-4" />
+            Back to Equipment List
+          </>
         </Link>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -815,7 +817,7 @@ export default function EquipmentDetailPage() {
               {/* Commented out the individual ReservationModal trigger above */}
               {canManage && (
                 <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                  <Link href={`/equipment/${id}/edit`} legacyBehavior>
+                  <Link href={`/equipment/${id}/edit`} >
                     <Edit className="h-4 w-4" /> Edit Equipment
                   </Link>
                 </Button>

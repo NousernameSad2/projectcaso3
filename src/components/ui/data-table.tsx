@@ -35,6 +35,8 @@ interface DataTableProps<TData, TValue> {
   // Remove optional props for external filter state management
   // columnFilters?: ColumnFiltersState 
   // onColumnFiltersChange?: React.Dispatch<React.SetStateAction<ColumnFiltersState>>
+  columnFilters?: ColumnFiltersState // Use this prop
+  onColumnFiltersChange?: React.Dispatch<React.SetStateAction<ColumnFiltersState>> // Use this prop
 }
 
 export function DataTable<TData, TValue>({
@@ -44,17 +46,25 @@ export function DataTable<TData, TValue>({
   // Remove external filter state props
   // columnFilters: externalColumnFilters,
   // onColumnFiltersChange: setExternalColumnFilters,
+  columnFilters: externalColumnFilters, // Destructure the prop
+  onColumnFiltersChange: setExternalColumnFilters, // Destructure the prop
 }: DataTableProps<TData, TValue>) {
   // Restore internal state management
   const [internalColumnFilters, setInternalColumnFilters] = React.useState<ColumnFiltersState>([])
   
   // Use internal state
-  const columnFilters = internalColumnFilters;
-  const setColumnFilters = setInternalColumnFilters;
+  // const columnFilters = internalColumnFilters;
+  // const setColumnFilters = setInternalColumnFilters;
 
   // Remove determination logic
   // const columnFilters = externalColumnFilters ?? internalColumnFilters;
   // const setColumnFilters = setExternalColumnFilters ?? setInternalColumnFilters;
+
+  // Determine whether to use internal or external state for column filters
+  const isExternalFilters = externalColumnFilters !== undefined && setExternalColumnFilters !== undefined;
+  const columnFilters = isExternalFilters ? externalColumnFilters : internalColumnFilters;
+  const setColumnFilters = isExternalFilters ? setExternalColumnFilters : setInternalColumnFilters;
+
 
   const [sorting, setSorting] = React.useState<SortingState>([])
 

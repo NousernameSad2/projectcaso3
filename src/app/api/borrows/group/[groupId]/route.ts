@@ -59,6 +59,12 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
                 borrower: {
                     select: { id: true, name: true, email: true }
                 },
+                approvedByFic: {
+                    select: { name: true, email: true }
+                },
+                approvedByStaff: {
+                    select: { name: true, email: true }
+                },
                 class: { 
                   select: {
                     courseCode: true,

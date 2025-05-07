@@ -23,7 +23,7 @@ export type DeficiencyAdminView = Deficiency & {
     id: string; 
     equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId'> 
   };
-  // ficToNotify?: Pick<User, 'id' | 'name'> | null;
+  ficToNotify?: Pick<User, 'id' | 'name'> | null;
 };
 
 // Helper for status badges (similar to borrow status)

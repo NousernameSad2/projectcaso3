@@ -299,33 +299,25 @@ export async function PATCH(request: NextRequest) {
                             borrowStatus: BorrowStatus.APPROVED,
                             approvedByFicId: userRole === UserRole.FACULTY ? actorId : null,
                             approvedByStaffId: userRole === UserRole.STAFF ? actorId : null,
-                            // Directly use requested times as approved times upon bulk approval
-                            // @ts-ignore - Persisting type error
-                            approvedStartTime: borrowsToApprove[0]?.requestedStartTime, // Assuming all have same requested time in group
-                            // @ts-ignore - Persisting type error
-                            approvedEndTime: borrowsToApprove[0]?.requestedEndTime,   // Assuming all have same requested time in group
-                            // Consider adding remarks if needed
+                            approvedStartTime: borrowsToApprove[0]?.requestedStartTime, 
+                            approvedEndTime: borrowsToApprove[0]?.requestedEndTime,   
                         },
                     });
                     
                     // 3. *** NEW: Update Equipment Status to RESERVED ***
                     // Ensure we only update equipment linked to the *successfully* approved borrows
-                    if (approvedResult.count > 0) {
-                        const updatedEquipmentResult = await tx.equipment.updateMany({
-                            where: { 
-                                id: { in: equipmentIdsToApprove },
-                                // Optionally add condition: status: EquipmentStatus.AVAILABLE 
-                                // to prevent overwriting BORROWED/MAINTENANCE etc. 
-                                // Depending on desired logic.
-                                // For now, let's assume approving always makes it RESERVED if AVAILABLE.
-                                status: EquipmentStatus.AVAILABLE 
-                            },
-                            data: {
-                                status: EquipmentStatus.RESERVED,
-                            },
-                        });
-                        console.log(`[API Bulk PATCH - Group ${groupId}] Updated status to RESERVED for ${updatedEquipmentResult.count} equipment items.`);
-                    }
+                    // if (approvedResult.count > 0) {
+                    //     const updatedEquipmentResult = await tx.equipment.updateMany({
+                    //         where: { 
+                    //             id: { in: equipmentIdsToApprove },
+                    //             status: EquipmentStatus.AVAILABLE 
+                    //         },
+                    //         data: {
+                    //             status: EquipmentStatus.RESERVED,
+                    //         },
+                    //     });
+                    //     console.log(`[API Bulk PATCH - Group ${groupId}] Updated status to RESERVED for ${updatedEquipmentResult.count} equipment items.`);
+                    // }
                     // *** END NEW ***
 
                     // 4. Auto-reject logic (if needed, seems commented out/removed in original)
@@ -415,19 +407,19 @@ export async function PATCH(request: NextRequest) {
                     });
 
                     // 2. *** NEW: Update Equipment status to BORROWED ***
-                    if (checkoutUpdate.count > 0) {
-                        const updatedEquipmentResult = await tx.equipment.updateMany({
-                            where: { 
-                                id: { in: equipmentIdsToCheckOut },
-                                // Update only if RESERVED or AVAILABLE (don't override MAINTENANCE etc.)
-                                status: { in: [EquipmentStatus.RESERVED, EquipmentStatus.AVAILABLE] }
-                            },
-                            data: {
-                                status: EquipmentStatus.BORROWED,
-                            },
-                        });
-                        console.log(`[API Bulk PATCH - Group ${groupId}] Updated status to BORROWED for ${updatedEquipmentResult.count} equipment items.`);
-                    }
+                    // if (checkoutUpdate.count > 0) {
+                    //     const updatedEquipmentResult = await tx.equipment.updateMany({
+                    //         where: { 
+                    //             id: { in: equipmentIdsToCheckOut },
+                    //             // Update only if RESERVED or AVAILABLE (don\'t override MAINTENANCE etc.)
+                    //             status: { in: [EquipmentStatus.RESERVED, EquipmentStatus.AVAILABLE] }
+                    //         },
+                    //         data: {
+                    //             status: EquipmentStatus.BORROWED,
+                    //         },
+                    //     });
+                    //     console.log(`[API Bulk PATCH - Group ${groupId}] Updated status to BORROWED for ${updatedEquipmentResult.count} equipment items.`);
+                    // }
                     // *** END NEW ***
                     
                     return checkoutUpdate;

@@ -61,7 +61,7 @@ const formatBorrowStatus = (status: BorrowStatus) => {
 // *** NEW: Helpers for Reservation Type Display ***
 const formatReservationType = (type: ReservationType | null | undefined): string => {
     if (!type) return 'N/A';
-    return type === 'IN_CLASS' ? 'In Class' : 'Out of Class';
+    return type === 'IN_CLASS' ? 'IN CLASS' : 'OUT OF CLASS';
 };
 const getReservationTypeVariant = (type: ReservationType | null | undefined): "success" | "destructive" | "secondary" => {
     if (!type) return 'secondary';
@@ -384,7 +384,7 @@ export default function ProfilePage() {
                         href={`/borrows/group/${groupId}`}
                         key={groupId}
                         className="block hover:bg-muted/10 transition-colors rounded-lg"
-                        legacyBehavior>
+                        >
                         <Card className="overflow-hidden bg-card/60 border">
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2 text-base">
@@ -501,7 +501,7 @@ export default function ProfilePage() {
                       <Link
                           href={`/equipment/${borrow.equipment.id}`}
                           className="block flex-shrink-0"
-                          legacyBehavior>
+                          >
                         <Image 
                           src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'} 
                           alt={borrow.equipment.name}
@@ -517,7 +517,7 @@ export default function ProfilePage() {
                                  href={`/equipment/${borrow.equipment.id}`}
                                  className="font-semibold hover:underline flex-shrink min-w-0 mr-2"
                                  title={borrow.equipment.name}
-                                 legacyBehavior>
+                                 >
                                  <span className="truncate">{borrow.equipment.name}</span>
                              </Link>
                              {/* --- Badge Container --- */}
@@ -525,7 +525,7 @@ export default function ProfilePage() {
                                  {/* Reservation Type Badge */}
                                  <Badge
                                      variant={getReservationTypeVariant(borrow.reservationType)}
-                                     className="capitalize text-xs whitespace-nowrap"
+                                     className="text-xs whitespace-nowrap"
                                      title={`Reservation Type: ${formatReservationType(borrow.reservationType)}`}
                                  >
                                      {formatReservationType(borrow.reservationType)}
@@ -540,7 +540,7 @@ export default function ProfilePage() {
                              Borrowed by: <Link
                              href={`/users/${borrow.borrower.id}/profile`}
                              className="hover:underline"
-                             legacyBehavior>{borrow.borrower.name ?? borrow.borrower.email}</Link>
+                             >{borrow.borrower.name ?? borrow.borrower.email}</Link>
                          </p>
                          {borrow.class && (
                            <p className="text-xs text-muted-foreground">

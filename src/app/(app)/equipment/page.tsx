@@ -29,6 +29,7 @@ interface EquipmentWithCount extends Equipment {
   };
   nextUpcomingReservationStart: string | null; // Added from API
   availableUnitsInFilterRange: number | null;  // Added from API
+  activeBorrowCount: number; // Added from API
 }
 
 // Define category options including 'ALL'
@@ -222,8 +223,9 @@ export default function EquipmentPage() {
      fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange); // Refetch data
   };
 
-  // Check user permissions
-  const canManageEquipment = sessionStatus === 'authenticated' && !!session?.user && session.user.role !== UserRole.REGULAR;
+  // Check user permissions and authentication status
+  const isAuthenticated = sessionStatus === 'authenticated';
+  const canManageEquipment = isAuthenticated && !!session?.user && session.user.role !== UserRole.REGULAR;
   const hasSelection = selectedEquipmentIds.length > 0;
 
   // ... Session status checks and return ...
@@ -363,8 +365,10 @@ export default function EquipmentPage() {
            {/* Add Equipment Button - Show when NO items selected AND user is Staff/Faculty */} 
            {!hasSelection && canManageEquipment && (
              <Button size="sm" asChild>
-               <Link href="/equipment/new" legacyBehavior>
-                 <PlusCircle className="mr-2 h-4 w-4" /> Add Equipment
+               <Link href="/equipment/new">
+                 <>
+                   <PlusCircle className="mr-2 h-4 w-4" /> Add Equipment
+                 </>
                </Link>
              </Button>
            )}
@@ -390,6 +394,8 @@ export default function EquipmentPage() {
               isSelected={selectedEquipmentIds.includes(item.id)} 
               onSelectToggle={handleSelectToggle} 
               isDateFilterActive={!!appliedDateRange}
+              canSelect={isAuthenticated}
+              canManageEquipment={canManageEquipment}
             />
           ))}
         </div>
