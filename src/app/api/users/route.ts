@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
   }
 }
 
-// POST: Create a new user (STAFF only)
+// POST: Create a new user (STAFF or FACULTY)
 export async function POST(req: NextRequest) {
   // Get current user session
   const session = await getServerSession(authOptions);
@@ -115,9 +115,10 @@ export async function POST(req: NextRequest) {
   }
   const currentUser = session.user;
 
-  // Check if user is STAFF
-  if (currentUser.role !== UserRole.STAFF) { 
-    return NextResponse.json({ message: 'Unauthorized: STAFF role required' }, { status: 403 });
+  // Check if user is STAFF or FACULTY
+  const allowedRolesToCreate: UserRole[] = [UserRole.STAFF, UserRole.FACULTY];
+  if (!allowedRolesToCreate.includes(currentUser.role as UserRole)) { 
+    return NextResponse.json({ message: 'Unauthorized: STAFF or FACULTY role required' }, { status: 403 });
   }
 
   try {
@@ -165,7 +166,7 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    console.log(`STAFF user ${currentUser.email} created new user: ${newUser.email}`);
+    console.log(`Admin user ${currentUser.email} (Role: ${currentUser.role}) created new user: ${newUser.email}`);
     return NextResponse.json({ message: "User created successfully", user: newUser }, { status: 201 });
 
   } catch (error) {

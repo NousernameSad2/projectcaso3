@@ -363,8 +363,8 @@ export default function AdminUsersPage() {
                         />
                     </div>
                     {/* -------------------- */} 
-                    {/* Add User Button - Only for STAFF */} 
-                    {loggedInUser?.role === UserRole.STAFF && (
+                    {/* Add User Button - For STAFF or FACULTY */} 
+                    {(loggedInUser?.role === UserRole.STAFF || loggedInUser?.role === UserRole.FACULTY) && (
                 <AddUserDialog onUserAdded={handleUserAdded} />
                     )}
                 </div>
