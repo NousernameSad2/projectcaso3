@@ -65,6 +65,8 @@ export default function EditUserDialog({
   onUserUpdated 
 }: EditUserDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
   const { data: session, status: sessionStatus } = useSession();
   const token = session?.accessToken;
 
@@ -159,10 +161,59 @@ export default function EditUserDialog({
 
   const isSessionLoading = sessionStatus === 'loading';
 
+  const handleChangePassword = async () => {
+    if (!user || !user.id) {
+      toast.error("User context is missing. Cannot change password.");
+      return;
+    }
+    if (!newPassword.trim()) {
+      toast.error("New password cannot be empty.");
+      return;
+    }
+    if (newPassword.length < 8) {
+      toast.error("New password must be at least 8 characters long.");
+      return;
+    }
+
+    const currentToken = session?.accessToken;
+    if (!currentToken) {
+      toast.error("Authentication session is invalid. Please log in again.");
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      const response = await fetch(`/api/admin/users/${user.id}/change-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${currentToken}`,
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to change password.');
+      }
+
+      toast.success(result.message || 'Password changed successfully!');
+      setNewPassword(''); // Clear the password field
+      // Optionally, close the dialog or refresh data if needed
+      // onOpenChange(false); 
+    } catch (error: any) {
+      console.error('Error changing password:', error);
+      toast.error(`Error: ${error.message || 'An unknown error occurred.'}`);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
       {/* No DialogTrigger here, opened controlled by parent state */}
-      <DialogContent className="sm:max-w-[425px] bg-card border-border">
+      <DialogContent className="sm:max-w-2xl bg-card border-border">
         <DialogHeader>
           <DialogTitle>Edit User: {user?.name || user?.email}</DialogTitle>
           <DialogDescription>
@@ -171,119 +222,131 @@ export default function EditUserDialog({
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
-            {/* Name Field */}
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Full Name</FormLabel>
-                  <FormControl>
-                    <Input placeholder="John Doe" {...field} disabled={isLoading || isSessionLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Row 1: Name and Email */}
+            <div className="flex flex-row space-x-4">
+              <div className="w-1/2">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="John Doe" {...field} disabled={isLoading || isSessionLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="w-1/2">
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email Address</FormLabel>
+                      <FormControl>
+                        <Input type="email" placeholder="user@example.com" {...field} disabled={isLoading || isSessionLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
-            {/* Email Field */}
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Email Address</FormLabel>
-                  <FormControl>
-                    <Input type="email" placeholder="user@example.com" {...field} disabled={isLoading || isSessionLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Row 2: Student Number and Contact Number */}
+            <div className="flex flex-row space-x-4">
+              <div className="w-1/2">
+                <FormField
+                  control={form.control}
+                  name="studentNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Student Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="w-1/2">
+                <FormField
+                  control={form.control}
+                  name="contactNumber"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Contact Number</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g., 09171234567" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
-            {/* Student Number Field (Optional) */}
-            <FormField
-              control={form.control}
-              name="studentNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Student Number</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            {/* Row 3: Role and Status */}
+            <div className="flex flex-row space-x-4">
+              <div className="w-1/2">
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSessionLoading}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Object.values(UserRole).map((role) => (
+                            <SelectItem key={role} value={role}>
+                              {role.charAt(0) + role.slice(1).toLowerCase()}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <div className="w-1/2">
+                <FormField
+                  control={form.control}
+                  name="status"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Status</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSessionLoading}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a status" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {Object.values(UserStatus).map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())} {/* Format status */}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
 
-            {/* Contact Number Field (Optional) */}
-            <FormField
-              control={form.control}
-              name="contactNumber"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Contact Number</FormLabel>
-                  <FormControl>
-                    <Input placeholder="e.g., 09171234567" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Role Select */}
-            <FormField
-              control={form.control}
-              name="role"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Role</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSessionLoading}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a role" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {Object.values(UserRole).map((role) => (
-                        <SelectItem key={role} value={role}>
-                          {role.charAt(0) + role.slice(1).toLowerCase()}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Status Select */}
-            <FormField
-              control={form.control}
-              name="status"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Status</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={isLoading || isSessionLoading}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select a status" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {Object.values(UserStatus).map((status) => (
-                        <SelectItem key={status} value={status}>
-                          {status.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase())} {/* Format status */}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            {/* Sex Select (Optional) */}
+            {/* Sex Select (Optional) - Full width or can be paired if desired */}
             <FormField
               control={form.control}
               name="sex"
@@ -308,12 +371,46 @@ export default function EditUserDialog({
               )}
             />
 
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading || isSessionLoading}>
+            {/* --- Admin Change Password Section --- */}
+            <div className="space-y-2 pt-4 mt-6 border-t border-border">
+              <h4 className="font-medium text-md text-foreground">Administrator: Change Password</h4>
+              <p className="text-sm text-muted-foreground">
+                Set a new password for {user?.name || user?.email}. The user will not be notified.
+              </p>
+              <FormItem>
+                <FormLabel htmlFor="newPasswordAdmin">New Password</FormLabel>
+                <FormControl>
+                  <Input 
+                    id="newPasswordAdmin"
+                    type="password" 
+                    placeholder="Enter new password (min 8 chars)" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={isLoading || isSessionLoading || isChangingPassword} 
+                  />
+                </FormControl>
+                {/* Basic client-side validation message example (optional) */}
+                {newPassword && newPassword.length > 0 && newPassword.length < 8 && (
+                  <p className="text-sm text-destructive mt-1">Password must be at least 8 characters.</p>
+                )}
+              </FormItem>
+              <Button 
+                type="button" 
+                onClick={handleChangePassword} 
+                disabled={isLoading || isSessionLoading || isChangingPassword || !newPassword || newPassword.length < 8}
+                className="mt-2"
+              >
+                {isChangingPassword ? <LoadingSpinner size="sm" /> : 'Set New Password'}
+              </Button>
+            </div>
+            {/* --- End Admin Change Password Section --- */}
+            
+            <DialogFooter className="mt-6">
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading || isSessionLoading || isChangingPassword}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading || isSessionLoading || !form.formState.isDirty}>
-                {isLoading ? <LoadingSpinner size="sm" /> : 'Save Changes'}
+              <Button type="submit" disabled={isLoading || isSessionLoading || isChangingPassword || !form.formState.isDirty}>
+                {isLoading ? <LoadingSpinner size="sm" /> : 'Save User Details'}
               </Button>
             </DialogFooter>
           </form>

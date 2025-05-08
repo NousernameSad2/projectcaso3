@@ -136,6 +136,14 @@ export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>;
 // Expose the base schema if needed elsewhere (like the API route)
 export { ChangePasswordBaseSchema };
 
+// Schema for Admin Changing Another User's Password
+export const AdminChangePasswordSchema = z.object({
+  newPassword: z.string().min(8, "New password must be at least 8 characters long"),
+  // Optional: confirmPassword if desired, but often admins don't need to confirm
+});
+
+export type AdminChangePasswordInput = z.infer<typeof AdminChangePasswordSchema>;
+
 // Schema for Borrow Request Creation
 export const BorrowRequestSchema = z.object({
   equipmentId: z.string({ required_error: "Equipment ID is required."}),
