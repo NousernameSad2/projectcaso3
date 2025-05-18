@@ -54,12 +54,19 @@ export async function PATCH(request: Request, { params }: { params: { borrowId: 
                  throw new Error(`Cannot checkout item. Status is not APPROVED: ${borrowRecord.borrowStatus}`);
             }
 
-            // 5. Update Borrow Record: Set status to ACTIVE and record checkout time
+            // 5. Determine new status (ACTIVE or OVERDUE) and update Borrow Record
+            const now = new Date();
+            let newStatus: BorrowStatus = BorrowStatus.ACTIVE;
+            // Ensure approvedEndTime is not null before comparing
+            if (borrowRecord.approvedEndTime && new Date(borrowRecord.approvedEndTime) < now) {
+                newStatus = BorrowStatus.OVERDUE;
+            }
+
             const checkedOutBorrow = await tx.borrow.update({
                 where: { id: borrowId },
                 data: {
-                    borrowStatus: BorrowStatus.ACTIVE,
-                    checkoutTime: new Date(), // Record the actual checkout time
+                    borrowStatus: newStatus, // Use the determined status
+                    checkoutTime: now,       // Record the actual checkout time
                     // confirmedCheckoutById: session.user.id // Optional: track who confirmed checkout
                 },
             });

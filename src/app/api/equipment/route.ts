@@ -15,11 +15,11 @@ export async function GET(req: NextRequest) {
     const search = url.searchParams.get('search') || '';
     const categoryParam = url.searchParams.get('category');
     const statusParam = url.searchParams.get('status');
-    const page = parseInt(url.searchParams.get('page') || '1', 10);
-    const limit = parseInt(url.searchParams.get('limit') || '12', 10);
-    const skip = (page - 1) * limit;
+    // Pagination parameters removed
+    // const page = parseInt(url.searchParams.get('page') || '1', 10);
+    // const limit = parseInt(url.searchParams.get('limit') || '12', 10);
+    // const skip = (page - 1) * limit;
     
-    // <<< START: Date Range Params >>>
     const startDateParam = url.searchParams.get('startDate');
     const endDateParam = url.searchParams.get('endDate');
 
@@ -30,55 +30,40 @@ export async function GET(req: NextRequest) {
     if (startDateParam) {
         const parsedStart = new Date(startDateParam);
         if (isValid(parsedStart)) {
-            startDate = startOfDay(parsedStart); // Use start of day for start date
+            startDate = startOfDay(parsedStart);
             hasDateFilter = true;
         }
     }
     if (endDateParam) {
         const parsedEnd = new Date(endDateParam);
         if (isValid(parsedEnd)) {
-            endDate = endOfDay(parsedEnd); // Use end of day for end date
+            endDate = endOfDay(parsedEnd);
              hasDateFilter = true;
         }
     }
-    // If only one date is provided, maybe default the other? For now, requires both for range.
     if ((startDate && !endDate) || (!startDate && endDate)) {
-        // Or maybe treat single date as wanting availability *on* that day?
-        // For simplicity, let's clear if only one is valid for now.
         console.warn("Date range filter requires both start and end dates.");
         startDate = null;
         endDate = null;
         hasDateFilter = false;
     }
-    // <<< END: Date Range Params >>>
 
-    // Base where clause
     let whereClause: Prisma.EquipmentWhereInput = {
       OR: [
         { name: { contains: search, mode: 'insensitive' } },
         { equipmentId: { contains: search, mode: 'insensitive' } },
       ],
-      // We will not filter by item.status directly here anymore if a statusParam is provided.
-      // That will be handled by derivedStatus after fetching.
-      // However, if statusParam is for a specific non-derivable status like ARCHIVED,
-      // or if NO statusParam is given (meaning "ALL" but perhaps still excluding ARCHIVED by default),
-      // we might add conditions here.
-      // For now, let's keep it simple: if statusParam is ARCHIVED, filter it here.
-      // Otherwise, fetch broader and filter by derived status later.
     };
 
     if (statusParam === EquipmentStatus.ARCHIVED) {
       whereClause.status = EquipmentStatus.ARCHIVED;
     } else {
-      // Exclude ARCHIVED items unless explicitly requested.
-      // This ensures they don't appear in "ALL" or other derived statuses unless their prismaStatus is ARCHIVED.
       whereClause.NOT = {
-        ...(whereClause.NOT as Prisma.JsonObject), // Preserve other NOT conditions if any
+        ...(whereClause.NOT as Prisma.JsonObject),
         status: EquipmentStatus.ARCHIVED,
       };
     }
 
-    // Add category filter
     if (categoryParam && categoryParam !== 'ALL') {
       if (Object.values(EquipmentCategory).includes(categoryParam as EquipmentCategory)) {
          whereClause.category = categoryParam as EquipmentCategory;
@@ -86,51 +71,24 @@ export async function GET(req: NextRequest) {
         console.warn(`[API GET /equipment] Invalid category parameter received: ${categoryParam}`);
       }
     }
-
-    // REMOVED: Original direct status filter:
-    // if (statusParam && statusParam !== 'ALL' && statusParam !== EquipmentStatus.ARCHIVED) { // ARCHIVED handled above
-    //   if (Object.values(EquipmentStatus).includes(statusParam as EquipmentStatus)) {
-    //      // whereClause.status = statusParam as EquipmentStatus; // This line is removed
-    //   } else {
-    //      console.warn(`[API GET /equipment] Invalid status parameter received: ${statusParam}`);
-    //   }
-    // }
     
-    // <<< START: Date Range Filtering Logic >>>
-    // if (hasDateFilter && startDate && endDate) { // Entire block REMOVED
-    //   console.log(`[API GET /equipment] Applying date filter: ${startDate.toISOString()} - ${endDate.toISOString()}`);
-    //   const conflictingBorrowStatuses: BorrowStatus[] = [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE];
-      
-    //   // The following modification to whereClause.NOT is removed because it's too strict for stockCount > 1.
-    //   // Date range availability will be handled by post-processing availableUnitsInFilterRange.
-    //   // whereClause.NOT = {
-    //   //   ...(whereClause.NOT as Prisma.JsonObject), // Preserve other NOT conditions (e.g., for ARCHIVED status)
-    //   //   borrowRecords: {
-    //   //     some: {
-    //   //       borrowStatus: { in: conflictingBorrowStatuses },
-    //   //       OR: [
-    //   //         { approvedStartTime: { lt: endDate }, approvedEndTime: { gt: startDate } },
-    //   //       ]
-    //   //     }
-    //   //   }
-    //   // };
-    // }
-    // <<< END: Date Range Filtering Logic >>>
-
-    // --- DEBUG LOG --- 
     console.log("[API GET /equipment] Effective whereClause for DB query:", JSON.stringify(whereClause));
-    // --- END DEBUG LOG ---
 
-    // Fetch paginated items
-    const allMatchingDbItems = await prisma.equipment.findMany({
+    // Total count for pagination removed
+    // const trueTotalCount = await prisma.equipment.count({
+    //   where: whereClause,
+    // });
+
+    // Fetch ALL items from the database matching the whereClause
+    const dbItems = await prisma.equipment.findMany({
       where: whereClause,
       include: {
         _count: {
           select: {
-            borrowRecords: true, // This counts all borrow records
+            borrowRecords: true,
           },
         },
-        borrowRecords: { // Fetch all potentially relevant borrow records
+        borrowRecords: { 
           where: {
             borrowStatus: { in: [
               BorrowStatus.PENDING, 
@@ -138,11 +96,7 @@ export async function GET(req: NextRequest) {
               BorrowStatus.ACTIVE, 
               BorrowStatus.OVERDUE
             ] },
-            // We only care about reservations that haven't ended or are active
-            // For PENDING/APPROVED: their requested/approved end time must be in the future
-            // For ACTIVE/OVERDUE: they are ongoing by definition
             OR: [
-              // PENDING or APPROVED that are for the future or current (overlapping today)
               {
                 borrowStatus: { in: [BorrowStatus.PENDING, BorrowStatus.APPROVED] },
                 OR: [
@@ -150,21 +104,20 @@ export async function GET(req: NextRequest) {
                     { approvedEndTime: null, requestedEndTime: { gte: new Date() } }
                 ]
               },
-              // ACTIVE or OVERDUE (these are inherently current or past due)
               {
                 borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE] }
               }
             ]
           },
           select: {
-            borrowStatus: true, // Need status to differentiate
+            borrowStatus: true,
             requestedStartTime: true,
             approvedStartTime: true,
             requestedEndTime: true, 
             approvedEndTime: true,
           },
           orderBy: [
-            { approvedStartTime: 'asc' }, // Keep ordering for nextUpcomingReservation
+            { approvedStartTime: 'asc' },
             { requestedStartTime: 'asc' },
           ],
         }
@@ -172,14 +125,13 @@ export async function GET(req: NextRequest) {
       orderBy: {
         name: 'asc',
       },
-      skip: skip,
-      take: limit,
+      // skip and take removed for fetching all items
+      // skip: skip,
+      // take: limit,
     });
 
-    // Process items to add nextUpcomingReservationStart, availableUnitsInFilterRange, activeBorrowCount, and derivedStatus
-    const now = new Date(); // For derivedStatus calculation
-
-    const itemsWithDerivedStatus = allMatchingDbItems.map(item => {
+    const now = new Date();
+    const itemsWithDerivedFields = dbItems.map(item => {
       let nextUpcomingReservationStart: Date | null = null;
       let availableUnitsInFilterRange: number | null = null;
       
@@ -189,9 +141,9 @@ export async function GET(req: NextRequest) {
 
       const futurePendingOrApprovedBorrows = item.borrowRecords?.filter(
         br => (br.borrowStatus === BorrowStatus.PENDING || br.borrowStatus === BorrowStatus.APPROVED) &&
-              ((br.approvedStartTime && new Date(br.approvedStartTime) >= now) || // Ensure it's truly upcoming or current
+              ((br.approvedStartTime && new Date(br.approvedStartTime) >= now) ||
                (!br.approvedStartTime && br.requestedStartTime && new Date(br.requestedStartTime) >= now)) 
-      ).sort((a, b) => { // Sort to get the earliest upcoming
+      ).sort((a, b) => { 
           const aStart = a.approvedStartTime || a.requestedStartTime;
           const bStart = b.approvedStartTime || b.requestedStartTime;
           if (!aStart) return 1;
@@ -199,10 +151,8 @@ export async function GET(req: NextRequest) {
           return new Date(aStart).getTime() - new Date(bStart).getTime();
       }) || [];
       
-
       if (futurePendingOrApprovedBorrows.length > 0) {
         const firstUpcoming = futurePendingOrApprovedBorrows[0];
-        // Ensure the date is valid before assigning
         const upcomingDate = firstUpcoming.approvedStartTime || firstUpcoming.requestedStartTime;
         if (upcomingDate) {
             nextUpcomingReservationStart = new Date(upcomingDate);
@@ -213,20 +163,21 @@ export async function GET(req: NextRequest) {
         const conflictingFutureBorrowsCount = futurePendingOrApprovedBorrows.filter(borrow => {
           const bStart = borrow.approvedStartTime || borrow.requestedStartTime;
           const bEnd = borrow.approvedEndTime || borrow.requestedEndTime;
-          return bStart < endDate! && bEnd > startDate!;
+          if (bStart && bEnd && startDate && endDate) { // Ensure dates are valid
+            return new Date(bStart) < endDate && new Date(bEnd) > startDate;
+          }
+          return false;
         }).length;
         
         const conflictingActiveBorrowsInFilterRange = item.borrowRecords?.filter(
           br => (br.borrowStatus === BorrowStatus.ACTIVE || br.borrowStatus === BorrowStatus.OVERDUE) &&
-                // Assuming active/overdue borrows always have approved start/end times for simplicity here
-                // A more robust check would use actual checkoutTime and expected/approvedEndTime
-                (br.approvedStartTime && br.approvedEndTime && br.approvedStartTime < endDate! && br.approvedEndTime > startDate!)
+                (br.approvedStartTime && br.approvedEndTime && startDate && endDate && // Ensure dates are valid
+                 new Date(br.approvedStartTime) < endDate && new Date(br.approvedEndTime) > startDate)
         ).length || 0;
 
         availableUnitsInFilterRange = Math.max(0, item.stockCount - conflictingFutureBorrowsCount - conflictingActiveBorrowsInFilterRange);
       }
 
-      // Calculate derivedStatus (logic from EquipmentCard.tsx)
       const prismaStatus = item.status;
       const stockCount = item.stockCount;
       const currentlyEffectivelyAvailableUnits = stockCount - activeBorrowCount;
@@ -243,8 +194,8 @@ export async function GET(req: NextRequest) {
         derivedStatus = EquipmentStatus.BORROWED;
       } else if (
         prismaStatus === EquipmentStatus.RESERVED &&
-        nextUpcomingReservationStart && // Already a Date object or null
-        nextUpcomingReservationStart > now && // Check if it's in the future
+        nextUpcomingReservationStart && 
+        nextUpcomingReservationStart > now && 
         currentlyEffectivelyAvailableUnits > 0
       ) {
         derivedStatus = EquipmentStatus.AVAILABLE;
@@ -255,13 +206,7 @@ export async function GET(req: NextRequest) {
       } else if (prismaStatus === EquipmentStatus.AVAILABLE && currentlyEffectivelyAvailableUnits > 0) {
         derivedStatus = EquipmentStatus.AVAILABLE;
       }
-      // This condition implies prismaStatus being AVAILABLE but units <= 0, which should be BORROWED
-      // else if (prismaStatus === EquipmentStatus.AVAILABLE && currentlyEffectivelyAvailableUnits <= 0 && stockCount > 0) {
-      //   derivedStatus = EquipmentStatus.BORROWED; // Covered by the earlier BORROWED check
-      // }
 
-
-      // Final override from EquipmentCard display logic
       if (
         derivedStatus !== EquipmentStatus.BORROWED &&
         derivedStatus !== EquipmentStatus.UNDER_MAINTENANCE &&
@@ -273,45 +218,41 @@ export async function GET(req: NextRequest) {
         derivedStatus = EquipmentStatus.AVAILABLE;
       }
       
-      const { borrowRecords, ...itemData } = item; // Exclude raw borrowRecords from final response
-      return { ...itemData, nextUpcomingReservationStart, availableUnitsInFilterRange, activeBorrowCount, derivedStatus };
+      const { borrowRecords, ...itemData } = item; 
+      return { 
+        ...itemData, 
+        nextUpcomingReservationStart: nextUpcomingReservationStart ? nextUpcomingReservationStart.toISOString() : null,
+        availableUnitsInFilterRange,
+        activeBorrowCount,
+        derivedStatus 
+      };
     });
 
-    // Filter by derivedStatus if statusParam is present (and not 'ALL')
-    let itemsFilteredByDerivedStatus = itemsWithDerivedStatus;
+    let itemsToReturn = itemsWithDerivedFields;
     if (statusParam && statusParam !== 'ALL') {
       if (Object.values(EquipmentStatus).includes(statusParam as EquipmentStatus)) {
-        itemsFilteredByDerivedStatus = itemsWithDerivedStatus.filter(
+        itemsToReturn = itemsWithDerivedFields.filter(
           pItem => pItem.derivedStatus === (statusParam as EquipmentStatus)
         );
       } else {
-        // This case should ideally not be hit if frontend sends valid statuses
         console.warn(`[API GET /equipment] Invalid statusParam for derived filtering: ${statusParam}`);
       }
     }
     
-    // If date filter is active, and user asked for AVAILABLE, further filter by availableUnitsInFilterRange
-    // This ensures "AVAILABLE" with date range means truly available in that range.
-    let finalFilteredItems = itemsFilteredByDerivedStatus;
-    if (hasDateFilter && startDate && endDate) { // NEW Condition: Apply if any date filter is active
-        finalFilteredItems = itemsFilteredByDerivedStatus.filter(item => 
+    if (hasDateFilter && startDate && endDate) {
+        itemsToReturn = itemsToReturn.filter(item => 
             item.availableUnitsInFilterRange !== null && item.availableUnitsInFilterRange > 0
         );
     }
-    // Re-paginate based on the final filtered list.
-    const totalItems = finalFilteredItems.length;
-    const totalPages = Math.ceil(totalItems / limit) || 1; // Ensure totalPages is at least 1
-    const paginatedItems = finalFilteredItems.slice(skip, skip + limit);
 
-    return NextResponse.json({
-      items: paginatedItems, // Send the paginated items
-      totalPages, 
-      currentPage: page
-    });
+    return NextResponse.json({ items: itemsToReturn }); // Return all processed items, no pagination fields
 
   } catch (error) {
-    console.error("API Error - GET /api/equipment:", error);
-    return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+    console.error('[API GET /equipment] Error fetching equipment:', error);
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ message: 'Validation error.', errors: error.flatten().fieldErrors }, { status: 400 });
+    }
+    return NextResponse.json({ message: 'Internal Server Error fetching equipment' }, { status: 500 });
   }
 }
 

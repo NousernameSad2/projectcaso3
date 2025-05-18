@@ -66,7 +66,8 @@ export async function POST(request: Request) {
        // Check if the specific borrow exists and is APPROVED
        const borrowToCheckout = await prisma.borrow.findUnique({
            where: { id: borrowId, borrowStatus: BorrowStatus.APPROVED },
-           select: { id: true } // Just need to know it exists and matches criteria
+           // Select approvedEndTime to determine if it should be active or overdue
+           select: { id: true, approvedEndTime: true } 
        });
 
        if (!borrowToCheckout) {
@@ -75,10 +76,17 @@ export async function POST(request: Request) {
            return NextResponse.json({ error: `Borrow record ${borrowId} is not approved for checkout (Status: ${exists.borrowStatus}).` }, { status: 400 });
        }
 
+       let newStatus: BorrowStatus = BorrowStatus.ACTIVE;
+       if (borrowToCheckout.approvedEndTime && new Date(borrowToCheckout.approvedEndTime) < checkoutTimestamp) {
+           newStatus = BorrowStatus.OVERDUE;
+       }
+
        await prisma.borrow.update({
           where: { id: borrowId },
           data: {
-              ...updateData,
+              // ...updateData, // Original updateData only had ACTIVE, so we replace it
+              borrowStatus: newStatus,
+              checkoutTime: checkoutTimestamp,
               approvedByStaffId: user.id, // Record who confirmed the checkout
           },
        });
@@ -86,6 +94,8 @@ export async function POST(request: Request) {
 
     } else if (borrowGroupId) {
        // --- Bulk Item Checkout ---
+       // For bulk, we currently set all to ACTIVE. 
+       // A more complex approach would be needed to set ACTIVE/OVERDUE individually.
        // @ts-ignore // Ignore borrowGroupId typing issue if present
        result = await prisma.borrow.updateMany({
          where: {
@@ -93,7 +103,9 @@ export async function POST(request: Request) {
            borrowStatus: BorrowStatus.APPROVED, // Only checkout items that are approved
          },
          data: {
-             ...updateData,
+             // ...updateData, // This was the original updateData with just ACTIVE
+             borrowStatus: BorrowStatus.ACTIVE, // Explicitly set to ACTIVE for now
+             checkoutTime: checkoutTimestamp,
              approvedByStaffId: user.id, // Record who confirmed the checkout
          },
        });

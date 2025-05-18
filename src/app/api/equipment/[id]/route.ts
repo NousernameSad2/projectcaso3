@@ -214,7 +214,7 @@ export async function PUT(
   }
 }
 
-// DELETE: "Delete" an equipment record by archiving it
+// DELETE: "Delete" an equipment record by archiving it or permanently deleting if already archived
 export async function DELETE(req: NextRequest, { params }: RouteContext) {
   // Permission check (ensure user is STAFF or FACULTY)
   const session = await getServerSession(authOptions);
@@ -223,9 +223,8 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
   }
 
-  // *** FIX: Await params before accessing ***
   const resolvedParams = await params;
-  const equipmentId = resolvedParams.id; // Use variable
+  const equipmentId = resolvedParams.id;
 
   if (!equipmentId) {
     return NextResponse.json({ message: 'Equipment ID is missing' }, { status: 400 });
@@ -235,38 +234,43 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     // Check if equipment exists first
     const equipment = await prisma.equipment.findUnique({
       where: { id: equipmentId },
-      select: { id: true, status: true } // Select status to avoid archiving already archived
+      select: { id: true, status: true } 
     });
 
     if (!equipment) {
       return NextResponse.json({ message: 'Equipment not found' }, { status: 404 });
     }
 
-    // Optional: Prevent archiving if already archived?
     if (equipment.status === EquipmentStatus.ARCHIVED) {
-        return NextResponse.json({ message: 'Equipment is already archived' }, { status: 400 });
+      // If already archived, permanently delete.
+      // The Prisma schema change (onDelete: SetNull) handles associated borrows by setting their equipmentId to null.
+      await prisma.equipment.delete({
+        where: { id: equipmentId },
+      });
+      console.log(`Equipment ${equipmentId} permanently deleted by ${session.user.email}.`);
+      // Return success with OK status and a message
+      return NextResponse.json({ message: 'Equipment permanently deleted' }, { status: 200 });
+    } else {
+      // If not archived, update the equipment status to ARCHIVED
+      await prisma.equipment.update({
+        where: { id: equipmentId },
+        data: { status: EquipmentStatus.ARCHIVED },
+      });
+      console.log(`Equipment ${equipmentId} archived by ${session.user.email}.`);
+      // Return success with No Content status (standard for Archive)
+      return new NextResponse(null, { status: 204 });
     }
 
-    // Update the equipment status to ARCHIVED instead of deleting
-    await prisma.equipment.update({
-      where: { id: equipmentId },
-      data: { status: EquipmentStatus.ARCHIVED },
-    });
-
-    console.log(`Equipment ${equipmentId} archived by ${session.user.email}.`);
-    // Return success with No Content status (standard for DELETE/Archive)
-    return new NextResponse(null, { status: 204 });
-
   } catch (error: any) {
-    console.error(`API Error - DELETE (Archive) /api/equipment/${equipmentId}:`, error);
+    console.error(`API Error - DELETE /api/equipment/${equipmentId}:`, error);
 
-    // Specific check for Record Not Found during the initial findUnique or update
+    // Specific check for Record Not Found during the initial findUnique, update, or delete
     if (error.code === 'P2025') {
       return NextResponse.json({ message: 'Equipment not found' }, { status: 404 });
     }
 
     // Fallback for other errors
-    return NextResponse.json({ message: 'Internal Server Error archiving equipment' }, { status: 500 });
+    return NextResponse.json({ message: 'Internal Server Error processing delete request' }, { status: 500 });
   }
 }
 

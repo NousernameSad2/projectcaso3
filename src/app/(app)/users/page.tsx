@@ -42,6 +42,9 @@ interface DisplayUser {
     status: UserStatus; 
     createdAt: string; 
     updatedAt: string;
+    studentNumber?: string | null;
+    contactNumber?: string | null;
+    sex?: 'Male' | 'Female' | null;
 }
 
 // Define UserData type matching EditUserDialog prop expectation
@@ -51,6 +54,9 @@ interface UserData {
   email: string | null;
   role: UserRole;
   status: UserStatus;
+  studentNumber?: string | null;
+  contactNumber?: string | null;
+  sex?: 'Male' | 'Female' | null;
 }
 
 // Helper to get badge variant based on status
@@ -271,6 +277,9 @@ export default function AdminUsersPage() {
             email: userToEdit.email,
             role: userToEdit.role,
             status: userToEdit.status,
+            studentNumber: userToEdit.studentNumber,
+            contactNumber: userToEdit.contactNumber,
+            sex: userToEdit.sex,
         };
         setEditingUser(userData);
         setIsEditDialogOpen(true);
@@ -294,6 +303,9 @@ export default function AdminUsersPage() {
                         email: updatedUserData.email,
                         role: updatedUserData.role,
                         status: updatedUserData.status,
+                        studentNumber: updatedUserData.studentNumber,
+                        contactNumber: updatedUserData.contactNumber,
+                        sex: updatedUserData.sex,
                     };
                 }
                 return u;

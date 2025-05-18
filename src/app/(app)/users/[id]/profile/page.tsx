@@ -13,6 +13,7 @@ import Image from 'next/image';
 import { toast } from "sonner"; // Added toast import
 import Link from 'next/link'; // Ensure Link is imported
 import { useQuery } from '@tanstack/react-query'; // Import useQuery
+import { transformGoogleDriveUrl } from "@/lib/utils"; // Added transformGoogleDriveUrl
 // Removed cn, ProfileEditForm, ChangePasswordForm imports
 
 // UserProfile type remains the same
@@ -394,11 +395,17 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                                     {groupItems.map(item => (
                                         <li key={item.id} className="flex items-center gap-2">
                                             <Image
-                                                src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                                src={transformGoogleDriveUrl(item.equipment.images?.[0]) || '/images/placeholder-default.png'}
                                                 alt={item.equipment.name}
                                                 width={32}
                                                 height={32}
                                                 className="rounded object-cover aspect-square"
+                                                onError={(e) => {
+                                                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                    e.currentTarget.src = '/images/placeholder-default.png';
+                                                  }
+                                                }}
                                             />
                                             <div className='flex-grow'>
                                                 <span className='font-medium'>{item.equipment.name}</span>
@@ -422,7 +429,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
             })}
             {/* Render Individual History */}
             {individualHistoryItems.map((borrow) => {
-                const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
+                const imageUrl = transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png';
                 return (
                      <Card key={borrow.id} className="overflow-hidden bg-card/60 border">
                         <CardHeader>
@@ -437,6 +444,12 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                                 width={40}
                                 height={40}
                                 className="rounded object-cover aspect-square"
+                                onError={(e) => {
+                                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                                    e.currentTarget.src = '/images/placeholder-default.png';
+                                  }
+                                }}
                             />
                             <div className='flex-grow'>
                                 <span className='font-medium text-base'>{borrow.equipment.name}</span>
@@ -484,12 +497,17 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
                         className="block flex-shrink-0"
                         >
                       <Image
-                        src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'}
+                        src={transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png'}
                         alt={borrow.equipment.name}
                         width={80}
                         height={80}
                         className="rounded border aspect-square object-contain bg-background p-1"
-                        onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                        onError={(e) => { 
+                          if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                            e.currentTarget.srcset = '/images/placeholder-default.png';
+                            e.currentTarget.src = '/images/placeholder-default.png';
+                          }
+                        }}
                       />
                     </Link>
                     <div className="flex-grow space-y-1 text-sm">

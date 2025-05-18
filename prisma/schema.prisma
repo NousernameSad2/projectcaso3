@@ -180,8 +180,8 @@ model Borrow {
   class               Class?            @relation(fields: [classId], references: [id], onDelete: SetNull) 
   ficId               String?           @db.ObjectId 
   fic                 User?             @relation("BorrowsSupervised", fields: [ficId], references: [id])
-  equipmentId         String            @db.ObjectId
-  equipment           Equipment         @relation(fields: [equipmentId], references: [id])
+  equipmentId         String?           @db.ObjectId // Changed to String?
+  equipment           Equipment?        @relation(fields: [equipmentId], references: [id], onDelete: SetNull) // Added onDelete: SetNull and made Equipment? optional
 
   borrowStatus        BorrowStatus      @default(PENDING)
   

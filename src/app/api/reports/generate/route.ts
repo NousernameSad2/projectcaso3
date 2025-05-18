@@ -22,6 +22,7 @@ const QuerySchema = z.object({
     courseId: z.string().optional(), // Expect 'all' or a specific ID
     ficId: z.string().optional(), // Expect 'all' or a specific ID
     equipmentId: z.string().optional(), // Expect 'all' or a specific ID
+    borrowerId: z.string().optional(), // Expect 'all' or a specific User ID
     // Add other potential filters here
 });
 
@@ -153,7 +154,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid query parameters', details: queryParseResult.error.flatten() }, { status: 400 });
     }
 
-    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId } = queryParseResult.data;
+    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId } = queryParseResult.data;
 
     // --- Build Filters --- 
     const borrowFilters: any = {}; // Filters applicable to Borrow model
@@ -199,13 +200,30 @@ export async function GET(req: NextRequest) {
 
     // FIC ID Filter
     if (ficId && ficId !== 'all') {
-         if (reportType === 'borrowing_activity') {
-             borrowFilters.ficId = ficId;
-         } 
-         // Note: Deficiency doesn't directly link to FIC easily via borrow 
-         // unless we filter borrows first, then deficiencies. 
-         // Keep it simple for now, FIC filter might only apply well to borrow reports.
-     }
+        if (reportType === 'borrowing_activity') {
+            // Filter by ficId through the class association for borrows
+            borrowFilters.class = { ...borrowFilters.class, ficId: ficId }; 
+        } else if (reportType === 'deficiency_summary') {
+            // Filter by the FIC directly intended to be notified on the deficiency
+            deficiencyFilters.ficToNotifyId = ficId;
+        }
+        // Note for other report types or future enhancements: 
+        // Deficiency linkage to an FIC via borrow.class.ficId or borrow.ficId 
+        // would require more complex nested filters if ficToNotifyId is not the primary link.
+    }
+    
+    // Borrower ID Filter (New)
+    if (borrowerId && borrowerId !== 'all') {
+        if (reportType === 'borrowing_activity') {
+            borrowFilters.borrowerId = borrowerId;
+        } else if (reportType === 'deficiency_summary') {
+            // For deficiency summary, filter if the selected user is either responsible OR tagged the deficiency
+            deficiencyFilters.OR = [
+                { userId: borrowerId },       // User responsible for the deficiency
+                { taggedById: borrowerId }    // User who tagged the deficiency
+            ];
+        }
+    }
     
     try {
         let data: any[] = [];
@@ -219,20 +237,27 @@ export async function GET(req: NextRequest) {
                 // The necessary filters (borrow + course/fic if provided) 
                 // should already be in borrowingActivityFilters due to logic above.
                 const borrowingActivityFilters = { ...borrowFilters };
-                // Directly add course/fic if they were set
-                if (courseId && courseId !== 'all') borrowingActivityFilters.classId = courseId;
-                if (ficId && ficId !== 'all') borrowingActivityFilters.ficId = ficId;
+                // Directly add courseId if it was set (already handled by borrowFilters but explicit here for clarity if needed)
+                // if (courseId && courseId !== 'all') borrowingActivityFilters.classId = courseId; 
+                // REMOVED: ficId direct filter, as it's now handled via borrowFilters.class.ficId
+                // if (ficId && ficId !== 'all') borrowingActivityFilters.ficId = ficId;
                 
                 console.log("Fetching Borrowing Activity with filters:", borrowingActivityFilters);
                 data = await prisma.borrow.findMany({
                     where: borrowingActivityFilters, 
-                    include: { borrower: { select: { name: true } }, equipment: { select: { name: true } }, class: { select: { courseCode: true, section: true, semester: true, academicYear: true } } },
+                    include: { 
+                        borrower: { select: { name: true } }, 
+                        equipment: { select: { name: true } }, 
+                        class: { select: { courseCode: true, section: true, semester: true, academicYear: true } },
+                        approvedByFic: { select: { name: true } }
+                    },
                     orderBy: { requestSubmissionTime: 'desc' }
                 });
                 csvHeaders = [
                     'id', 'borrowStatus', 'requestSubmissionTime', 'requestedStartTime', 'requestedEndTime',
                     'borrower.name', 'equipment.name', 'class.courseCode', 'class.section',
-                    'class.semester', 'class.academicYear', 'checkoutTime', 'actualReturnTime'
+                    'class.semester', 'class.academicYear', 'checkoutTime', 'actualReturnTime',
+                    'approvedByFic.name'
                 ];
                 pdfHeaders = csvHeaders;
                 pdfImplemented = true; // Mark borrowing activity PDF as (basically) implemented

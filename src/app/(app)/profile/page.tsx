@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Edit, KeyRound, Users, Clock, BookUser } from 'lucide-react'; // Added BookUser
 import Image from 'next/image';
-import { cn } from '@/lib/utils';
+import { cn, transformGoogleDriveUrl } from '@/lib/utils';
 import ProfileEditForm from '@/components/profile/ProfileEditForm'; // Import the form
 import ChangePasswordForm from '@/components/profile/ChangePasswordForm'; // Import the change password form
 import Link from 'next/link'; // Add Link import
@@ -408,11 +408,17 @@ export default function ProfilePage() {
                                         return (
                                         <li key={item.id} className="flex items-center gap-2">
                                             <Image 
-                                                src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                                                src={transformGoogleDriveUrl(item.equipment.images?.[0]) || '/images/placeholder-default.png'}
                                                 alt={item.equipment.name}
                                                 width={32}
                                                 height={32}
                                                 className="rounded object-cover aspect-square"
+                                                onError={(e) => {
+                                                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                    e.currentTarget.src = '/images/placeholder-default.png';
+                                                  }
+                                                }}
                                             />
                                             <div className='flex-grow'>
                                                 <span className='font-medium'>{item.equipment.name}</span>
@@ -445,7 +451,7 @@ export default function ProfilePage() {
                   approvedStartTime: borrow.approvedStartTime 
                 }, null, 2));
                 // ---- END Logging ----
-                const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
+                const imageUrl = transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png';
                 return (
                      <Card key={borrow.id} className="overflow-hidden bg-card/60 border">
                         <CardHeader>
@@ -460,6 +466,12 @@ export default function ProfilePage() {
                                 width={40}
                                 height={40}
                                 className="rounded object-cover aspect-square"
+                                onError={(e) => {
+                                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                                    e.currentTarget.src = '/images/placeholder-default.png';
+                                  }
+                                }}
                             />
                             <div className='flex-grow'>
                                 <span className='font-medium text-base'>{borrow.equipment.name}</span>
@@ -503,12 +515,17 @@ export default function ProfilePage() {
                           className="block flex-shrink-0"
                           >
                         <Image 
-                          src={borrow.equipment.images?.[0] || '/images/placeholder-default.png'} 
+                          src={transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png'}
                           alt={borrow.equipment.name}
                           width={80} 
                           height={80} 
                           className="rounded border aspect-square object-contain bg-background p-1"
-                          onError={(e) => { (e.target as HTMLImageElement).src = '/images/placeholder-default.png'; }}
+                          onError={(e) => {
+                            if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                              e.currentTarget.srcset = '/images/placeholder-default.png';
+                              e.currentTarget.src = '/images/placeholder-default.png';
+                            }
+                          }}
                         />
                       </Link>
                       <div className="flex-grow space-y-1 text-sm">

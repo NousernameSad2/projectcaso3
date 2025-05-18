@@ -96,6 +96,9 @@ export async function GET(req: NextRequest) {
         status: true,
         createdAt: true,
         updatedAt: true,
+        studentNumber: true,
+        contactNumber: true,
+        sex: true,
       },
       orderBy: orderByClause,
     });

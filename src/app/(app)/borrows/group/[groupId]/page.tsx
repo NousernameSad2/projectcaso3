@@ -16,6 +16,7 @@ import { Prisma, Borrow, Equipment, User as PrismaUser, BorrowStatus, UserRole, 
 import Image from 'next/image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import LogDeficiencyForItemModal from '@/components/borrow/LogDeficiencyForItemModal';
+import { transformGoogleDriveUrl } from '@/lib/utils';
 
 // Helper function to format reservation type
 const formatReservationType = (type: ReservationType | null | undefined): string => {
@@ -320,9 +321,12 @@ export default function BorrowGroupDetailPage() {
                             {borrowItems.map((item) => {
                                 const getImagePath = (dbPath: string | undefined | null): string => {
                                     if (!dbPath) return '/images/placeholder-default.png';
-                                    return dbPath.startsWith('http') ? dbPath : `/${dbPath.startsWith('/') ? dbPath.substring(1) : dbPath}`;
+                                    if (dbPath.startsWith('http')) {
+                                      return transformGoogleDriveUrl(dbPath);
+                                    }
+                                    return `/${dbPath.startsWith('/') ? dbPath.substring(1) : dbPath}`;
                                 };
-                                const imageUrl = getImagePath(item.equipment.images?.[0]);
+                                const imageUrl = getImagePath(item.equipment?.images?.[0]);
                                 const isStaffOrFaculty = session?.user?.role === UserRole.STAFF || session?.user?.role === UserRole.FACULTY;
 
                                 return (
@@ -330,25 +334,30 @@ export default function BorrowGroupDetailPage() {
                                         <TableCell className="hidden md:table-cell">
                                             <Image 
                                                 src={imageUrl}
-                                                alt={item.equipment.name}
+                                                alt={item.equipment?.name || 'Equipment'}
                                                 width={64}
                                                 height={64}
                                                 className="rounded-md object-cover h-16 w-16 transition-transform group-hover:scale-105"
-                                                onError={(e) => (e.currentTarget.src = '/images/placeholder-error.png')}
+                                                onError={(e) => {
+                                                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                    e.currentTarget.src = '/images/placeholder-default.png';
+                                                  }
+                                                }}
                                             />
                                         </TableCell>
                                         <TableCell>
                                             {canViewDetails ? (
-                                                <Link href={`/equipment/${item.equipment.id}`} className="font-medium hover:underline">
-                                                    {item.equipment.name}
+                                                <Link href={`/equipment/${item.equipment?.id}`} className="font-medium hover:underline">
+                                                    {item.equipment?.name || 'Unknown Equipment'}
                                                 </Link>
                                             ) : (
                                                 <span onClick={handleRegularUserItemClick} className="font-medium cursor-default">
-                                                    {item.equipment.name}
+                                                    {item.equipment?.name || 'Unknown Equipment'}
                                                 </span>
                                             )}
                                         </TableCell>
-                                        <TableCell>{item.equipment.equipmentId || 'N/A'}</TableCell>
+                                        <TableCell>{item.equipment?.equipmentId || 'N/A'}</TableCell>
                                         <TableCell><Badge variant={item.borrowStatus === 'APPROVED' ? 'secondary' : 'outline'}>{item.borrowStatus}</Badge></TableCell>
                                         <TableCell className="text-right">
                                             {isStaffOrFaculty && (item.borrowStatus === BorrowStatus.ACTIVE || item.borrowStatus === BorrowStatus.PENDING_RETURN || item.borrowStatus === BorrowStatus.RETURNED || item.borrowStatus === BorrowStatus.COMPLETED || item.borrowStatus === BorrowStatus.OVERDUE) && (
@@ -356,7 +365,7 @@ export default function BorrowGroupDetailPage() {
                                                     variant="ghost"
                                                     size="sm"
                                                     onClick={() => {
-                                                        setCurrentDeficiencyItem({ borrowId: item.id, equipmentName: item.equipment.name });
+                                                        setCurrentDeficiencyItem({ borrowId: item.id, equipmentName: item.equipment?.name || 'Unknown Equipment' });
                                                         setIsLogDeficiencyModalOpen(true);
                                                     }}
                                                     title="Log Deficiency"

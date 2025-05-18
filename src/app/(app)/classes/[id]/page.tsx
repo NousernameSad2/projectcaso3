@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
@@ -35,6 +35,7 @@ import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { Prisma, BorrowStatus as PrismaBorrowStatus, ReservationType } from '@prisma/client';
+import { cn, transformGoogleDriveUrl } from "@/lib/utils";
 
 // Define the structure for enrolled user data within the class details
 interface EnrolledUser {
@@ -639,15 +640,21 @@ export default function ClassDetailPage() {
                                                 {groupItems.slice(0, 3).map(item => ( // Show first 3 items
                                                     (<li key={item.id} className="flex items-center gap-2 text-sm">
                                                         <Image
-                                                            src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                                            alt={item.equipment.name}
+                                                            src={transformGoogleDriveUrl(item.equipment?.images?.[0]) || '/images/placeholder-default.png'}
+                                                            alt={item.equipment?.name || 'Equipment'}
                                                             width={24}
                                                             height={24}
                                                             className="rounded object-cover aspect-square"
+                                                            onError={(e) => {
+                                                              if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                                e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                                e.currentTarget.src = '/images/placeholder-default.png';
+                                                              }
+                                                            }}
                                                         />
                                                         <div className="flex-grow">
-                                                            <span className="font-medium">{item.equipment.name}</span>
-                                                            {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                                            <span className="font-medium">{item.equipment?.name || 'Unknown Equipment'}</span>
+                                                            {item.equipment?.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment?.equipmentId})</span>}
                                                         </div>
                                                     </li>)
                                                 ))}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { toast } from "sonner";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { DataTable } from "@/components/ui/data-table";
@@ -19,6 +19,7 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { format, isValid } from 'date-fns';
+import { cn, transformGoogleDriveUrl } from "@/lib/utils";
 
 // --- Type Definitions ---
 type GroupBorrowWithDetails = Borrow & {
@@ -476,14 +477,20 @@ export default function BorrowRequestsPage() {
                           {groupItems.map(item => (
                               <li key={item.id} className='flex items-center gap-2'>
                                  <Image 
-                                     src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                     alt={item.equipment.name}
+                                     src={transformGoogleDriveUrl(item.equipment?.images?.[0]) || '/images/placeholder-default.png'}
+                                     alt={item.equipment?.name || 'Equipment'}
                                      width={24} height={24} 
                                      className="rounded object-contain aspect-square bg-background border"
+                                     onError={(e) => {
+                                       if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                         e.currentTarget.srcset = '/images/placeholder-default.png';
+                                         e.currentTarget.src = '/images/placeholder-default.png';
+                                       }
+                                     }}
                                  />
-                                 <span className='flex-grow truncate' title={`${item.equipment.name} (${item.equipment.equipmentId ?? 'N/A'})`}>
-                                    {item.equipment.name} 
-                                    <span className="text-muted-foreground/80 text-[10px] ml-1">({item.equipment.equipmentId ?? 'N/A'})</span>
+                                 <span className='flex-grow truncate' title={`${item.equipment?.name || 'Unknown'} (${item.equipment?.equipmentId ?? 'N/A'})`}>
+                                    {item.equipment?.name || 'Unknown Equipment'}
+                                    <span className="text-muted-foreground/80 text-[10px] ml-1">({item.equipment?.equipmentId ?? 'N/A'})</span>
                                  </span>
                                  <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="capitalize text-[10px] scale-90 whitespace-nowrap">
                                       {formatBorrowStatus(item.borrowStatus)}

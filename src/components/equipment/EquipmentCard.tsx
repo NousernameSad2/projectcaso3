@@ -3,14 +3,23 @@
 import React, { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Equipment, EquipmentStatus as PrismaEquipmentStatus } from '@prisma/client'; // Renamed to avoid conflict
+import { Equipment, EquipmentStatus as PrismaEquipmentStatus, EquipmentCategory } from '@prisma/client'; // Renamed to avoid conflict
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { Eye } from 'lucide-react';
+import { cn, transformGoogleDriveUrl } from '@/lib/utils';
+import { Eye, ArrowRight, CalendarDays, CheckCircle, Info, Package, Slash, Wrench, XCircle } from 'lucide-react';
+import { useSession } from 'next-auth/react';
+import { UserRole } from '@prisma/client';
+import { 
+    Tooltip, 
+    TooltipContent, 
+    TooltipProvider, 
+    TooltipTrigger 
+} from "@/components/ui/tooltip";
+import ReservationModal from "./ReservationModal";
 // If you use useRouter, uncomment the import:
 // import { useRouter } from 'next/navigation';
 
@@ -61,7 +70,8 @@ export default function EquipmentCard({
   canSelect,
   canManageEquipment,
 }: EquipmentCardProps) {
-  // const router = useRouter(); // Uncomment if using router.push
+  const { data: session } = useSession();
+  const canReserve = equipment.status !== EquipmentStatus.OUT_OF_COMMISSION && equipment.status !== EquipmentStatus.DEFECTIVE;
 
   const { displayStatus, statusLabel, statusVariant } = useMemo(() => {
     const now = new Date();
@@ -193,41 +203,13 @@ export default function EquipmentCard({
     equipment.status // Original DB status for comparison
   ]);
 
-  const canReserve = useMemo(() => {
-    const currentlyAvailableUnits = equipment.stockCount - equipment.activeBorrowCount;
-
-    if (isDateFilterActive) {
-      return typeof equipment.availableUnitsInFilterRange === 'number' && equipment.availableUnitsInFilterRange > 0;
-    }
-
-    // Check if item is in a state that generally prevents reservation
-    if (
-      displayStatus === EquipmentStatus.UNDER_MAINTENANCE ||
-      displayStatus === EquipmentStatus.DEFECTIVE ||
-      displayStatus === EquipmentStatus.OUT_OF_COMMISSION
-    ) {
-      return false;
-    }
-    
-    return currentlyAvailableUnits > 0; // Can reserve if at least one unit is actually available now
-
-  }, [
-    isDateFilterActive, 
-    equipment.availableUnitsInFilterRange, 
-    displayStatus, 
-    equipment.stockCount, 
-    equipment.activeBorrowCount
-  ]);
-
   const handleCardClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (canSelect && !(e.target as HTMLElement).closest('.interactive-element')) {
       onSelectToggle(equipment.id);
     }
   };
 
-  const imageUrl = equipment.images && equipment.images.length > 0 
-    ? equipment.images[0] 
-    : '/images/placeholder-default.png'; // Adjust your placeholder path
+  const imageUrl = transformGoogleDriveUrl(equipment.images?.[0]) || "/images/placeholder-default.png";
 
   return (
     <Card 
@@ -241,14 +223,20 @@ export default function EquipmentCard({
       <CardHeader className="p-0 relative">
         {canManageEquipment ? (
           <Link href={`/equipment/${equipment.id}`} className="aspect-video w-full relative block group interactive-element" aria-label={`View details for ${equipment.name}`}>
-            <Image
-              src={imageUrl}
-              alt={equipment.name}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              className="object-cover transition-transform group-hover:scale-105"
-              priority={false}
-            />
+            <div className="relative aspect-square w-full overflow-hidden">
+              <Image
+                src={imageUrl}
+                alt={equipment.name}
+                fill
+                className="object-cover transition-transform duration-300 ease-in-out group-hover:scale-105"
+                onError={(e) => {
+                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                    e.currentTarget.src = '/images/placeholder-default.png';
+                  }
+                }}
+              />
+            </div>
           </Link>
         ) : (
           <div className="aspect-video w-full relative block">

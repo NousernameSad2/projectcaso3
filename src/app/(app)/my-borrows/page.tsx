@@ -1,19 +1,20 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useCallback } from 'react';
 import { toast } from "sonner";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
-import { format, isValid, formatDistanceStrict } from 'date-fns';
+import { format, isValid, formatDistanceStrict, differenceInHours, isPast, isToday, isFuture, addDays } from 'date-fns';
 import Link from 'next/link';
-import { Users, List } from 'lucide-react';
+import { Users, List, AlertCircle, Info, CheckCircle, XCircle, Package, CalendarDays, Clock, ExternalLink, MessageSquare } from 'lucide-react';
 // Import types
 import { Borrow, Equipment, Class, BorrowStatus, ReservationType } from '@prisma/client';
 // Import the new modal
 import ReportDeficiencyModal from '@/components/deficiencies/ReportDeficiencyModal';
+import { cn, transformGoogleDriveUrl } from "@/lib/utils";
 
 // Define the shape of the data expected from the user borrows endpoint
 // Make sure this includes fields needed by the modal (id, borrowGroupId, equipment details)
@@ -209,10 +210,16 @@ export default function MyBorrowsPage() {
           {items.map(item => (
               <li key={item.id} className="flex items-start gap-3 border-b pb-3 last:border-b-0">
                   <Image 
-                      src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
+                      src={transformGoogleDriveUrl(item.equipment.images?.[0]) || '/images/placeholder-default.png'}
                       alt={item.equipment.name}
                       width={48} height={48}
                       className="rounded object-cover aspect-square mt-1"
+                      onError={(e) => {
+                        if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                          e.currentTarget.srcset = '/images/placeholder-default.png';
+                          e.currentTarget.src = '/images/placeholder-default.png';
+                        }
+                      }}
                   />
                   <div className="flex-grow">
                       <div className="flex justify-between items-center mb-1">
@@ -312,7 +319,7 @@ export default function MyBorrowsPage() {
                  <h2 className="text-xl font-semibold text-white border-b pb-2">Individual Borrows</h2>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
                      {individualBorrows.map((borrow) => {
-                         const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
+                         const imageUrl = transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png';
                          // Disable button if submitting this item OR any group item (simplification)
                          const isSubmittingThisItem = isSubmittingReturn; 
                          return (
@@ -324,6 +331,12 @@ export default function MyBorrowsPage() {
                                          fill
                                          className="object-cover"
                                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                                         onError={(e) => {
+                                           if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                             e.currentTarget.srcset = '/images/placeholder-default.png';
+                                             e.currentTarget.src = '/images/placeholder-default.png';
+                                           }
+                                         }}
                                      />
                                      <Badge variant={getStatusVariant(borrow.borrowStatus)} className="absolute top-2 right-2 capitalize text-xs">
                                          {borrow.borrowStatus.toLowerCase().replace('_', ' ')}

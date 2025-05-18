@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { ArrowLeft, Edit, Trash2, Loader2, CalendarDays, AlertCircle, Wrench, History, PackagePlus, ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, MessageSquare, User as UserIcon, School, FilePenLine } from 'lucide-react';
-import { cn } from "@/lib/utils";
+import { cn, transformGoogleDriveUrl } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -792,14 +792,17 @@ export default function EquipmentDetailPage() {
               <CardContent className="p-0">
                 <div className="relative aspect-square w-full">
                   <Image
-                    src={equipment.images?.[0] || '/images/placeholder-default.png'}
+                    src={transformGoogleDriveUrl(equipment.images?.[0]) || '/images/placeholder-default.png'}
                     alt={equipment.name}
                     fill
                     className="object-cover"
                     priority
                     onError={(e) => {
-                      e.currentTarget.srcset = '/images/placeholder-default.png';
-                      e.currentTarget.src = '/images/placeholder-default.png';
+                      // If the (potentially transformed) URL fails, set to placeholder
+                      if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                        e.currentTarget.srcset = '/images/placeholder-default.png';
+                        e.currentTarget.src = '/images/placeholder-default.png';
+                      }
                     }}
                   />
                 </div>
@@ -825,23 +828,30 @@ export default function EquipmentDetailPage() {
               {canManage && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="destructive" className="w-full justify-start gap-2" disabled={isDeleting}>
+                    <Button variant="destructive" className="w-full justify-start gap-2" disabled={isDeleting || !equipment}>
                       {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                      Delete Equipment
+                      {equipment?.status === EquipmentStatus.ARCHIVED ? "Permanently Delete Equipment" : "Archive Equipment"}
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete the equipment
-                        record and potentially related borrow history.
+                        {equipment?.status === EquipmentStatus.ARCHIVED
+                          ? "This action cannot be undone. This will permanently delete the equipment record and all related data, including borrow history and maintenance logs."
+                          : "This action will archive the equipment. It can be restored later if needed, but will not be available for borrowing."}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteConfirm} disabled={isDeleting} className="bg-destructive hover:bg-destructive/90">
-                        {isDeleting ? "Deleting..." : "Yes, delete it"}
+                      <AlertDialogAction 
+                        onClick={handleDeleteConfirm} 
+                        disabled={isDeleting} 
+                        className="bg-destructive hover:bg-destructive/90"
+                      >
+                        {isDeleting 
+                          ? (equipment?.status === EquipmentStatus.ARCHIVED ? "Deleting..." : "Archiving...") 
+                          : (equipment?.status === EquipmentStatus.ARCHIVED ? "Yes, permanently delete it" : "Yes, archive it")}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

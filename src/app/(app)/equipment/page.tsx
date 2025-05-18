@@ -54,9 +54,6 @@ export default function EquipmentPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<string>('AVAILABLE'); 
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const itemsPerPage = 12;
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
   const [appliedDateRange, setAppliedDateRange] = useState<DateRange | undefined>(undefined);
@@ -69,13 +66,11 @@ export default function EquipmentPage() {
   const [isBulkStatusModalOpen, setIsBulkStatusModalOpen] = useState(false);
 
   // Fetch equipment data from API - Wrapped in useCallback
-  const fetchEquipment = useCallback(async (currentPage = page, search = searchTerm, category = selectedCategory, status = selectedStatus, dates = appliedDateRange) => {
+  const fetchEquipment = useCallback(async (search = searchTerm, category = selectedCategory, status = selectedStatus, dates = appliedDateRange) => {
     setIsLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.set('page', currentPage.toString());
-      params.set('limit', itemsPerPage.toString());
       if (search) params.set('search', search);
       if (category && category !== 'ALL') params.set('category', category);
       if (status && status !== 'ALL') params.set('status', status);
@@ -89,68 +84,39 @@ export default function EquipmentPage() {
       const data = await response.json();
       // Expect EquipmentWithCount from API
       setEquipmentList(data.items || []);
-      setTotalPages(data.totalPages || 1);
     } catch (err: any) {
       console.error("Error fetching equipment:", err);
       setError(err.message || "An unknown error occurred");
       setEquipmentList([]);
-      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
-  // Dependencies for useCallback: Include values from outside the function that it relies on and might change.
-  // State setters (setIsLoading, setError, etc.) and imported functions (format) are generally stable.
-  // We need page, searchTerm, selectedCategory, selectedStatus, appliedDateRange from the outer scope
-  // *if* they were not passed as arguments (but they are, so they don't need to be dependencies here).
-  // itemsPerPage is used directly and comes from outer scope.
-  }, [itemsPerPage, setEquipmentList, setError, setIsLoading, setTotalPages]); // Added dependency array for useCallback
+  }, [setEquipmentList, setError, setIsLoading, searchTerm, selectedCategory, selectedStatus, appliedDateRange]);
 
   // Initial fetch and refetch on filter changes
   useEffect(() => {
-    // Fetch page 1 whenever filters change
-    fetchEquipment(1, searchTerm, selectedCategory, selectedStatus, appliedDateRange);
-  // fetchEquipment is now stable due to useCallback
+    fetchEquipment(searchTerm, selectedCategory, selectedStatus, appliedDateRange);
   }, [searchTerm, selectedCategory, selectedStatus, appliedDateRange, fetchEquipment]);
-
-  // Fetch equipment for pagination changes
-  useEffect(() => {
-    // Fetch the current page when page changes (or filters change which might affect total pages etc.)
-    fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange);
-  // fetchEquipment is now stable due to useCallback
-  }, [page, searchTerm, selectedCategory, selectedStatus, appliedDateRange, fetchEquipment]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
-    setPage(1); 
   };
 
   const handleCategoryChange = (value: string) => {
     setSelectedCategory(value);
-    setPage(1); 
   };
 
   const handleStatusChange = (value: string) => {
     setSelectedStatus(value);
-    setPage(1); 
   };
 
   const handleApplyDateFilter = () => {
     setAppliedDateRange(dateRange);
-    setPage(1); 
   };
 
   const handleClearDateFilter = () => {
     setDateRange(undefined);
     setAppliedDateRange(undefined);
-    setPage(1); 
-  };
-
-  const handlePreviousPage = () => {
-    setPage((prev) => Math.max(prev - 1, 1));
-  };
-
-  const handleNextPage = () => {
-    setPage((prev) => Math.min(prev + 1, totalPages));
   };
 
   // --- Toggle selection handler ---
@@ -179,7 +145,6 @@ export default function EquipmentPage() {
     setIsReservationModalOpen(false);
     setSelectedEquipmentForReservation(null);
     clearSelection(); // Clear bulk selection if single was reserved
-    // fetchEquipment(); // Optionally re-fetch
   };
 
   // --- Handlers for Bulk Modals ---
@@ -192,7 +157,7 @@ export default function EquipmentPage() {
      clearSelection(); 
      toast.success('Items checked out successfully!'); 
      setIsBulkCheckoutModalOpen(false);
-     fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange); // Refetch data
+     fetchEquipment(); // Refetch data
   };
 
   // Handler for opening bulk reservation modal - RE-ADD
@@ -206,9 +171,8 @@ export default function EquipmentPage() {
     console.log("Bulk reservation successful, group ID:", borrowGroupId);
     clearSelection();
     toast.success('Bulk reservation request submitted successfully!');
-    // setIsBulkReservationModalOpen(false); // REMOVE state setting
     // Optionally refetch data or navigate
-    // fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange);
+    // fetchEquipment();
   };
 
   const handleOpenBulkStatus = () => {
@@ -220,7 +184,7 @@ export default function EquipmentPage() {
      clearSelection();
      toast.success('Equipment statuses updated successfully!');
      setIsBulkStatusModalOpen(false);
-     fetchEquipment(page, searchTerm, selectedCategory, selectedStatus, appliedDateRange); // Refetch data
+     fetchEquipment(); // Refetch data
   };
 
   // Check user permissions and authentication status
@@ -398,30 +362,6 @@ export default function EquipmentPage() {
               canManageEquipment={canManageEquipment}
             />
           ))}
-        </div>
-      )}
-      {/* Pagination Controls */}
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center mt-8 space-x-2">
-          <Button
-            onClick={handlePreviousPage}
-            disabled={page <= 1 || isLoading}
-            variant="outline"
-            size="sm"
-          >
-            Previous
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {page} of {totalPages}
-          </span>
-          <Button
-            onClick={handleNextPage}
-            disabled={page >= totalPages || isLoading}
-            variant="outline"
-            size="sm"
-          >
-            Next
-          </Button>
         </div>
       )}
       {/* Modals (Temporarily commented out to fix type errors) */}

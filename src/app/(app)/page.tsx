@@ -42,7 +42,7 @@ import {
 import { ReservationType } from '@prisma/client'; // <<< Import ReservationType
 import { format, isValid, differenceInHours } from 'date-fns'; // For date formatting and isValid
 import { toast } from 'sonner'; // Import toast
-import { cn } from '@/lib/utils'; // Added
+import { cn, transformGoogleDriveUrl } from '@/lib/utils'; // Added
 import Image from 'next/image'; // Added
 import { Badge } from "@/components/ui/badge"; // Added
 import { Separator } from "@/components/ui/separator"; // Added
@@ -149,42 +149,43 @@ const formatReservationType = (type: ReservationType | null | undefined): string
 // Placeholder Panel Component (Can be moved to separate file later)
 function StaffActionPanel() {
   const { data: session } = useSession();
-  const queryClient = useQueryClient(); // <<< ADDED: Get queryClient instance
-  const router = useRouter(); // <<< ADDED: Get router instance
+  const queryClient = useQueryClient();
+  const router = useRouter();
   
-  // State for Reservations (Pending, Approved & Active)
   const [reservations, setReservations] = useState<PendingReservation[]>([]);
   const [isLoadingReservations, setIsLoadingReservations] = useState(true);
   const [reservationError, setReservationError] = useState<string | null>(null);
   
-  // State for Pending Returns
   const [returns, setReturns] = useState<PendingReservation[]>([]);
   const [isLoadingReturns, setIsLoadingReturns] = useState(true);
   const [returnError, setReturnError] = useState<string | null>(null);
   
-  const [processingId, setProcessingId] = useState<string | null>(null); // For individual actions
-  const [processingGroupId, setProcessingGroupId] = useState<string | null>(null); // For group actions
+  const [processingId, setProcessingId] = useState<string | null>(null);
+  const [processingGroupId, setProcessingGroupId] = useState<string | null>(null);
   const [editingReservation, setEditingReservation] = useState<PendingReservation | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // State for Rejection Confirmation Dialog
   const [isRejectConfirmOpen, setIsRejectConfirmOpen] = useState(false);
   const [rejectTargetGroupId, setRejectTargetGroupId] = useState<string | null>(null);
 
-  // --- START: State for Approved Rejection Confirmation Dialog ---
   const [isRejectApprovedConfirmOpen, setIsRejectApprovedConfirmOpen] = useState(false);
   const [rejectApprovedTargetGroupId, setRejectApprovedTargetGroupId] = useState<string | null>(null);
-  const [isRejectingApprovedGroupId, setIsRejectingApprovedGroupId] = useState<string | null>(null); // For loading state
-  // --- END: State for Approved Rejection Confirmation Dialog ---
+  const [isRejectingApprovedGroupId, setIsRejectingApprovedGroupId] = useState<string | null>(null);
 
-  // Fetching Functions (fetchReservations, fetchReturns)
+  // State for expanding sections
+  const [pendingExpanded, setPendingExpanded] = useState(false);
+  const [approvedExpanded, setApprovedExpanded] = useState(false);
+  const [returnsExpanded, setReturnsExpanded] = useState(false);
+  const [activeExpanded, setActiveExpanded] = useState(false);
+
+  const INITIAL_ITEMS_LIMIT = 3; // Number of items to show initially
+
   const fetchReservations = useCallback(async () => {
     if (!session?.accessToken) return;
     setIsLoadingReservations(true);
     setReservationError(null);
     try {
-      // Fetch PENDING, APPROVED, and ACTIVE statuses
-      const response = await fetch('/api/borrows?status=PENDING&status=APPROVED&status=ACTIVE', {
+      const response = await fetch('/api/borrows?status=PENDING&status=APPROVED&status=ACTIVE&status=OVERDUE', {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       });
       if (!response.ok) {
@@ -230,8 +231,7 @@ function StaffActionPanel() {
     }
   }, [session?.accessToken, fetchReservations, fetchReturns]);
 
-  // --- Action Handlers --- //
-  // Approve/Reject Handler (Individual) - Keep if needed for specific items within group?
+  // Action Handlers (handleUpdateStatus, handleCheckout, etc. - unchanged)
   const handleUpdateStatus = async (borrowId: string, status: PrismaBorrowStatus) => {
      if (!session?.accessToken) { toast.error("Auth error."); return; }
      setProcessingId(borrowId);
@@ -252,7 +252,6 @@ function StaffActionPanel() {
         setProcessingId(null);
      }
   };
-  // Checkout Handler (Individual)
   const handleCheckout = async (borrowId: string) => {
      if (!session?.accessToken) { toast.error("Auth error."); return; }
      setProcessingId(borrowId);
@@ -272,7 +271,6 @@ function StaffActionPanel() {
         setProcessingId(null);
      }
   };
-  // Confirm Return Handler (Individual)
   const handleConfirmReturn = async (borrowId: string) => {
      if (!session?.accessToken) { toast.error("Auth error."); return; }
      setProcessingId(borrowId);
@@ -297,7 +295,6 @@ function StaffActionPanel() {
      }
   };
 
-  // Group Action Handlers (Approve/Reject/Checkout/Return)
   const handleApproveGroup = async (borrowGroupId: string | null | undefined) => {
     if (!borrowGroupId || processingGroupId || !session?.accessToken) return;
     setProcessingGroupId(borrowGroupId);
@@ -398,12 +395,10 @@ function StaffActionPanel() {
       }
   };
   
-  // Bulk Confirm Return Handler (Staff Dashboard)
   const handleConfirmReturnGroup = async (borrowGroupId: string | null | undefined) => {
     if (!borrowGroupId || processingGroupId || !session?.accessToken) return;
     setProcessingGroupId(borrowGroupId);
     try {
-        // console.log(`[Confirm Return Group Frontend] Sending POST to /api/borrows/bulk/return for group ${borrowGroupId}`); // Updated Log
         const response = await fetch(`/api/borrows/bulk/return`, {
             method: 'POST', // Changed to POST
             headers: {
@@ -413,8 +408,6 @@ function StaffActionPanel() {
             body: JSON.stringify({ borrowGroupId }) // Send groupId in body
         });
         const result = await response.json();
-        // console.log(`[Confirm Return Group Frontend] API Response Status: ${response.status}`); // Kept Log 
-        // console.log(`[Confirm Return Group Frontend] API Response Body:`, result); // Kept Log
 
         if (!response.ok) {
             // Use error field from result if available
@@ -438,14 +431,12 @@ function StaffActionPanel() {
         }
 
     } catch (err: any) {
-        // console.error("[Confirm Return Group Frontend] Confirmation error caught:", err); // Kept Log
         toast.error(`Return confirmation failed: ${err.message}`);
     } finally {
         setProcessingGroupId(null);
     }
   };
 
-  // --- START: Handler for Rejecting Approved Group ---
   const performRejectApprovedGroup = async (borrowGroupId: string | null | undefined) => {
     if (!borrowGroupId || isRejectingApprovedGroupId || !session?.accessToken) return;
 
@@ -474,7 +465,6 @@ function StaffActionPanel() {
       setRejectApprovedTargetGroupId(null); // Clear target
     }
   };
-  // --- END: Handler for Rejecting Approved Group ---
 
   // --- Grouping Logic --- //
   const groupedPendingReservations = useMemo(() => {
@@ -520,11 +510,13 @@ function StaffActionPanel() {
   // Group Active Checkouts
   const groupedActiveCheckouts = useMemo(() => {
     console.log("[Grouping Active] Starting...");
-    const active = reservations.filter(res => res.borrowStatus === PrismaBorrowStatus.ACTIVE);
+    const activeAndOverdue = reservations.filter(
+      res => res.borrowStatus === PrismaBorrowStatus.ACTIVE || res.borrowStatus === PrismaBorrowStatus.OVERDUE
+    );
     const groups: Record<string, PendingReservation[]> = {};
-    active.forEach(res => {
+    activeAndOverdue.forEach(res => {
         const groupId = res.borrowGroupId || `individual-${res.id}`;
-        console.log(`[Grouping Active] Item ${res.id}, Original groupId: ${res.borrowGroupId}, Assigned Key: ${groupId}`);
+        console.log(`[Grouping Active] Item ${res.id}, Original groupId: ${res.borrowGroupId}, Assigned Key: ${groupId}, Status: ${res.borrowStatus}`);
         if (!groups[groupId]) {
             groups[groupId] = [];
         }
@@ -585,29 +577,39 @@ function StaffActionPanel() {
   // --- END: Handler to open REJECT APPROVED confirmation dialog ---
 
   // --- Rendering Logic --- //
-  if (isLoadingReservations) {
-    return <div className="p-4 text-center"><LoadingSpinner /> Loading reservations...</div>;
+  if (isLoadingReservations) { // Covers initial load for reservations part of the dashboard
+    return <div className="p-4 text-center"><LoadingSpinner /> Loading dashboard data...</div>;
   }
-  if (reservationError) {
-     return <div className="p-4 text-destructive">Error loading reservations: {reservationError}</div>;
+  // Note: isLoadingReturns handles its own section's loading state
+
+  if (reservationError) { // Main error for reservation-based sections
+     return <div className="p-4 text-destructive">Error loading reservation data: {reservationError}</div>;
   }
+  // Note: returnError handles its own section's error state
+
+  const itemsToDisplayPending = pendingExpanded ? groupedPendingReservations : groupedPendingReservations.slice(0, INITIAL_ITEMS_LIMIT);
+  const itemsToDisplayApproved = approvedExpanded ? groupedApprovedReservations : groupedApprovedReservations.slice(0, INITIAL_ITEMS_LIMIT);
+  const itemsToDisplayReturns = returnsExpanded ? groupedPendingReturns : groupedPendingReturns.slice(0, INITIAL_ITEMS_LIMIT);
+  const itemsToDisplayActive = activeExpanded ? groupedActiveCheckouts : groupedActiveCheckouts.slice(0, INITIAL_ITEMS_LIMIT);
 
   return (
-      <div className="space-y-6">
-          <h3 className="text-lg font-semibold text-foreground flex items-center">
+    <>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        {/* Panel 1: Pending Reservations */}
+        <div className="bg-card border border-border/30 rounded-lg shadow-sm p-4 flex flex-col">
+          <h3 className="text-lg font-semibold text-foreground flex items-center mb-3">
               <ListChecks className="mr-2 h-5 w-5 text-yellow-500" />
               Pending Reservations
           </h3>
           {groupedPendingReservations.length === 0 ? (
               <p className="text-muted-foreground italic text-sm">No pending reservations.</p>
           ) : (
-              groupedPendingReservations.map(([groupId, items]) => {
+            <div className="flex-grow space-y-3"> {/* Use flex-grow to push button down if content is short */}
+              {itemsToDisplayPending.map(([groupId, items]) => {
                   const isIndividual = groupId.startsWith('individual-');
-                  const representativeItem = items[0]; // Use first item for group details
+                  const representativeItem = items[0]; 
                   const isProcessingThisGroup = processingGroupId === (isIndividual ? null : representativeItem.borrowGroupId);
                   const href = isIndividual ? `/equipment/${representativeItem.equipmentId}` : `/borrows/group/${representativeItem.borrowGroupId}`;
-
-                  // --- START: Calculate request timing ---
                   let isLateRequest = false;
                   let hoursDifference: number | null = null;
                   try {
@@ -619,17 +621,10 @@ function StaffActionPanel() {
                               isLateRequest = hoursDifference < 48;
                           }
                       }
-                  } catch (e) {
-                      console.error("Error calculating date difference:", e);
-                  }
-                  // --- END: Calculate request timing ---
+                  } catch (e) { console.error("Error calculating date difference:", e); }
 
                   return (
-                      <Link
-                          href={href}
-                          key={groupId}
-                          className="block hover:bg-muted/10 transition-colors rounded-lg"
-                          >
+                      <Link href={href} key={groupId} className="block hover:bg-muted/10 transition-colors rounded-lg">
                           <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup ? 'opacity-50' : ''}`}>
                               <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                   <div>
@@ -637,49 +632,18 @@ function StaffActionPanel() {
                                           {isIndividual ? <Package className="h-4 w-4" /> : <Users className="h-4 w-4" />}
                                           <span>{representativeItem.borrower.name ?? 'Borrower'}</span>
                                           {!isIndividual && <span className="text-xs font-normal text-muted-foreground">({items.length} items)</span>}
-                                          {/* --- START: Render Request Timing Badge --- */}
-                                          {hoursDifference !== null && (
-                                              <Badge variant={isLateRequest ? "destructive" : "secondary"} className="ml-2 text-xs">
-                                                  {isLateRequest ? "Late Request" : "Regular Request"}
-                                              </Badge>
-                                          )}
-                                          {/* --- END: Render Request Timing Badge --- */}
-                                          {/* --- START: Render Reservation Type Badge --- */}
-                                          {representativeItem.reservationType && (
-                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
-                                                  {formatReservationType(representativeItem.reservationType)}
-                                              </Badge>
-                                          )}
-                                          {/* --- END: Render Reservation Type Badge --- */}
+                                          {hoursDifference !== null && (<Badge variant={isLateRequest ? "destructive" : "secondary"} className="ml-2 text-xs">{isLateRequest ? "Late Request" : "Regular Request"}</Badge>)}
+                                          {representativeItem.reservationType && (<Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">{formatReservationType(representativeItem.reservationType)}</Badge>)}
                                       </CardTitle>
-                                      <CardDescription className="text-xs mt-1">
-                                          Requested: {formatDateSafe(representativeItem.requestSubmissionTime, 'MMM d, yyyy h:mm a')}
-                                      </CardDescription>
+                                      <CardDescription className="text-xs mt-1">Requested: {formatDateSafe(representativeItem.requestSubmissionTime, 'MMM d, yyyy h:mm a')}</CardDescription>
                                   </div>
-                                  {/* Group Actions */}
                                   {!isIndividual && (
                                       <div className="flex gap-2">
-                                          <Button
-                                              size="sm"
-                                              variant="outline"
-                                              className="text-green-500 border-green-500/50 hover:bg-green-500/10 hover:text-green-600"
-                                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleApproveGroup(representativeItem.borrowGroupId); }}
-                                              disabled={isProcessingThisGroup}
-                                              title="Approve Group"
-                                          >
-                                              {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                                              <span className="ml-1 hidden sm:inline">Approve</span>
+                                          <Button size="sm" variant="outline" className="text-green-500 border-green-500/50 hover:bg-green-500/10 hover:text-green-600" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleApproveGroup(representativeItem.borrowGroupId); }} disabled={isProcessingThisGroup} title="Approve Group">
+                                              {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} <span className="ml-1 hidden sm:inline">Approve</span>
                                           </Button>
-                                          <Button
-                                              size="sm"
-                                              variant="outline"
-                                              className="text-red-500 border-red-500/50 hover:bg-red-500/10 hover:text-red-600"
-                                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRejectConfirmation(representativeItem.borrowGroupId!); }}
-                                              disabled={isProcessingThisGroup}
-                                              title="Reject Group"
-                                          >
-                                              {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                                              <span className="ml-1 hidden sm:inline">Reject</span>
+                                          <Button size="sm" variant="outline" className="text-red-500 border-red-500/50 hover:bg-red-500/10 hover:text-red-600" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRejectConfirmation(representativeItem.borrowGroupId!); }} disabled={isProcessingThisGroup} title="Reject Group">
+                                              {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} <span className="ml-1 hidden sm:inline">Reject</span>
                                           </Button>
                                       </div>
                                   )}
@@ -688,40 +652,30 @@ function StaffActionPanel() {
                                   <ul className="divide-y divide-border">
                                       {items.map(item => (
                                           <li key={item.id} className="flex items-center justify-between p-3 text-sm">
-                                              <div className="flex items-center gap-2">
-                                                  <HardDrive className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                  <span className="font-medium">{item.equipment.name}</span>
-                                                  <span className="text-xs text-muted-foreground">({item.equipment.equipmentId})</span>
+                                              <div className="flex items-center gap-3">
+                                                  <Image 
+                                                    src={transformGoogleDriveUrl(item.equipment?.images?.[0]) || '/images/placeholder-default.png'} 
+                                                    alt={item.equipment?.name || 'Equipment'} 
+                                                    width={40} 
+                                                    height={40} 
+                                                    className="rounded aspect-square object-cover" 
+                                                    onError={(e) => {
+                                                      if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                        e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                        e.currentTarget.src = '/images/placeholder-default.png';
+                                                      }
+                                                    }}
+                                                  />
+                                                  <div><span className="font-medium">{item.equipment?.name || 'Unknown Equipment'}</span> <span className="text-xs text-muted-foreground ml-1">({item.equipment?.equipmentId || 'N/A'})</span></div>
                                               </div>
                                               <div className="text-xs text-muted-foreground text-right space-y-1">
                                                   <div>Req: {formatDateSafe(item.requestedStartTime)} - {formatDateSafe(item.requestedEndTime)}</div>
                                                   {item.class && <div className="text-[11px]">Class: {item.class.courseCode} S{item.class.section}</div>}
                                               </div>
-
-                                              {/* Individual Actions (Only show if isIndividual) */}
                                               {isIndividual && (
                                                   <div className="flex gap-1">
-                                                       {/* Existing individual approve/reject buttons */}
-                                                      <Button 
-                                                          size="sm" 
-                                                          variant="ghost" 
-                                                          className="text-green-500 hover:bg-green-500/10"
-                                                          onClick={(e) => {e.preventDefault(); e.stopPropagation(); handleUpdateStatus(item.id, PrismaBorrowStatus.APPROVED)}}
-                                                          disabled={processingId === item.id}
-                                                          title="Approve Item"
-                                                       >
-                                                          {processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}
-                                                       </Button>
-                                                       <Button
-                                                          size="sm"
-                                                          variant="ghost" 
-                                                          className="text-red-500 hover:bg-red-500/10"
-                                                          onClick={(e) => {e.preventDefault(); e.stopPropagation(); handleUpdateStatus(item.id, session?.user?.role === UserRole.FACULTY ? PrismaBorrowStatus.REJECTED_FIC : PrismaBorrowStatus.REJECTED_STAFF)}}
-                                                          disabled={processingId === item.id}
-                                                          title="Reject Item"
-                                                       >
-                                                          {processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}
-                                                       </Button>
+                                                      <Button size="sm" variant="ghost" className="text-green-500 hover:bg-green-500/10" onClick={(e) => {e.preventDefault(); e.stopPropagation(); handleUpdateStatus(item.id, PrismaBorrowStatus.APPROVED)}} disabled={processingId === item.id} title="Approve Item">{processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />}</Button>
+                                                      <Button size="sm" variant="ghost" className="text-red-500 hover:bg-red-500/10" onClick={(e) => {e.preventDefault(); e.stopPropagation(); handleUpdateStatus(item.id, session?.user?.role === UserRole.FACULTY ? PrismaBorrowStatus.REJECTED_FIC : PrismaBorrowStatus.REJECTED_STAFF)}} disabled={processingId === item.id} title="Reject Item">{processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertCircle className="h-4 w-4" />}</Button>
                                                   </div>
                                               )}
                                           </li>
@@ -731,32 +685,36 @@ function StaffActionPanel() {
                           </Card>
                       </Link>
                   );
-              })
+              })}
+            </div>
           )}
-          {/* Section for Approved (Awaiting Checkout) - Simplified */}
-          <Separator />
-          <h3 className="text-lg font-semibold text-foreground flex items-center">
+          {groupedPendingReservations.length > INITIAL_ITEMS_LIMIT && (
+            <div className="mt-auto pt-2 text-center"> {/* mt-auto to push to bottom of flex container */}
+              <Button variant="link" onClick={() => setPendingExpanded(!pendingExpanded)} className="text-sm">
+                {pendingExpanded ? 'View Less' : 'View More'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 2: Approved (Awaiting Checkout) */}
+        <div className="bg-card border border-border/30 rounded-lg shadow-sm p-4 flex flex-col">
+          <h3 className="text-lg font-semibold text-foreground flex items-center mb-3">
              <PackageCheck className="mr-2 h-5 w-5 text-blue-500" /> 
              Approved (Awaiting Checkout)
          </h3>
           {groupedApprovedReservations.length === 0 ? (
               <p className="text-muted-foreground italic text-sm">No reservations awaiting checkout.</p>
           ) : (
-              <div className="space-y-3">
-                  {groupedApprovedReservations.map(([groupId, items]) => {
+            <div className="flex-grow space-y-3">
+                  {itemsToDisplayApproved.map(([groupId, items]) => {
                       const isIndividual = groupId.startsWith('individual-');
                       const representativeItem = items[0]; 
-                      // Use specific loading state for rejecting approved
                       const isProcessingThisGroup = processingGroupId === (isIndividual ? null : representativeItem.borrowGroupId);
                       const isRejectingThisApprovedGroup = isRejectingApprovedGroupId === (isIndividual ? null : representativeItem.borrowGroupId);
                       const href = isIndividual ? `/equipment/${representativeItem.equipmentId}` : `/borrows/group/${representativeItem.borrowGroupId}`;
-
                       return (
-                          <Link
-                              href={href}
-                              key={groupId}
-                              className="block hover:bg-muted/10 transition-colors rounded-lg"
-                              >
+                          <Link href={href} key={groupId} className="block hover:bg-muted/10 transition-colors rounded-lg">
                               <Card className={`border rounded-lg overflow-hidden ${isProcessingThisGroup || isRejectingThisApprovedGroup ? 'opacity-50' : ''}`}>
                                   <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
                                       <div>
@@ -764,55 +722,18 @@ function StaffActionPanel() {
                                               {isIndividual ? <Package className="h-4 w-4" /> : <Users className="h-4 w-4" />}
                                               <span>{representativeItem.borrower.name ?? 'Borrower'}</span>
                                               {!isIndividual && <span className="text-xs font-normal text-muted-foreground">({items.length} items)</span>}
+                                               {representativeItem.reservationType && (<Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">{formatReservationType(representativeItem.reservationType)}</Badge>)}
                                           </CardTitle>
-                                          <CardDescription className="text-xs mt-1">
-                                              Approved: {formatDateSafe(representativeItem.updatedAt, 'MMM d, yyyy h:mm a')}
-                                          </CardDescription>
-                                          {/* --- START: Render Reservation Type Badge (Approved) --- */}
-                                          {representativeItem.reservationType && (
-                                              <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
-                                                  {formatReservationType(representativeItem.reservationType)}
-                                              </Badge>
-                                          )}
-                                          {/* --- END: Render Reservation Type Badge (Approved) --- */}
+                                          <CardDescription className="text-xs mt-1">Approved: {formatDateSafe(representativeItem.updatedAt, 'MMM d, yyyy h:mm a')}</CardDescription>
                                       </div>
-                                      {/* Group Actions */}
                                       {!isIndividual && (
                                           <div className="flex gap-2">
-                                               <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="text-green-500 border-green-500/50 hover:bg-green-500/10 hover:text-green-600"
-                                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCheckoutGroup(representativeItem.borrowGroupId); }}
-                                                  disabled={isProcessingThisGroup || isRejectingThisApprovedGroup}
-                                                  title="Checkout Group"
-                                              >
-                                                  {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                                                  <span className="ml-1 hidden sm:inline">Checkout</span>
+                                               <Button size="sm" variant="outline" className="text-green-500 border-green-500/50 hover:bg-green-500/10 hover:text-green-600" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCheckoutGroup(representativeItem.borrowGroupId); }} disabled={isProcessingThisGroup || isRejectingThisApprovedGroup} title="Checkout Group">
+                                                  {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} <span className="ml-1 hidden sm:inline">Checkout</span>
                                               </Button>
-                                              {/* --- START: Add Reject Button for Approved --- */}
-                                              <Button
-                                                  size="sm"
-                                                  variant="outline"
-                                                  className="text-red-500 border-red-500/50 hover:bg-red-500/10 hover:text-red-600"
-                                                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRejectApprovedConfirmation(representativeItem.borrowGroupId); }}
-                                                  disabled={isProcessingThisGroup || isRejectingThisApprovedGroup}
-                                                  title="Reject Approved Group"
-                                              >
-                                                  {isRejectingThisApprovedGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
-                                                  <span className="ml-1 hidden sm:inline">Reject</span>
+                                              <Button size="sm" variant="outline" className="text-red-500 border-red-500/50 hover:bg-red-500/10 hover:text-red-600" onClick={(e) => { e.preventDefault(); e.stopPropagation(); openRejectApprovedConfirmation(representativeItem.borrowGroupId); }} disabled={isProcessingThisGroup || isRejectingThisApprovedGroup} title="Reject Approved Group">
+                                                  {isRejectingThisApprovedGroup ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />} <span className="ml-1 hidden sm:inline">Reject</span>
                                               </Button>
-                                              {/* --- END: Add Reject Button for Approved --- */}
-                                               {/* Add Edit Button? */} 
-                                               {/* <Button 
-                                                   size="sm" 
-                                                   variant="ghost" 
-                                                   onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleOpenEditModal(representativeItem); }} 
-                                                   disabled={isProcessingThisGroup || isRejectingThisApprovedGroup}
-                                                  title="Edit Approved Times"
-                                               >
-                                                   <Pencil className="h-4 w-4" />
-                                               </Button> */} 
                                           </div>
                                       )}
                                   </CardHeader>
@@ -820,25 +741,28 @@ function StaffActionPanel() {
                                       <ul className="divide-y divide-border">
                                           {items.map(item => (
                                               <li key={item.id} className="flex items-center justify-between p-3 text-sm">
-                                                   <div className="flex items-center gap-2">
-                                                       <HardDrive className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                                                       <span className="font-medium">{item.equipment.name}</span>
-                                                       <span className="text-xs text-muted-foreground">({item.equipment.equipmentId})</span>
+                                                   <div className="flex items-center gap-3">
+                                                       <Image 
+                                                         src={transformGoogleDriveUrl(item.equipment?.images?.[0]) || '/images/placeholder-default.png'} 
+                                                         alt={item.equipment?.name || 'Equipment'} 
+                                                         width={40} 
+                                                         height={40} 
+                                                         className="rounded aspect-square object-cover" 
+                                                         onError={(e) => {
+                                                           if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                             e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                             e.currentTarget.src = '/images/placeholder-default.png';
+                                                           }
+                                                         }}
+                                                       />
+                                                       <div> <span className="font-medium">{item.equipment?.name || 'Unknown Equipment'}</span> <span className="text-xs text-muted-foreground ml-1">({item.equipment?.equipmentId || 'N/A'})</span></div>
                                                    </div>
                                                    <div className="text-xs text-muted-foreground text-right space-y-1">
                                                        <div>Approved: {formatDateSafe(item.approvedStartTime)} - {formatDateSafe(item.approvedEndTime)}</div>
                                                        {item.classId && item.class && <div className="text-[11px]">Class: {item.class.courseCode} S{item.class.section}</div>}
                                                    </div>
-                                                  {/* Individual Checkout Action */}
                                                   {isIndividual && (
-                                                      <Button 
-                                                          size="sm" 
-                                                          variant="ghost" 
-                                                          className="text-green-500 hover:bg-green-500/10"
-                                                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCheckout(item.id); }}
-                                                          disabled={processingId === item.id || isProcessingThisGroup || isRejectingThisApprovedGroup}
-                                                          title="Checkout Item"
-                                                      >
+                                                      <Button size="sm" variant="ghost" className="text-green-500 hover:bg-green-500/10" onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCheckout(item.id); }} disabled={processingId === item.id || isProcessingThisGroup || isRejectingThisApprovedGroup} title="Checkout Item">
                                                           {processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                                                       </Button>
                                                   )}
@@ -850,69 +774,54 @@ function StaffActionPanel() {
                           </Link>
                       );
                   })}
-              </div>
+            </div>
           )}
-          {/* Section for Pending Returns - Use detailed card layout */}
-          <Separator />
-          <h3 className="text-lg font-semibold text-foreground flex items-center">
+          {groupedApprovedReservations.length > INITIAL_ITEMS_LIMIT && (
+            <div className="mt-auto pt-2 text-center">
+              <Button variant="link" onClick={() => setApprovedExpanded(!approvedExpanded)} className="text-sm">
+                {approvedExpanded ? 'View Less' : 'View More'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 3: Pending Returns */}
+        <div className="bg-card border border-border/30 rounded-lg shadow-sm p-4 flex flex-col">
+          <h3 className="text-lg font-semibold text-foreground flex items-center mb-3">
              <AlertTriangle className="mr-2 h-5 w-5 text-orange-500" /> 
              Pending Returns
          </h3>
-          {isLoadingReturns && <div className="text-center py-4"><LoadingSpinner /></div>}
-          {returnError && <p className="text-destructive text-sm text-center py-4">Error loading returns: {returnError}</p>}
+          {isLoadingReturns && <div className="text-center py-4 flex-grow flex items-center justify-center"><LoadingSpinner /></div>}
+          {returnError && <p className="text-destructive text-sm text-center py-4 flex-grow flex items-center justify-center">Error loading returns: {returnError}</p>}
           {!isLoadingReturns && !returnError && groupedPendingReturns.length === 0 && (
-               <p className="text-muted-foreground italic text-sm">No items pending return confirmation.</p>
+               <p className="text-muted-foreground italic text-sm flex-grow flex items-center justify-center">No items pending return confirmation.</p>
           )}
           {!isLoadingReturns && !returnError && groupedPendingReturns.length > 0 && (
-              <div className="space-y-3">
-                  {groupedPendingReturns.map(([groupId, items]) => {
+            <>
+              <div className="flex-grow space-y-3">
+                  {itemsToDisplayReturns.map(([groupId, items]) => {
                       const isIndividual = groupId.startsWith('individual-');
                       const representativeItem = items[0]; 
                       const isProcessingThisGroup = processingGroupId === (isIndividual ? null : representativeItem.borrowGroupId);
                       const href = isIndividual ? `/equipment/${representativeItem.equipmentId}` : `/borrows/group/${representativeItem.borrowGroupId}`; 
-
                            return (
-                               <Link
-                                   href={href}
-                                   key={groupId}
-                                   className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                                   >
+                               <Link href={href} key={groupId} className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden">
                                    <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors overflow-hidden">
                                        <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
                                            <div className="flex justify-between items-center gap-2">
                                                <div>
-                                                   <CardTitle className="text-base font-medium">
+                                                   <CardTitle className="text-base font-medium flex items-center gap-2">
+                                                       {isIndividual ? <Package className="h-4 w-4" /> : <Users className="h-4 w-4" />}
                                                        {isIndividual ? "Individual Return" : `Group Return (${items.length} items)`}
                                                    </CardTitle>
-                                                   <p className="text-xs text-muted-foreground">
-                                                       Borrowed by: {representativeItem.borrower.name || representativeItem.borrower.email}
-                                                   </p>
-                                                   {/* --- START: Render Reservation Type Badge (Returns) --- */}
-                                                   {representativeItem.reservationType && (
-                                                       <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
-                                                           {formatReservationType(representativeItem.reservationType)}
-                                                       </Badge>
-                                                   )}
-                                                   {/* --- END: Render Reservation Type Badge (Returns) --- */}
-                                                   <p className="text-xs text-muted-foreground mt-1">
-                                                       Checked out: {formatDateSafe(representativeItem.checkoutTime)}
-                                                   </p>
-                                                   <p className="text-xs text-muted-foreground">
-                                                       Approved Until: {formatDateSafe(representativeItem.approvedEndTime ?? null)}
-                                                   </p>
+                                                   <p className="text-xs text-muted-foreground">Borrowed by: {representativeItem.borrower.name || representativeItem.borrower.email}</p>
+                                                   {representativeItem.reservationType && (<Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">{formatReservationType(representativeItem.reservationType)}</Badge>)}
+                                                   <p className="text-xs text-muted-foreground mt-1">Checked out: {formatDateSafe(representativeItem.checkoutTime)}</p>
+                                                   <p className="text-xs text-muted-foreground">Approved Until: {formatDateSafe(representativeItem.approvedEndTime ?? null)}</p>
                                                </div>
-                                               {/* <<< ADDED: Confirm Group Return Button >>> */} 
                                                {!isIndividual && (
-                                                   <Button 
-                                                       size="sm" 
-                                                       variant="outline"
-                                                       className="border-orange-500 text-orange-500 hover:bg-orange-500/10 hover:text-orange-600"
-                                                       onClick={(e) => { e.preventDefault(); handleConfirmReturnGroup(representativeItem.borrowGroupId); }} 
-                                                       disabled={isProcessingThisGroup}
-                                                       title="Confirm Return for All Items in Group"
-                                                   >
-                                                       {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                                                       Confirm Group Return
+                                                   <Button size="sm" variant="outline" className="border-orange-500 text-orange-500 hover:bg-orange-500/10 hover:text-orange-600" onClick={(e) => { e.preventDefault(); handleConfirmReturnGroup(representativeItem.borrowGroupId); }} disabled={isProcessingThisGroup} title="Confirm Return for All Items in Group">
+                                                       {isProcessingThisGroup ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Confirm Group Return
                                                    </Button>
                                                )}
                                            </div>
@@ -920,47 +829,33 @@ function StaffActionPanel() {
                                        <CardContent className="p-0">
                                            <ul className="divide-y divide-border/30">
                                                {items.map(item => {
-                                                   // Check if the item has any associated unresolved deficiencies
-                                                   // The API now includes a deficiencies array if unresolved ones exist
                                                    const hasOpenDeficiency = (item as any).deficiencies && (item as any).deficiencies.length > 0;
-                                                   
                                                    return (
                                                        <li key={item.id} className="flex items-center justify-between p-3 text-sm">
                                                            <div className="flex items-center gap-3">
                                                                <Image 
-                                                                   src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                                                   alt={item.equipment.name}
-                                                                   width={40}
-                                                                   height={40}
-                                                                   className="rounded aspect-square object-cover"
+                                                                 src={transformGoogleDriveUrl(item.equipment?.images?.[0]) || '/images/placeholder-default.png'} 
+                                                                 alt={item.equipment?.name || 'Equipment'} 
+                                                                 width={40} 
+                                                                 height={40} 
+                                                                 className="rounded aspect-square object-cover" 
+                                                                 onError={(e) => {
+                                                                   if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                                     e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                                     e.currentTarget.src = '/images/placeholder-default.png';
+                                                                   }
+                                                                 }}
                                                                />
                                                                <div>
-                                                                   <span className="font-medium text-foreground">{item.equipment.name}</span>
-                                                                   <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId || 'N/A'})</span>
-                                                                   {/* Badges Container */} 
+                                                                   <span className="font-medium text-foreground">{item.equipment?.name || 'Unknown Equipment'}</span> <span className="text-xs text-muted-foreground ml-1">({item.equipment?.equipmentId || 'N/A'})</span>
                                                                    <div className="inline-flex flex-wrap gap-1 ml-2">
-                                                                     {/* Deficiency Badge */}
-                                                                     {hasOpenDeficiency && (
-                                                                         <Badge variant="destructive" className="text-xs px-1.5 py-0.5 whitespace-nowrap">Deficiency</Badge>
-                                                                     )}
-                                                                     {/* --- ADDED EquipmentStatus Badge --- */}
-                                                                     <Badge variant={getEquipmentStatusVariant(item.equipment.status)} className="text-xs px-1.5 py-0.5 whitespace-nowrap">
-                                                                         {formatEquipmentStatus(item.equipment.status)}
-                                                                     </Badge>
+                                                                     {hasOpenDeficiency && (<Badge variant="destructive" className="text-xs px-1.5 py-0.5 whitespace-nowrap">Deficiency</Badge>)}
+                                                                     <Badge variant={getEquipmentStatusVariant(item.equipment?.status)} className="text-xs px-1.5 py-0.5 whitespace-nowrap">{formatEquipmentStatus(item.equipment?.status)}</Badge>
                                                                    </div>
                                                                </div>
                                                            </div>
-                                                           {/* Individual Confirm Return Button */} 
-                                                           <Button 
-                                                               size="sm" 
-                                                               variant='outline'
-                                                               className='border-orange-500 text-orange-500 hover:bg-orange-500/10 hover:text-orange-600'
-                                                               onClick={() => handleConfirmReturn(item.id)} 
-                                                               disabled={processingId === item.id}
-                                                               title={`Confirm return for ${item.equipment.name}`}
-                                                           >
-                                                               {processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-                                                               Confirm Return
+                                                           <Button size="sm" variant='outline' className='border-orange-500 text-orange-500 hover:bg-orange-500/10 hover:text-orange-600' onClick={() => handleConfirmReturn(item.id)} disabled={processingId === item.id} title={`Confirm return for ${item.equipment?.name || 'Unknown Equipment'}`}>
+                                                               {processingId === item.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null} Confirm Return
                                                            </Button>
                                                        </li>
                                                    );
@@ -972,144 +867,137 @@ function StaffActionPanel() {
                            );
                        })}
               </div>
+            </>
           )}
-          {/* Section for Active Checkouts */}
-          <Separator />
-          <h3 className="text-lg font-semibold text-foreground flex items-center">
+          {!isLoadingReturns && !returnError && groupedPendingReturns.length > INITIAL_ITEMS_LIMIT && (
+            <div className="mt-auto pt-2 text-center">
+              <Button variant="link" onClick={() => setReturnsExpanded(!returnsExpanded)} className="text-sm">
+                {returnsExpanded ? 'View Less' : 'View More'}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Panel 4: Active Checkouts */}
+        <div className="bg-card border border-border/30 rounded-lg shadow-sm p-4 flex flex-col">
+          <h3 className="text-lg font-semibold text-foreground flex items-center mb-3">
              <Activity className="mr-2 h-5 w-5 text-green-500" /> 
              Active Checkouts
          </h3>
           {groupedActiveCheckouts.length === 0 ? (
-              <p className="text-muted-foreground italic text-sm">No items currently checked out.</p>
+              <p className="text-muted-foreground italic text-sm flex-grow flex items-center justify-center">No items currently checked out.</p>
           ) : (
-              <div className="space-y-3">
-                  {groupedActiveCheckouts.map(([groupId, items]) => {
+            <>
+              <div className="flex-grow space-y-3">
+                  {itemsToDisplayActive.map(([groupId, items]) => {
                       const isIndividual = groupId.startsWith('individual-');
                       const representativeItem = items[0]; 
                       const href = isIndividual ? `/equipment/${representativeItem.equipmentId}` : `/borrows/group/${representativeItem.borrowGroupId}`; 
-
+                      const isGroupOverdue = items.some(item => item.borrowStatus === PrismaBorrowStatus.OVERDUE);
                       return (
-                          <Link
-                              href={href}
-                              key={groupId}
-                              className="block hover:shadow-lg transition-shadow duration-200 rounded-lg overflow-hidden"
-                              >
-                              <Card className="bg-card/60 border border-border/30 hover:border-border/60 transition-colors">
-                                  <CardHeader className="p-4 bg-muted/30 border-b border-border/30">
-                                      <div className="flex justify-between items-center gap-2">
-                                          <div>
-                                              <CardTitle className="text-base font-medium">
-                                                  {isIndividual ? "Individual Checkout" : `Group Checkout (${items.length} items)`}
-                                              </CardTitle>
-                                              <p className="text-xs text-muted-foreground">
-                                                  Borrowed by: {representativeItem.borrower.name || representativeItem.borrower.email}
-                                              </p>
-                                               {/* --- START: Render Reservation Type Badge (Active) --- */}
-                                               {representativeItem.reservationType && (
-                                                   <Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">
-                                                       {formatReservationType(representativeItem.reservationType)}
-                                                   </Badge>
-                                               )}
-                                               {/* --- END: Render Reservation Type Badge (Active) --- */}
-                                               <p className="text-xs text-muted-foreground mt-1">
-                                                  Checked out: {formatDateSafe(representativeItem.checkoutTime)}
-                                               </p>
-                                               <p className="text-xs text-muted-foreground">
-                                                  Expected Return: {formatDateSafe((representativeItem as any)?.expectedReturnTime ?? null)} 
-                                               </p>
-                                          </div>
-                                          {/* Potential Actions for Active Items (e.g., View Details, Report Issue) */} 
-                                          {/* <Button size="sm" variant="outline">View Details</Button> */} 
-                                       </div>
+                          <Link href={href} key={groupId} className="block hover:bg-muted/10 transition-colors rounded-lg">
+                              <Card className="border rounded-lg overflow-hidden">
+                                  <CardHeader className="flex flex-row items-center justify-between bg-muted/30 px-4 py-3">
+                                      <div>
+                                          <CardTitle className="text-base font-medium flex items-center gap-2">
+                                              {isIndividual ? <Package className="h-4 w-4" /> : <Users className="h-4 w-4" />}
+                                              <span>{representativeItem.borrower.name ?? 'Borrower'}</span>
+                                              {!isIndividual && <span className="text-xs font-normal text-muted-foreground">({items.length} items)</span>}
+                                              {representativeItem.reservationType && (<Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">{formatReservationType(representativeItem.reservationType)}</Badge>)}
+                                              {isGroupOverdue && !isIndividual && (<Badge variant="destructive" className="ml-2 text-xs whitespace-nowrap">OVERDUE ITEMS</Badge>)}
+                                          </CardTitle>
+                                          <CardDescription className="text-xs mt-1">Checked out: {formatDateSafe(representativeItem.checkoutTime)} {(representativeItem as any).expectedReturnTime && ` | Expected Return: ${formatDateSafe((representativeItem as any).expectedReturnTime)}`}</CardDescription>
+                                      </div>
                                   </CardHeader>
                                    <CardContent className="p-0">
-                                       <ul className="divide-y divide-border/30">
+                                       <ul className="divide-y divide-border">
                                           {items.map(item => (
                                               <li key={item.id} className="flex items-center justify-between p-3 text-sm">
                                                   <div className="flex items-center gap-3">
-                                                      {/* Equipment Image */} 
                                                       <Image 
-                                                          src={item.equipment.images?.[0] || '/images/placeholder-default.png'}
-                                                          alt={item.equipment.name}
-                                                          width={40}
-                                                          height={40}
-                                                          className="rounded aspect-square object-cover"
+                                                        src={transformGoogleDriveUrl(item.equipment?.images?.[0]) || '/images/placeholder-default.png'} 
+                                                        alt={item.equipment?.name || 'Equipment'} 
+                                                        width={40} 
+                                                        height={40} 
+                                                        className="rounded aspect-square object-cover" 
+                                                        onError={(e) => {
+                                                          if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                                            e.currentTarget.srcset = '/images/placeholder-default.png';
+                                                            e.currentTarget.src = '/images/placeholder-default.png';
+                                                          }
+                                                        }}
                                                       />
                                                       <div>
-                                                          <span className="font-medium text-foreground">{item.equipment.name}</span>
-                                                          <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId || 'N/A'})</span>
-                                                          {/* --- ADDED EquipmentStatus Badge --- */}
-                                                          <Badge variant={getEquipmentStatusVariant(item.equipment.status)} className="ml-2 text-xs whitespace-nowrap">
-                                                              {formatEquipmentStatus(item.equipment.status)}
-                                                          </Badge>
+                                                          <span className="font-medium text-foreground">{item.equipment?.name || 'Unknown Equipment'}</span> <span className="text-xs text-muted-foreground ml-1">({item.equipment?.equipmentId || 'N/A'})</span>
+                                                          <Badge variant={getBorrowStatusVariant(item.borrowStatus)} className="ml-2 text-xs capitalize whitespace-nowrap">{formatBorrowStatus(item.borrowStatus)}</Badge>
+                                                          <Badge variant={getEquipmentStatusVariant(item.equipment?.status)} className="ml-1 text-xs whitespace-nowrap">{formatEquipmentStatus(item.equipment?.status)}</Badge>
                                                       </div>
                                                   </div>
-                                                  {/* Add specific actions for active items if needed */} 
                                               </li>
                                           ))}
                                       </ul>
-        </CardContent>
-      </Card>
+                                   </CardContent>
+                              </Card>
                           </Link>
                       );
                   })}
               </div>
+            </>
           )}
-          {/* Rejection Confirmation Dialog (for PENDING) */}
-          <AlertDialog open={isRejectConfirmOpen} onOpenChange={setIsRejectConfirmOpen}>
-              <AlertDialogContent>
-                  <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                          This action will reject all pending items associated with this transaction ID ({rejectTargetGroupId}). This cannot be undone.
-                      </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                      <AlertDialogCancel disabled={processingGroupId === rejectTargetGroupId}>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                          onClick={() => handleRejectGroup(rejectTargetGroupId)}
-                          disabled={processingGroupId === rejectTargetGroupId} // Disable if this group is being processed
-                          className="bg-destructive hover:bg-destructive/90"
-                      >
-                          {processingGroupId === rejectTargetGroupId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          Confirm Reject
-                      </AlertDialogAction>
-                  </AlertDialogFooter>
-              </AlertDialogContent>
-          </AlertDialog>
-          {/* --- START: Rejection Confirmation Dialog (for APPROVED) --- */}
-          <AlertDialog open={isRejectApprovedConfirmOpen} onOpenChange={setIsRejectApprovedConfirmOpen}>
-              <AlertDialogContent>
-                  <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                          This action will REJECT this already APPROVED group request ({rejectApprovedTargetGroupId}). Items will need to be requested again. This cannot be undone.
-                      </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                      <AlertDialogCancel disabled={!!isRejectingApprovedGroupId}>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                          onClick={() => performRejectApprovedGroup(rejectApprovedTargetGroupId)}
-                          disabled={!!isRejectingApprovedGroupId} 
-                          className="bg-destructive hover:bg-destructive/90"
-                      >
-                          {isRejectingApprovedGroupId === rejectApprovedTargetGroupId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                          Confirm Reject Approved
-                      </AlertDialogAction>
-                  </AlertDialogFooter>
-              </AlertDialogContent>
-          </AlertDialog>
-          {/* --- END: Rejection Confirmation Dialog (for APPROVED) --- */}
-          {/* Edit Reservation Modal (Keep existing) */}
-          {editingReservation && (
-              <EditReservationModal
-                  isOpen={isEditModalOpen}
-                  setIsOpen={setIsEditModalOpen}
-                  reservationData={editingReservation}
-                  onSuccess={handleReservationEdited}
-              />
+          {groupedActiveCheckouts.length > INITIAL_ITEMS_LIMIT && (
+            <div className="mt-auto pt-2 text-center">
+              <Button variant="link" onClick={() => setActiveExpanded(!activeExpanded)} className="text-sm">
+                {activeExpanded ? 'View Less' : 'View More'}
+              </Button>
+            </div>
           )}
-      </div>
+        </div>
+      </div> {/* End of grid div */}
+
+      {/* Dialogs remain outside the grid, but inside the main fragment */}
+      <AlertDialog open={isRejectConfirmOpen} onOpenChange={setIsRejectConfirmOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      This action will reject all pending items associated with this transaction ID ({rejectTargetGroupId}). This cannot be undone.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel disabled={processingGroupId === rejectTargetGroupId}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => handleRejectGroup(rejectTargetGroupId)} disabled={processingGroupId === rejectTargetGroupId} className="bg-destructive hover:bg-destructive/90">
+                      {processingGroupId === rejectTargetGroupId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm Reject
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+      
+      <AlertDialog open={isRejectApprovedConfirmOpen} onOpenChange={setIsRejectApprovedConfirmOpen}>
+          <AlertDialogContent>
+              <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                      This action will REJECT this already APPROVED group request ({rejectApprovedTargetGroupId}). Items will need to be requested again. This cannot be undone.
+                  </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                  <AlertDialogCancel disabled={!!isRejectingApprovedGroupId}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => performRejectApprovedGroup(rejectApprovedTargetGroupId)} disabled={!!isRejectingApprovedGroupId} className="bg-destructive hover:bg-destructive/90">
+                      {isRejectingApprovedGroupId === rejectApprovedTargetGroupId ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null} Confirm Reject Approved
+                  </AlertDialogAction>
+              </AlertDialogFooter>
+          </AlertDialogContent>
+      </AlertDialog>
+      
+      {editingReservation && (
+          <EditReservationModal
+              isOpen={isEditModalOpen}
+              setIsOpen={setIsEditModalOpen}
+              reservationData={editingReservation}
+              onSuccess={handleReservationEdited}
+          />
+      )}
+    </>
   );
 }
 

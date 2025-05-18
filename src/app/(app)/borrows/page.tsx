@@ -10,7 +10,7 @@ import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
-import { cn } from '@/lib/utils';
+import { cn, transformGoogleDriveUrl } from '@/lib/utils';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import ReturnRequestDialog from '@/components/borrow/ReturnRequestDialog';
 
@@ -152,7 +152,7 @@ export default function BorrowsPage() {
             </TableHeader>
             <TableBody>
               {borrows.map((borrow) => {
-                const imageUrl = borrow.equipment.images?.[0] || '/images/placeholder-default.png';
+                const imageUrl = transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png';
                 const isCancelLoading = loadingCancel === borrow.id;
                 // Explicit check for cancellable statuses
                 const canCancel = borrow.borrowStatus === BorrowStatus.PENDING || borrow.borrowStatus === BorrowStatus.APPROVED;
@@ -167,6 +167,13 @@ export default function BorrowsPage() {
                             width={40}
                             height={40}
                             className="rounded object-cover aspect-square"
+                            onError={(e) => {
+                              // If the transformed URL fails, set to placeholder
+                              if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                                e.currentTarget.srcset = '/images/placeholder-default.png';
+                                e.currentTarget.src = '/images/placeholder-default.png';
+                              }
+                            }}
                         />
                     </TableCell>
                     <TableCell className="font-medium text-foreground truncate" title={borrow.equipment.name}>
