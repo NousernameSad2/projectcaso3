@@ -240,14 +240,22 @@ export default function EquipmentCard({
           </Link>
         ) : (
           <div className="aspect-video w-full relative block">
-             <Image
-              src={imageUrl}
-              alt={equipment.name}
-              fill
-              sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-              className="object-cover"
-              priority={false}
-            />
+            <div className="relative aspect-square w-full overflow-hidden">
+              <Image
+                src={imageUrl}
+                alt={equipment.name}
+                fill
+                sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                className="object-cover"
+                priority={false}
+                onError={(e) => {
+                  if (e.currentTarget.src !== '/images/placeholder-default.png') {
+                    e.currentTarget.srcset = '/images/placeholder-default.png';
+                    e.currentTarget.src = '/images/placeholder-default.png';
+                  }
+                }}
+              />
+            </div>
           </div>
         )}
         {canSelect && (
