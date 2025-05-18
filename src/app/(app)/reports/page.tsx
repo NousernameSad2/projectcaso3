@@ -1,6 +1,6 @@
 'use client'; // Required for Recharts potentially
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Card,
   CardContent,
@@ -9,8 +9,7 @@ import {
   CardDescription,
 } from '@/components/ui/card'; // Assuming shadcn/ui path
 import {
-  ResponsiveContainer, BarChart, XAxis, YAxis, Tooltip, Legend, Bar,
-  CartesianGrid, PieChart, Pie, Cell, Legend as PieLegend // Added PieChart components
+  ResponsiveContainer, Tooltip, PieChart, Pie, Cell, Legend as PieLegend // REMOVED BarChart, XAxis, YAxis, Legend, Bar, CartesianGrid
 } from 'recharts'; // Example import
 import { useQuery } from '@tanstack/react-query'; // Import useQuery
 import axios from 'axios'; // Need axios or fetch for API calls
@@ -53,10 +52,10 @@ interface DashboardStats {
 }
 
 // Interface for the weekly usage chart data
-interface DailyUsage {
-  name: string; // Day name (e.g., 'Mon')
-  hours: number;
-}
+// interface DailyUsage { // REMOVED
+// name: string; // Day name (e.g., 'Mon')
+// hours: number;
+// }
 
 interface FilterOption { // Generic interface for filter dropdowns
     id: string;
@@ -78,6 +77,19 @@ interface AvailabilityMetricItem {
 }
 // --- END NEW ---
 
+// --- NEW: Axios-like Error Type Definition ---
+interface ApiErrorData {
+  message?: string;
+  error?: string;
+}
+
+interface AxiosLikeError extends Error {
+  response?: {
+    data?: ApiErrorData;
+  };
+}
+// --- END NEW ---
+
 // Fetcher function for React Query
 const fetchDashboardStats = async (): Promise<DashboardStats> => {
   const { data } = await axios.get<DashboardStats>('/api/reports/dashboard-stats');
@@ -85,10 +97,10 @@ const fetchDashboardStats = async (): Promise<DashboardStats> => {
 };
 
 // Fetcher function for Weekly Usage
-const fetchWeeklyUsage = async (): Promise<DailyUsage[]> => {
-  const { data } = await axios.get<DailyUsage[]>('/api/reports/weekly-usage');
-  return data;
-};
+// const fetchWeeklyUsage = async (): Promise<DailyUsage[]> => { // REMOVED
+//   const { data } = await axios.get<DailyUsage[]>('/api/reports/weekly-usage');
+//   return data;
+// };
 
 const fetchCourses = async (): Promise<FilterOption[]> => {
     const { data } = await axios.get<FilterOption[]>('/api/reports/filters/courses');
@@ -140,15 +152,15 @@ export default function ReportsPage() {
   });
 
   // Query for Weekly Usage Chart Data
-  const {
-    data: weeklyUsageData,
-    isLoading: isLoadingUsage,
-    isError: isErrorUsage,
-    error: errorUsage
-  } = useQuery<DailyUsage[], Error>({
-    queryKey: ['weeklyUsage'],
-    queryFn: fetchWeeklyUsage,
-  });
+  // const { // REMOVED All these related to weeklyUsageData
+  //   data: weeklyUsageData,
+  //   isLoading: isLoadingUsage,
+  //   isError: isErrorUsage,
+  //   error: errorUsage
+  // } = useQuery<DailyUsage[], Error>({
+  //   queryKey: ['weeklyUsage'],
+  //   queryFn: fetchWeeklyUsage,
+  // });
 
   // Hooks for filter data
   const { data: courses, isLoading: isLoadingCourses } = useQuery<FilterOption[], Error>({ queryKey: ['reportFilterCourses'], queryFn: fetchCourses });
@@ -156,7 +168,7 @@ export default function ReportsPage() {
   const { data: equipment, isLoading: isLoadingEquipment } = useQuery<FilterOption[], Error>({ queryKey: ['reportFilterEquipment'], queryFn: fetchEquipment });
   const { data: borrowers, isLoading: isLoadingBorrowers } = useQuery<FilterOption[], Error>({ queryKey: ['reportFilterBorrowers'], queryFn: fetchBorrowers });
 
-  const { data: statusCounts, isLoading: isLoadingStatusCounts, isError: isErrorStatusCounts, error: errorStatusCounts }
+  const { data: statusCounts, isLoading: isLoadingStatusCounts, isError: isErrorStatusCounts /*, error: errorStatusCounts REMOVED */ }
     = useQuery<StatusCount[], Error>({
         queryKey: ['equipmentStatusCounts'],
         queryFn: fetchEquipmentStatusCounts,
@@ -171,7 +183,7 @@ export default function ReportsPage() {
   const [selectedBorrower, setSelectedBorrower] = useState<string>('all'); // Default to 'all' for Borrower filter
 
   // --- State for Live Report Preview ---
-  const [liveReportData, setLiveReportData] = useState<any[] | null>(null);
+  const [liveReportData, setLiveReportData] = useState<Record<string, unknown>[] | null>(null);
   const [isLiveReportLoading, setIsLiveReportLoading] = useState<boolean>(false);
   const [liveReportError, setLiveReportError] = useState<Error | string | null>(null);
   const [activeReportTypeForDisplay, setActiveReportTypeForDisplay] = useState<ReportType | undefined>();
@@ -184,7 +196,7 @@ export default function ReportsPage() {
   const [contactHoursError, setContactHoursError] = useState<string | null>(null);
 
   // --- State for Utilization Ranking Table ---
-  const [utilizationRankingData, setUtilizationRankingData] = useState<any[] | null>(null);
+  const [utilizationRankingData, setUtilizationRankingData] = useState<Record<string, unknown>[] | null>(null);
   const [isFetchingUtilizationRanking, setIsFetchingUtilizationRanking] = useState<boolean>(false);
   const [utilizationRankingError, setUtilizationRankingError] = useState<string | null>(null);
   const [utilizationRankingDateRange, setUtilizationRankingDateRange] = useState<DateRange | undefined>();
@@ -192,7 +204,7 @@ export default function ReportsPage() {
   // --- State for Maintenance Activity Report ---
   const [maintenanceActivityEquipmentId, setMaintenanceActivityEquipmentId] = useState<string | undefined>();
   const [maintenanceActivityDateRange, setMaintenanceActivityDateRange] = useState<DateRange | undefined>();
-  const [maintenanceActivityData, setMaintenanceActivityData] = useState<any[] | null>(null);
+  const [maintenanceActivityData, setMaintenanceActivityData] = useState<Record<string, unknown>[] | null>(null);
   const [isMaintenanceActivityLoading, setIsMaintenanceActivityLoading] = useState<boolean>(false);
   const [maintenanceActivityError, setMaintenanceActivityError] = useState<string | null>(null);
 
@@ -283,7 +295,7 @@ export default function ReportsPage() {
   };
 
   // --- Fetch Live Report Data ---
-  const fetchAndDisplayLiveReport = async () => {
+  const fetchAndDisplayLiveReport = useCallback(async () => {
     if (!reportType) {
         setLiveReportData(null);
         setActiveReportTypeForDisplay(undefined);
@@ -327,7 +339,7 @@ export default function ReportsPage() {
 
 
     try {
-        const response = await axios.get(`/api/reports/generate?${params.toString()}`);
+        const response = await axios.get<Record<string, unknown>[]>(`/api/reports/generate?${params.toString()}`);
         if (response.data && Array.isArray(response.data) && response.data.length === 0) {
              setLiveReportData([]); 
         } else if (typeof response.data === 'string' && response.status === 200) { 
@@ -342,19 +354,19 @@ export default function ReportsPage() {
         } else {
             // If response.data is not an array (e.g. error object from API but with 200 status)
             console.error("Unexpected data structure for live report:", response.data);
-            setLiveReportError(response.data?.message || response.data?.error || 'Unexpected data structure received.');
             setLiveReportData(null);
         }
         setActiveReportTypeForDisplay(reportType);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching live report:", error);
-        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch live report';
+        const typedError = error as AxiosLikeError;
+        const errorMsg = typedError.response?.data?.error || typedError.response?.data?.message || typedError.message || 'Failed to fetch live report';
         setLiveReportError(errorMsg);
         setLiveReportData(null);
     } finally {
         setIsLiveReportLoading(false);
     }
-  };
+  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower]);
 
   // --- Calculate Contact Hours Handler ---
   const handleCalculateContactHours = async () => {
@@ -375,11 +387,12 @@ export default function ReportsPage() {
     });
 
     try {
-        const response = await axios.get(`/api/reports/calculate-contact-hours?${params.toString()}`);
+        const response = await axios.get<{ totalContactHours: number }>(`/api/reports/calculate-contact-hours?${params.toString()}`);
         setCalculatedContactHours(response.data.totalContactHours);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error calculating contact hours:", error);
-        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to calculate contact hours';
+        const typedError = error as AxiosLikeError;
+        const errorMsg = typedError.response?.data?.error || typedError.response?.data?.message || typedError.message || 'Failed to calculate contact hours';
         setContactHoursError(errorMsg);
         setCalculatedContactHours(null);
     } finally {
@@ -403,9 +416,10 @@ export default function ReportsPage() {
     try {
         const response = await axios.get(`/api/reports/utilization-ranking?${params.toString()}`);
         setUtilizationRankingData(response.data);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching utilization ranking:", error);
-        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch utilization ranking';
+        const typedError = error as AxiosLikeError;
+        const errorMsg = typedError.response?.data?.error || typedError.response?.data?.message || typedError.message || 'Failed to fetch utilization ranking';
         setUtilizationRankingError(errorMsg);
         setUtilizationRankingData(null);
     } finally {
@@ -433,10 +447,10 @@ export default function ReportsPage() {
     return () => {
         clearTimeout(handler);
     };
-  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower]);
+  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower, fetchAndDisplayLiveReport]);
 
   // --- Fetch Maintenance Activity Report ---
-  const fetchMaintenanceActivityReport = async () => {
+  const fetchMaintenanceActivityReport = useCallback(async () => {
     setIsMaintenanceActivityLoading(true);
     setMaintenanceActivityError(null);
     setMaintenanceActivityData(null);
@@ -466,20 +480,21 @@ export default function ReportsPage() {
             setMaintenanceActivityError(response.data?.message || response.data?.error || 'Unexpected data structure received.');
             setMaintenanceActivityData(null);
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("Error fetching maintenance activity report:", error);
-        const errorMsg = error.response?.data?.error || error.response?.data?.message || error.message || 'Failed to fetch maintenance activity report';
+        const typedError = error as AxiosLikeError;
+        const errorMsg = typedError.response?.data?.error || typedError.response?.data?.message || typedError.message || 'Failed to fetch maintenance activity report';
         setMaintenanceActivityError(errorMsg);
         setMaintenanceActivityData(null);
     } finally {
         setIsMaintenanceActivityLoading(false);
     }
-  };
+  }, [maintenanceActivityEquipmentId, maintenanceActivityDateRange]);
 
   // useEffect for Maintenance Activity Report (triggers on filter change)
   useEffect(() => {
     fetchMaintenanceActivityReport();
-  }, [maintenanceActivityEquipmentId, maintenanceActivityDateRange]);
+  }, [maintenanceActivityEquipmentId, maintenanceActivityDateRange, fetchMaintenanceActivityReport]);
 
   // --- NEW: Fetch Availability Metrics ---
   const fetchAvailabilityMetrics = async () => {
@@ -503,7 +518,7 @@ export default function ReportsPage() {
     if (maintenanceActivityEquipmentId) {
         fetchMaintenanceActivityReport();
     }
-  }, [utilizationRankingDateRange, maintenanceActivityEquipmentId]);
+  }, [utilizationRankingDateRange, maintenanceActivityEquipmentId, fetchMaintenanceActivityReport]);
 
   // --- NEW: useEffect for fetching availability metrics on mount ---
   useEffect(() => {
@@ -1087,11 +1102,11 @@ export default function ReportsPage() {
                                     </TableHeader>
                                     <TableBody>
                                         {utilizationRankingData.map((item, index) => (
-                                            <TableRow key={item.equipmentId}>
+                                            <TableRow key={item.equipmentId as React.Key}>
                                                 <TableCell>{index + 1}</TableCell>
-                                                <TableCell className="font-medium">{item.name}</TableCell>
-                                                <TableCell className="text-right">{item.totalContactHours.toFixed(1)}</TableCell>
-                                                <TableCell className="text-right">{item.borrowCount}</TableCell>
+                                                <TableCell className="font-medium">{String(item.name)}</TableCell>
+                                                <TableCell className="text-right">{(item.totalContactHours as number)?.toFixed(1)}</TableCell>
+                                                <TableCell className="text-right">{String(item.borrowCount)}</TableCell>
                                             </TableRow>
                                         ))}
                                     </TableBody>
@@ -1222,17 +1237,17 @@ export default function ReportsPage() {
                         </TableHeader>
                         <TableBody>
                           {maintenanceActivityData.map((item) => (
-                            <TableRow key={`${item.equipmentId}-${item.maintenanceStartDate}`}>
-                              <TableCell className="font-medium">{item.equipmentName}</TableCell>
-                              <TableCell>{item.equipmentIdentifier || 'N/A'}</TableCell>
-                              <TableCell>{formatDateFns(item.maintenanceStartDate, 'PP p')}</TableCell>
-                              <TableCell className="max-w-xs truncate" title={item.maintenanceNotes || undefined}>{item.maintenanceNotes || 'N/A'}</TableCell>
-                              <TableCell>{item.initiatedBy || 'N/A'}</TableCell>
-                              <TableCell>{item.maintenanceEndDate ? formatDateFns(item.maintenanceEndDate, 'PP p') : 'N/A'}</TableCell>
-                              <TableCell className="text-right">{item.durationHours?.toFixed(1) ?? 'N/A'}</TableCell>
+                            <TableRow key={`${item.equipmentId as string}-${item.maintenanceStartDate as string}`}>
+                              <TableCell className="font-medium">{String(item.equipmentName)}</TableCell>
+                              <TableCell>{String(item.equipmentIdentifier || 'N/A')}</TableCell>
+                              <TableCell>{formatDateFns(item.maintenanceStartDate as string | Date, 'PP p')}</TableCell>
+                              <TableCell className="max-w-xs truncate" title={String(item.maintenanceNotes || '')}>{String(item.maintenanceNotes || 'N/A')}</TableCell>
+                              <TableCell>{String(item.initiatedBy || 'N/A')}</TableCell>
+                              <TableCell>{item.maintenanceEndDate ? formatDateFns(item.maintenanceEndDate as string | Date, 'PP p') : 'N/A'}</TableCell>
+                              <TableCell className="text-right">{(item.durationHours as number)?.toFixed(1) ?? 'N/A'}</TableCell>
                               <TableCell>
-                                <Badge variant={item.status === 'Completed' ? 'default' : 'secondary'}>
-                                  {item.status}
+                                <Badge variant={(item.status as string) === 'Completed' ? 'default' : 'secondary'}>
+                                  {String(item.status)}
                                 </Badge>
                               </TableCell>
                             </TableRow>
@@ -1318,38 +1333,36 @@ export default function ReportsPage() {
 const formatDateDisplay = (dateInput: string | Date | undefined | null): string => {
     if (!dateInput) return 'N/A';
     try {
-        // Check if it's already a Date object, otherwise parse
-        const dateObj = typeof dateInput === 'string' ? parseISO(dateInput) : dateInput;
-        return formatDateFns(dateObj, 'PP p'); // e.g., Sep 20, 2023, 2:30 PM
-    } catch (e) {
-        // If parsing fails, return the original string or a placeholder
-        return String(dateInput); 
+        return formatDateFns(parseISO(dateInput.toString()), "PPpp"); // Format with time
+    } catch { // REMOVED unused _
+        // console.error("Error formatting date:", _error); // Optional: log the error
+        return 'Invalid Date';
     }
 };
 
 
 interface ColumnDefinition {
     header: string;
-    accessor: string | ((row: any) => any); 
-    render?: (value: any, row: any) => React.ReactNode; 
+    accessor: string | ((row: Record<string, unknown>) => unknown);
+    render?: (value: unknown, row: Record<string, unknown>) => React.ReactNode;
 }
 
-// Helper to safely get nested values from an object using a dot-separated path
-const getNestedValue = (obj: any, path: string | ((row: any) => any)): any => {
+// Helper to get nested values, supporting dot notation and accessor functions
+const getNestedValue = (obj: Record<string, unknown>, path: string | ((row: Record<string, unknown>) => unknown)): unknown => {
     if (typeof path === 'function') {
         try {
             return path(obj);
-        } catch (e) {
-            // console.warn("Error in accessor function:", e);
-            return 'N/A';
+        } catch { // REMOVED unused _
+            // console.error(`Error accessing path via function for object:`, obj, _err);
+            return 'Error'; // Or some other placeholder for error
         }
     }
-    return path.split('.').reduce((acc, part) => {
+    return path.split('.').reduce((acc: Record<string, unknown> | undefined, part: string) => { // Changed any to unknown
         if (acc && typeof acc === 'object' && part in acc) {
-            return acc[part];
+            return acc[part] as Record<string, unknown> | undefined; // Changed any to unknown
         }
         return undefined;
-    }, obj);
+    }, obj as Record<string, unknown>); // Changed any to unknown
 };
 
 
@@ -1357,20 +1370,21 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
     switch (reportType) {
         case ReportType.BORROWING_ACTIVITY:
             return [
-                { header: 'Borrower', accessor: 'borrower.name' },
-                { header: 'Equipment', accessor: 'equipment.name' },
+                { header: 'Borrower', accessor: (row) => (row.borrower as Record<string, unknown>)?.name },
+                { header: 'Equipment', accessor: (row) => (row.equipment as Record<string, unknown>)?.name },
                 { 
                     header: 'Class', 
                     accessor: (row) => {
-                        if (!row.class) return 'N/A';
-                        return `${row.class.courseCode || ''} ${row.class.section || ''} (${row.class.semester || ''} ${row.class.academicYear || ''})`.replace(/\\(\\s*\\)/g, '').trim() || 'N/A';
+                        const classInfo = row.class as Record<string, unknown> | null;
+                        if (!classInfo) return 'N/A';
+                        return `${classInfo.courseCode || ''} ${classInfo.section || ''} (${classInfo.semester || ''} ${classInfo.academicYear || ''})`.replace(/\(\s*\)/g, '').trim() || 'N/A';
                     }
                 },
                 { header: 'Status', accessor: 'borrowStatus' },
-                { header: 'Requested', accessor: 'requestSubmissionTime', render: (val) => formatDateDisplay(val) },
-                { header: 'Checkout', accessor: 'checkoutTime', render: (val) => formatDateDisplay(val) },
-                { header: 'Returned', accessor: 'actualReturnTime', render: (val) => formatDateDisplay(val) },
-                { header: 'Approved By FIC', accessor: 'approvedByFic.name'},
+                { header: 'Requested', accessor: 'requestSubmissionTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
+                { header: 'Checkout', accessor: 'checkoutTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
+                { header: 'Returned', accessor: 'actualReturnTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, // Typed val
+                { header: 'Approved By FIC', accessor: (row) => (row.approvedByFic as Record<string, unknown>)?.name },
             ];
         case ReportType.EQUIPMENT_UTILIZATION:
             return [
@@ -1381,14 +1395,19 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
             ];
         case ReportType.DEFICIENCY_SUMMARY:
             return [
-                { header: 'Description', accessor: 'description', render: (val) => val || 'N/A' },
+                // @ts-expect-error TODO: Investigate why TS infers {} here despite explicit React.ReactNode and string return
+                { header: 'Description', accessor: 'description', render: (val: unknown): React.ReactNode => val || 'N/A' },
                 { header: 'Type', accessor: 'type' },
-                { header: 'Status', accessor: 'status' },
-                { header: 'User Responsible', accessor: 'user.name' }, 
-                { header: 'Tagged By', accessor: 'taggedBy.name' }, 
-                { header: 'Reported At', accessor: 'createdAt', render: (val) => formatDateDisplay(val) },
-                { header: 'Related Equipment', accessor: 'borrow.equipment.name' },
-                { header: 'Related Borrow ID', accessor: 'borrow.id'},
+                { header: 'Status', accessor: 'status', 
+                  render: (val: unknown) => { 
+                    return <Badge variant={getBadgeVariantForStatus(val as string)}>{String(val)}</Badge>;
+                  }
+                },
+                { header: 'User Responsible', accessor: (row) => (row.user as Record<string, unknown>)?.name }, 
+                { header: 'Tagged By', accessor: (row) => (row.taggedBy as Record<string, unknown>)?.name }, 
+                { header: 'Reported At', accessor: 'createdAt', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
+                { header: 'Related Equipment', accessor: (row) => ((row.borrow as Record<string, { equipment?: Record<string, unknown> }>)?.equipment as Record<string, unknown>)?.name },
+                { header: 'Related Borrow ID', accessor: (row) => (row.borrow as Record<string, unknown>)?.id },
             ];
         case ReportType.SYSTEM_USAGE:
             return [
@@ -1401,10 +1420,9 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
     }
 };
 
-const RenderLiveReportTable: React.FC<{ data: any[]; reportType: ReportType }> = ({ data, reportType }) => {
+const RenderLiveReportTable: React.FC<{ data: Record<string, unknown>[]; reportType: ReportType }> = ({ data, reportType }) => {
     if (!data || data.length === 0) {
-        // This case should be handled by the caller, but as a safeguard:
-        return <p className="text-muted-foreground">No data to display for the selected filters.</p>;
+        return <p className="text-muted-foreground italic">No data available for this report configuration.</p>;
     }
 
     const columns = getColumnDefinitions(reportType);

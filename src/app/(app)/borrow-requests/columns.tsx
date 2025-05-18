@@ -1,6 +1,6 @@
 'use client'
 
-import { ColumnDef, RowData, TableMeta } from "@tanstack/react-table"
+import { ColumnDef, RowData } from "@tanstack/react-table"
 import { Borrow, BorrowStatus, User, Equipment, Class, ReservationType } from "@prisma/client" // Import base types
 import { format } from 'date-fns'
 import { Badge } from "@/components/ui/badge"
@@ -15,8 +15,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu" // For actions menu
 import { toast } from "sonner"; // Add toast import
-import Link from "next/link";
-import { Checkbox } from "@/components/ui/checkbox"
 
 // Define the type here (moved from page.tsx)
 export type BorrowRequestAdminView = Borrow & {
@@ -67,9 +65,9 @@ declare module '@tanstack/react-table' {
 }
 
 // Defines the shape of the meta object passed to the table
-interface BorrowRequestAdminViewMeta extends TableMeta<BorrowRequestAdminView> {
-  // ... meta properties ...
-}
+// interface BorrowRequestAdminViewMeta extends TableMeta<BorrowRequestAdminView> { // Removed this interface
+//   // ... meta properties ...
+// }
 
 export const columns: ColumnDef<BorrowRequestAdminView>[] = [
   // Optional: Selection Checkbox column

@@ -1,10 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     // 1. Authentication & Authorization Check

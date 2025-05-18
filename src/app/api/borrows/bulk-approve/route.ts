@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; 
+import { authOptions } from '@/lib/authOptions';
 import { z } from 'zod';
 
 // Zod schema for validating the incoming request body

@@ -1,19 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+// import { z } from 'zod'; // Removed unused z import
 import { prisma } from '@/lib/prisma';
 import { AdminUserUpdateSchema } from '@/lib/schemas';
-import { UserRole } from '@prisma/client';
+import { UserRole, type Prisma } from '@prisma/client'; // Added Prisma type import
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-interface RouteContext {
-  params: {
-    id: string;
-  }
-}
+import { authOptions } from "@/lib/authOptions";
 
 // Helper function for permission check
-async function verifyStaffOrFaculty(req: NextRequest) {
+async function verifyStaffOrFaculty() { // Removed req: NextRequest
     const session = await getServerSession(authOptions);
     if (!session?.user) return { authorized: false, user: null, response: NextResponse.json({ message: 'Authentication required' }, { status: 401 }) };
     
@@ -30,9 +24,14 @@ async function verifyStaffOrFaculty(req: NextRequest) {
 }
 
 // GET: Get a specific user by ID (STAFF or FACULTY)
-export async function GET(req: NextRequest, { params: { id: userId } }: RouteContext) {
-  const authResult = await verifyStaffOrFaculty(req);
-  if (!authResult.authorized) return authResult.response;
+export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) { // Updated signature
+  const params = await context.params; // Await params
+  const userId = params.id; // Extract userId
+  const authResult = await verifyStaffOrFaculty();
+  if (!authResult.authorized) {
+    if (authResult.response) { return authResult.response; }
+    return NextResponse.json({ message: 'Authorization check failed unexpectedly.' }, { status: 500 });
+  }
 
   try {
     const user = await prisma.user.findUnique({
@@ -63,17 +62,22 @@ export async function GET(req: NextRequest, { params: { id: userId } }: RouteCon
 }
 
 // PATCH: Update a specific user (STAFF or FACULTY)
-export async function PATCH(req: NextRequest, { params: { id: userId } }: RouteContext) {
-  const authResult = await verifyStaffOrFaculty(req);
-  if (!authResult.authorized) return authResult.response;
+export async function PATCH(_req: NextRequest, context: { params: Promise<{ id: string }> }) { // Updated signature
+  const params = await context.params; // Await params
+  const userId = params.id; // Extract userId
+  const authResult = await verifyStaffOrFaculty();
+  if (!authResult.authorized) {
+    if (authResult.response) { return authResult.response; }
+    return NextResponse.json({ message: 'Authorization check failed unexpectedly.' }, { status: 500 });
+  }
   
   const requestingUser = authResult.user; // Get user from auth result
 
   try {
     let body;
     try {
-      body = await req.json();
-    } catch (error) {
+      body = await _req.json();
+    } catch { // Changed from catch(error)
       return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
     }
 
@@ -110,7 +114,7 @@ export async function PATCH(req: NextRequest, { params: { id: userId } }: RouteC
     // --- End Handle FIC Unassignment ---
 
     // Prepare data, converting empty strings to null for nullable fields
-    const dataToUpdate: { [key: string]: any } = {};
+    const dataToUpdate: Prisma.UserUpdateInput = {}; // Typed with Prisma.UserUpdateInput
     if (updateData.name !== undefined) dataToUpdate.name = updateData.name;
     if (updateData.email !== undefined) dataToUpdate.email = updateData.email.toLowerCase(); // Ensure email is lowercase
     if (updateData.role !== undefined) dataToUpdate.role = updateData.role;
@@ -155,22 +159,30 @@ export async function PATCH(req: NextRequest, { params: { id: userId } }: RouteC
     console.log(`User ${requestingUser?.email} updated user: ${updatedUser.email}`);
     return NextResponse.json({ message: "User updated successfully", user: updatedUser });
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Changed to error: unknown
     console.error(`API Error - PATCH /api/users/${userId}:`, error);
-    if (error.code === 'P2025') { 
-        return NextResponse.json({ message: 'User not found' }, { status: 404 });
-    }
-    if (error.code === 'P2002') { 
-        return NextResponse.json({ message: 'Email already in use by another account' }, { status: 409 });
+    if (error && typeof error === 'object' && 'code' in error) {
+        const prismaError = error as { code: string };
+        if (prismaError.code === 'P2025') { 
+            return NextResponse.json({ message: 'User not found' }, { status: 404 });
+        }
+        if (prismaError.code === 'P2002') { 
+            return NextResponse.json({ message: 'Email already in use by another account' }, { status: 409 });
+        }
     } 
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 }
 
 // DELETE: Delete a specific user (STAFF or FACULTY)
-export async function DELETE(req: NextRequest, { params: { id: userId } }: RouteContext) {
-  const authResult = await verifyStaffOrFaculty(req);
-  if (!authResult.authorized) return authResult.response;
+export async function DELETE(_req: NextRequest, context: { params: Promise<{ id: string }> }) { // Updated signature
+  const params = await context.params; // Await params
+  const userId = params.id; // Extract userId
+  const authResult = await verifyStaffOrFaculty();
+  if (!authResult.authorized) {
+    if (authResult.response) { return authResult.response; }
+    return NextResponse.json({ message: 'Authorization check failed unexpectedly.' }, { status: 500 });
+  }
   
   const requestingUser = authResult.user; // Get user from auth result
 
@@ -203,28 +215,23 @@ export async function DELETE(req: NextRequest, { params: { id: userId } }: Route
     console.log(`User ${requestingUser?.email} deleted user: ${userId}`);
     return new NextResponse(null, { status: 204 }); 
 
-  } catch (error: any) {
+  } catch (error: unknown) { // Changed to error: unknown
     console.error(`API Error - DELETE /api/users/${userId}:`, error);
     
-    // Specific check for the User Not Found case
-    if (error.code === 'P2025') { 
-        return NextResponse.json({ message: 'User not found' }, { status: 404 });
+    if (error && typeof error === 'object' && 'code' in error) {
+        const prismaError = error as { code: string, meta?: Record<string, unknown> }; // Changed meta type
+        // Specific check for the User Not Found case
+        if (prismaError.code === 'P2025') { 
+            return NextResponse.json({ message: 'User not found' }, { status: 404 });
+        }
+        
+        // Specific check for required relation violation (backup)
+        if (prismaError.code === 'P2014') {
+            // This should ideally be caught by the pre-check, but handle defensively
+            console.error(`Prisma Error P2014 during delete for user ${userId}:`, prismaError.meta);
+            return NextResponse.json({ message: 'Cannot delete user: They are required by another record (e.g., assigned as FIC to a class). Please ensure they are unassigned first.' }, { status: 409 });
+        }
     }
-    
-    // Specific check for required relation violation (backup)
-    if (error.code === 'P2014') {
-        // This should ideally be caught by the pre-check, but handle defensively
-        console.error(`Prisma Error P2014 during delete for user ${userId}:`, error.meta);
-        return NextResponse.json({ message: 'Cannot delete user: They are required by another record (e.g., assigned as FIC to a class). Please ensure they are unassigned first.' }, { status: 409 });
-    }
-    
-    // Generic check for foreign key constraints (e.g., user in Borrow records)
-    if (error.code === 'P2003') {
-        console.error(`Prisma Error P2003 during delete for user ${userId}:`, error.meta);
-        return NextResponse.json({ message: 'Cannot delete user: They are referenced in other records (e.g., borrow history). Please reassign or delete related records first.' }, { status: 409 }); // Use 409 Conflict here too
-    }
-    
-    // Fallback for other errors
     return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
   }
 } 

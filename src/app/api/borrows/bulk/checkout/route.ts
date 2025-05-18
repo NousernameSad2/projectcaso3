@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, BorrowStatus, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -55,11 +55,6 @@ export async function POST(request: Request) {
   // 3. Perform the update (single or bulk)
   try {
     let result;
-    const updateData = {
-        borrowStatus: BorrowStatus.ACTIVE,
-        checkoutTime: checkoutTimestamp,
-        // approvedByStaffId: user.id, // Record who confirmed the checkout
-    };
 
     if (borrowId) {
        // --- Single Item Checkout ---
@@ -84,7 +79,6 @@ export async function POST(request: Request) {
        await prisma.borrow.update({
           where: { id: borrowId },
           data: {
-              // ...updateData, // Original updateData only had ACTIVE, so we replace it
               borrowStatus: newStatus,
               checkoutTime: checkoutTimestamp,
               approvedByStaffId: user.id, // Record who confirmed the checkout
@@ -96,14 +90,12 @@ export async function POST(request: Request) {
        // --- Bulk Item Checkout ---
        // For bulk, we currently set all to ACTIVE. 
        // A more complex approach would be needed to set ACTIVE/OVERDUE individually.
-       // @ts-ignore // Ignore borrowGroupId typing issue if present
        result = await prisma.borrow.updateMany({
          where: {
            borrowGroupId: borrowGroupId,
            borrowStatus: BorrowStatus.APPROVED, // Only checkout items that are approved
          },
          data: {
-             // ...updateData, // This was the original updateData with just ACTIVE
              borrowStatus: BorrowStatus.ACTIVE, // Explicitly set to ACTIVE for now
              checkoutTime: checkoutTimestamp,
              approvedByStaffId: user.id, // Record who confirmed the checkout
@@ -112,13 +104,11 @@ export async function POST(request: Request) {
 
        // Handle bulk count 0 scenario
        if (result.count === 0) {
-         // @ts-ignore // Ignore borrowGroupId typing issue if present
          const groupExists = await prisma.borrow.findFirst({ where: { borrowGroupId } });
          if (!groupExists) {
            return NextResponse.json({ error: `Borrow group ${borrowGroupId} not found.` }, { status: 404 });
          } else {
              // Check if any are actually approved in the group
-             // @ts-ignore // Ignore borrowGroupId typing issue if present
              const anyApproved = await prisma.borrow.findFirst({ where: { borrowGroupId, borrowStatus: BorrowStatus.APPROVED }});
              if (!anyApproved) {
                  return NextResponse.json({ message: `No approved requests found in group ${borrowGroupId} awaiting checkout.`, count: 0 }, { status: 200 });

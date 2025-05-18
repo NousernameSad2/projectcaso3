@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Ensure this path is correct
+import { authOptions } from '@/lib/authOptions';
 import { BorrowStatus } from '@prisma/client';
 
 // Define active statuses explicitly for type safety
@@ -19,7 +19,7 @@ const isActiveStatus = (status: BorrowStatus): boolean => {
 };
 
 // GET: Fetch all borrow records for the currently logged-in user
-export async function GET(req: NextRequest) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     // 1. Authentication: Ensure user is logged in

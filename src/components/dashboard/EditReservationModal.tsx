@@ -15,11 +15,12 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Loader2 } from 'lucide-react';
-import { Prisma, Borrow, BorrowStatus } from '@prisma/client'; // Assuming Prisma types are needed
+import { Prisma } from '@prisma/client'; // Removed Borrow, BorrowStatus
 import { format, parseISO } from 'date-fns';
 
 // Define the expected shape of reservation data passed to the modal
 // Use Prisma.BorrowGetPayload to get the type with relations if needed
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const borrowWithRelations = Prisma.validator<Prisma.BorrowDefaultArgs>()({
   include: { equipment: { select: { name: true } } } // Example relation
 });
@@ -58,9 +59,7 @@ export default function EditReservationModal({
     resolver: zodResolver(EditReservationSchema),
     defaultValues: {
         // Initialize with existing data, handle potential nulls
-        // @ts-ignore - Ignore type errors until schema/types sync
         approvedStartTime: reservationData.approvedStartTime ? new Date(reservationData.approvedStartTime) : (reservationData.requestedStartTime ? new Date(reservationData.requestedStartTime) : undefined),
-        // @ts-ignore - Ignore type errors until schema/types sync
         approvedEndTime: reservationData.approvedEndTime ? new Date(reservationData.approvedEndTime) : (reservationData.requestedEndTime ? new Date(reservationData.requestedEndTime) : undefined),
         // Initialize other fields...
     },
@@ -69,9 +68,7 @@ export default function EditReservationModal({
   useEffect(() => {
     // Reset form when reservationData changes (e.g., opening modal for different item)
     form.reset({
-        // @ts-ignore
         approvedStartTime: reservationData.approvedStartTime ? new Date(reservationData.approvedStartTime) : (reservationData.requestedStartTime ? new Date(reservationData.requestedStartTime) : undefined),
-        // @ts-ignore
         approvedEndTime: reservationData.approvedEndTime ? new Date(reservationData.approvedEndTime) : (reservationData.requestedEndTime ? new Date(reservationData.requestedEndTime) : undefined),
     });
   }, [reservationData, form]);
@@ -100,9 +97,10 @@ export default function EditReservationModal({
       toast.success("Reservation updated successfully!");
       onSuccess(); // Trigger callback (closes modal, refetches data)
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Update Error:", error);
-      toast.error(`Error: ${error.message || 'Could not update reservation.'}`);
+      const message = error instanceof Error ? error.message : 'Could not update reservation.';
+      toast.error(`Error: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -119,7 +117,7 @@ export default function EditReservationModal({
         <DialogHeader>
           <DialogTitle>Edit Approved Reservation</DialogTitle>
            <DialogDescription>
-             Adjust details for reservation of "{reservationData.equipment.name}". Current status: {reservationData.borrowStatus}
+             Adjust details for reservation of &quot;{reservationData.equipment?.name ?? 'Unknown Equipment'}&quot;. Current status: {reservationData.borrowStatus}
            </DialogDescription>
         </DialogHeader>
         

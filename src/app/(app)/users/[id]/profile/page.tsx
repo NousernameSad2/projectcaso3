@@ -310,8 +310,6 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
   });
   // --- END Borrow History Grouping ---
 
-  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory || (isFacultyUser && isLoadingFacultyBorrows);
-
   // Handle initial loading or unauthenticated state
   if (sessionStatus === 'loading') {
     return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="lg" /></div>;

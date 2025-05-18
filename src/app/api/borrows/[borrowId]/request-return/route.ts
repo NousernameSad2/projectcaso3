@@ -2,13 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-
-interface RouteContext {
-  params: {
-    borrowId: string; // Borrow ID from the URL
-  }
-}
+import { authOptions } from '@/lib/authOptions';
 
 interface SessionUser {
   id: string;
@@ -16,8 +10,9 @@ interface SessionUser {
 }
 
 // PATCH: Mark an active borrow as PENDING_RETURN by the borrower
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
+export async function PATCH(req: NextRequest, context: { params: Promise<{ borrowId: string }> }) {
     const session = await getServerSession(authOptions);
+    const params = await context.params;
     const user = session?.user as SessionUser | undefined;
 
     // 1. Authentication: Ensure user is logged in

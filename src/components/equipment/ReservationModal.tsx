@@ -1,14 +1,14 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm, Controller } from "react-hook-form";
-import { z } from "zod";
-import { ReservationBaseSchema, ReservationInput } from "@/lib/schemas";
+import { useForm } from "react-hook-form";
+import { /* ReservationBaseSchema, ReservationInput*/ } from "@/lib/schemas"; // Removed ReservationInput
 import { Equipment, Class, User } from '@prisma/client'; // Added Class and User
 import { toast } from "sonner"; // Import toast
 import { useSession } from 'next-auth/react'; // Import useSession
 import { format, parseISO } from 'date-fns'; // For formatting date/time and parseISO
+import { z } from 'zod';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -39,7 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"; // Added Select
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Check, ChevronsUpDown, X } from "lucide-react";
@@ -47,11 +47,36 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 // Define a basic type for the fetched class data
-interface EnrolledClass extends Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'> {
-  // This interface maps to the select clause in the API route
-}
+// Changed to type aliases
+type EnrolledClass = Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'>;
 
-interface Classmate extends Pick<User, 'id' | 'name'> {}
+type Classmate = Pick<User, 'id' | 'name'>;
+
+// Schema for the form in this modal
+const FormSchemaForModal = z.object({
+  equipmentIds: z.array(z.string().min(1)).min(1, { message: "At least one equipment item must be selected." }),
+  requestedStartTime: z.coerce.date({ 
+      required_error: "Start date and time are required.",
+      invalid_type_error: "Invalid start date/time format."
+  }),
+  requestedEndTime: z.coerce.date({ 
+      required_error: "End date and time are required.",
+      invalid_type_error: "Invalid end date/time format."
+  }),
+  classId: z.string().min(1, { message: "Class selection is required."}), 
+}).refine(
+  (data) => { // data should now be correctly typed based on the z.object above
+    if (!data.requestedStartTime || !data.requestedEndTime) {
+      return true;
+    }
+    return data.requestedEndTime > data.requestedStartTime;
+  }, 
+  {
+    message: "End time must be after start time.",
+    path: ["requestedEndTime"], 
+  }
+);
+type FormValuesForModal = z.infer<typeof FormSchemaForModal>;
 
 interface ReservationModalProps {
   equipmentToReserve: Equipment[]; // Accept array of equipment
@@ -76,14 +101,14 @@ export default function ReservationModal({
   const [selectedClassmateIds, setSelectedClassmateIds] = useState<Set<string>>(new Set());
   const [isClassmatePopoverOpen, setIsClassmatePopoverOpen] = useState(false);
 
-  const form = useForm<Omit<ReservationInput, 'groupMates'>>({
-    // Omit groupMates from form state, handle separately
-    resolver: zodResolver(ReservationBaseSchema.omit({ groupMates: true })), // Use ReservationBaseSchema and omit groupMates
+  const form = useForm<FormValuesForModal>({ // Use FormValuesForModal
+    resolver: zodResolver(FormSchemaForModal), // Use FormSchemaForModal
     defaultValues: {
       equipmentIds: equipmentToReserve.map(eq => eq.id),
       requestedStartTime: undefined,
       requestedEndTime: undefined,
       classId: "",
+      // groupMates is not part of FormValuesForModal, so no default needed here
     },
   });
 
@@ -118,7 +143,7 @@ export default function ReservationModal({
           }
           const data = await response.json();
           setEnrolledClasses(data as EnrolledClass[]);
-        } catch (error) { /* ... error handling ... */ } 
+        } catch { /* Removed _error */ }
         finally { setIsLoadingClasses(false); }
       }
     };
@@ -144,14 +169,14 @@ export default function ReservationModal({
         const filteredData = (data as Classmate[]).filter(cm => cm.id !== session?.user?.id);
         setClassmates(filteredData);
         setSelectedClassmateIds(new Set()); // Clear selections when classmates reload
-      } catch (error) { /* ... error handling ... */ } 
+      } catch { /* Removed _error */ }
       finally { setIsLoadingClassmates(false); }
     };
     fetchClassmates();
   }, [selectedClassId, session?.user?.id]); // Depend on selectedClassId and userId
 
   // Handle form submission
-  async function onSubmit(values: Omit<ReservationInput, 'groupMates'>) {
+  async function onSubmit(values: FormValuesForModal) { // Use FormValuesForModal
     if (sessionStatus !== 'authenticated' || !session?.user?.id) {
         toast.error("You must be logged in to make a reservation.");
         return;
@@ -228,13 +253,6 @@ export default function ReservationModal({
       return newSet;
     });
   };
-
-  const selectedClassmatesDisplay = useMemo(() => {
-     return classmates
-        .filter(cm => selectedClassmateIds.has(cm.id))
-        .map(cm => cm.name)
-        .join(", ");
-  }, [selectedClassmateIds, classmates]);
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>

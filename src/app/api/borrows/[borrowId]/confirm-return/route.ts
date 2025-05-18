@@ -1,21 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus, EquipmentStatus, UserRole } from '@prisma/client';
-import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Use the correct path
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
-
-interface RouteContext {
-  params: {
-    borrowId: string; // Borrow ID from the URL
-  }
-}
-
-// Define a type for the session user
-interface SessionUser {
-  id: string;
-  role: UserRole;
-}
 
 // Define expected request body
 const confirmReturnSchema = z.object({
@@ -27,7 +15,7 @@ const confirmReturnSchema = z.object({
 
 // PATCH: Confirm a PENDING_RETURN borrow record (by Staff/Faculty/Admin)
 // Correct signature for Next.js 13+ App Router - Modified for potential Promise params
-export async function PATCH(request: Request, context: { params: Promise<{ borrowId: string }> | { borrowId: string } }) {
+export async function PATCH(request: Request, context: { params: Promise<{ borrowId: string }> }) {
     // --- Await Params Start ---
     // Await the context.params in case it's a Promise (as seen in logs with Next 15 RC)
     const params = await context.params;
@@ -55,7 +43,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ borro
 
     // Access borrowId from the *awaited* params
     const borrowId = params.borrowId;
-    const userId = session.user.id; // Use userId from session for potential logging
 
     if (!borrowId) {
         console.error("[Confirm Return] Bad Request - Missing borrowId.");
@@ -148,7 +135,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ borro
                  if (currentEquipmentStatus === EquipmentStatus.BORROWED) {
                     console.log(`[Confirm Return TX ${borrowId}] Equipment status is BORROWED. Updating to AVAILABLE...`);
                     await tx.equipment.update({
-                        where: { id: borrowRecord.equipmentId },
+                        where: { id: borrowRecord.equipmentId ?? undefined },
                         data: { status: EquipmentStatus.AVAILABLE },
                     });
                      console.log(`[Confirm Return TX ${borrowId}] Equipment status updated to AVAILABLE.`);

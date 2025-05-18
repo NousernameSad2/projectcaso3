@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Equipment, Class, User, ReservationType } from '@prisma/client';
+import { Class, User, ReservationType } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { toast } from "sonner";
-import { format, parseISO, isAfter, addHours } from 'date-fns';
+import { format, isAfter, addHours } from 'date-fns';
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,7 +18,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Form,
@@ -32,8 +31,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { Loader2, AlertCircle, Check, ChevronsUpDown, X } from 'lucide-react';
+import { Loader2, Check, ChevronsUpDown, X } from 'lucide-react';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
@@ -51,8 +49,8 @@ const BulkReservationFormSchema = z.object({
 
 type BulkFormInput = z.infer<typeof BulkReservationFormSchema>;
 
-interface EnrolledClass extends Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'> {}
-interface Classmate extends Pick<User, 'id' | 'name'> {}
+type EnrolledClass = Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'>;
+type Classmate = Pick<User, 'id' | 'name'>;
 
 interface BulkReservationModalProps {
   selectedEquipmentIds: string[];
@@ -113,7 +111,7 @@ export default function BulkReservationModal({
       }
       const data = await response.json();
       setEnrolledClasses(data as EnrolledClass[]);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error fetching classes:", error);
       const errorMessage = error instanceof Error ? error.message : "Failed to load classes.";
       setClassError(errorMessage);

@@ -38,6 +38,7 @@ const getDeficiencyStatusVariant = (status: DeficiencyStatus): "default" | "seco
 
 // TableMeta definition for actions
 declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
     resolveDeficiencyHandler?: (deficiencyId: string) => Promise<void>;
     deleteDeficiencyHandler?: (deficiencyId: string) => Promise<void>;

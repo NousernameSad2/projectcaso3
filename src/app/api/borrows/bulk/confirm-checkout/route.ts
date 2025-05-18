@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -54,7 +54,6 @@ export async function POST(request: Request) {
       // Find the borrow records to be checked out
       const borrowsToConfirm = await tx.borrow.findMany({
         where: {
-          // @ts-ignore 
           borrowGroupId: borrowGroupId,
           borrowStatus: BorrowStatus.APPROVED,
         },
@@ -62,7 +61,6 @@ export async function POST(request: Request) {
       });
 
       if (borrowsToConfirm.length === 0) {
-         // @ts-ignore 
          const groupExists = await tx.borrow.findFirst({ where: { borrowGroupId } });
          if (!groupExists) {
            throw new Error(`Borrow group with ID ${borrowGroupId} not found.`);
@@ -72,7 +70,7 @@ export async function POST(request: Request) {
       }
 
       // --- Optional: Fetch and Log Equipment Statuses (Removed throwing error) ---
-      const equipmentIds = borrowsToConfirm.map(b => b.equipmentId);
+      const equipmentIds = borrowsToConfirm.map(b => b.equipmentId).filter(id => id !== null) as string[];
       const equipmentStatuses = await tx.equipment.findMany({
         where: { id: { in: equipmentIds } },
         select: { id: true, status: true, name: true },
@@ -128,13 +126,14 @@ export async function POST(request: Request) {
       { status: 200 }
     );
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     // ... existing error handling ...
     // Add specific check for the new error message
-    if (error.message?.includes('not in a usable state')) {
-        return NextResponse.json({ error: error.message }, { status: 409 }); // 409 Conflict
+    const errorMessage = error instanceof Error ? error.message : 'Database error occurred during bulk checkout confirmation.';
+    if (errorMessage?.includes('not in a usable state')) {
+        return NextResponse.json({ error: errorMessage }, { status: 409 }); // 409 Conflict
     }
     console.error(`Failed to bulk confirm checkout for group ${borrowGroupId}:`, error);
-    return NextResponse.json({ error: error.message || 'Database error occurred during bulk checkout confirmation.' }, { status: 500 });
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 } 

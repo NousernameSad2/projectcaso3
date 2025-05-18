@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { prisma } from '@/lib/prisma';
+import type { Prisma } from '@prisma/client'; // Prisma types
 import { ProfileUpdateSchema } from '@/lib/schemas'; // Import the update schema
-import { z } from 'zod';
 
 // GET handler to fetch current user's details
-export async function GET(req: NextRequest) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     if (!session?.user?.id) {
@@ -61,7 +61,7 @@ export async function PATCH(req: NextRequest) {
         let body;
         try {
             body = await req.json();
-        } catch (error) {
+        } catch {
             return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
         }
 
@@ -76,7 +76,7 @@ export async function PATCH(req: NextRequest) {
         const updateData = parsedData.data;
 
         // Ensure we don't try to update with undefined values if fields were omitted
-        const dataToUpdate: { [key: string]: any } = {};
+        const dataToUpdate: Prisma.UserUpdateInput = {};
         if (updateData.name !== undefined) dataToUpdate.name = updateData.name;
         
         // Assign directly, Zod validation already ensures non-empty string

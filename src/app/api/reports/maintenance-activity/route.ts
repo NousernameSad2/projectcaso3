@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { EquipmentStatus } from '@prisma/client'; // Import EquipmentStatus
+import { EquipmentStatus, type Prisma } from '@prisma/client'; // Import EquipmentStatus and Prisma
 import { differenceInHours, parseISO, isValid, isDate } from 'date-fns';
 
 // Expected structure from maintenanceLog JSON array
@@ -21,8 +21,8 @@ interface EditHistoryItem {
     user?: string;
     changes: Array<{
         field: string;
-        oldValue: any;
-        newValue: any;
+        oldValue: Prisma.JsonValue;
+        newValue: Prisma.JsonValue;
     }>;
 }
 

@@ -1,19 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus, EquipmentStatus, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-
-interface RouteContext {
-  params: {
-    borrowId: string; // Borrow ID from the URL
-  }
-}
+import { authOptions } from '@/lib/authOptions';
 
 // PATCH: Mark an APPROVED borrow record as ACTIVE (Checked Out by Staff/Faculty)
 // Correct signature for Next.js 13+ App Router
-export async function PATCH(request: Request, { params }: { params: { borrowId: string } }) {
+export async function PATCH(request: Request, context: { params: Promise<{ borrowId: string }> }) {
     const session = await getServerSession(authOptions);
+    const params = await context.params; // Await the params
 
     // 1. Authentication & Authorization: Ensure user is Staff/Faculty/Admin
     if (!session?.user?.id) {
@@ -77,7 +72,7 @@ export async function PATCH(request: Request, { params }: { params: { borrowId: 
             const currentEquipmentStatus = borrowRecord.equipment.status;
             if (currentEquipmentStatus === EquipmentStatus.AVAILABLE || currentEquipmentStatus === EquipmentStatus.RESERVED) {
                 await tx.equipment.update({
-                    where: { id: borrowRecord.equipmentId },
+                    where: { id: borrowRecord.equipmentId ?? undefined },
                     data: { status: EquipmentStatus.BORROWED },
                 });
             } else {

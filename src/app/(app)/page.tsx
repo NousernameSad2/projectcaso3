@@ -9,50 +9,37 @@ import Link from 'next/link';
 import {
   ClipboardList,   // For Borrows
   TriangleAlert,   // For Deficiencies
-  HardDrive,       // For Equipment
   PlusCircle,      // For New Reservation
   ListChecks,      // Icon for pending approvals
   AlertCircle,      // Icon for errors
   Loader2,
   PackageCheck,    // Added
-  ArrowRightCircle,// Added
-  RefreshCw,       // Added
-  BellDot,         // Added
   CheckCircle,     // Add CheckCircle
   AlertTriangle,    // Ensure this is imported
-  Edit,
   Activity,
-  Wrench,
-  BookUser,
   Users,
   Package,
   Check,
   X,
-  Pencil,
 } from 'lucide-react'; // Keep icons for layout
 import LoadingSpinner from '@/components/ui/LoadingSpinner'; // Import a loading spinner
 import { 
-    Borrow, 
     BorrowStatus as PrismaBorrowStatus, 
-    Equipment, 
     EquipmentStatus, // <<< Import EquipmentStatus
-    User,
     Prisma // Import Prisma namespace
 } from '@prisma/client'; 
 import { ReservationType } from '@prisma/client'; // <<< Import ReservationType
 import { format, isValid, differenceInHours } from 'date-fns'; // For date formatting and isValid
 import { toast } from 'sonner'; // Import toast
-import { cn, transformGoogleDriveUrl } from '@/lib/utils'; // Added
+import { transformGoogleDriveUrl } from '@/lib/utils'; // Added
 import Image from 'next/image'; // Added
 import { Badge } from "@/components/ui/badge"; // Added
-import { Separator } from "@/components/ui/separator"; // Added
 import {
     Tooltip,
     TooltipContent,
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip"; // Added for icon tooltips
-import { Checkbox } from "@/components/ui/checkbox"; // Added Checkbox
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,7 +49,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"; // Added Alert Dialog
 import EditReservationModal from '@/components/dashboard/EditReservationModal'; // Corrected import path
 import { useQueryClient } from '@tanstack/react-query'; // <<< ADDED: Import useQueryClient
@@ -80,12 +66,14 @@ interface DashboardSummary {
 }
 
 // Use Prisma.BorrowGetPayload to define the shape including relations
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const borrowWithRelations = Prisma.validator<Prisma.BorrowDefaultArgs>()({
   // include will fetch all scalar fields by default + the specified relations
   include: { 
     equipment: { select: { id: true, name: true, equipmentId: true, images: true, status: true } },
     borrower: { select: { id: true, name: true, email: true } },
     class: { select: { courseCode: true, section: true } }, // Include necessary class fields
+    deficiencies: { select: { id: true } }, // ADDED deficiencies to the include
   }
 });
 
@@ -386,9 +374,10 @@ function StaffActionPanel() {
           console.log("[Checkout Group Frontend] Calling fetchReservations() after successful checkout.");
           fetchReservations();
 
-      } catch (err: any) {
+      } catch (err: unknown) {
           console.error("[Checkout Group Frontend] Checkout error caught:", err);
-          toast.error(`Checkout failed: ${err.message}`);
+          const message = err instanceof Error ? err.message : "An unknown error occurred during group checkout.";
+          toast.error(`Checkout failed: ${message}`);
     } finally {
           console.log("[Checkout Group Frontend] handleCheckoutGroup finally block. Setting processingGroupId=null."); // Updated log
           setProcessingGroupId(null); // Only set processingGroupId
@@ -430,8 +419,9 @@ function StaffActionPanel() {
              await queryClient.invalidateQueries({ queryKey: ['pendingReturns'] });
         }
 
-    } catch (err: any) {
-        toast.error(`Return confirmation failed: ${err.message}`);
+    } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : "An unknown error occurred during group return confirmation.";
+        toast.error(`Return confirmation failed: ${message}`);
     } finally {
         setProcessingGroupId(null);
     }
@@ -547,12 +537,6 @@ function StaffActionPanel() {
         new Date(itemsA[0].updatedAt).getTime() - new Date(itemsB[0].updatedAt).getTime()
     );
   }, [returns]);
-
-  // Handler to open the edit modal
-  const handleOpenEditModal = (reservation: PendingReservation) => {
-      setEditingReservation(reservation);
-      setIsEditModalOpen(true);
-  };
 
   // Callback after successful edit
   const handleReservationEdited = () => {
@@ -828,8 +812,8 @@ function StaffActionPanel() {
                                        </CardHeader>
                                        <CardContent className="p-0">
                                            <ul className="divide-y divide-border/30">
-                                               {items.map(item => {
-                                                   const hasOpenDeficiency = (item as any).deficiencies && (item as any).deficiencies.length > 0;
+                                               {items.map((item: PendingReservation) => {
+                                                   const hasOpenDeficiency = (item as PendingReservation).deficiencies && ((item as PendingReservation).deficiencies?.length ?? 0) > 0;
                                                    return (
                                                        <li key={item.id} className="flex items-center justify-between p-3 text-sm">
                                                            <div className="flex items-center gap-3">
@@ -889,7 +873,7 @@ function StaffActionPanel() {
           ) : (
             <>
               <div className="flex-grow space-y-3">
-                  {itemsToDisplayActive.map(([groupId, items]) => {
+                  {itemsToDisplayActive.map(([groupId, items]: [string, PendingReservation[]]) => {
                       const isIndividual = groupId.startsWith('individual-');
                       const representativeItem = items[0]; 
                       const href = isIndividual ? `/equipment/${representativeItem.equipmentId}` : `/borrows/group/${representativeItem.borrowGroupId}`; 
@@ -906,12 +890,12 @@ function StaffActionPanel() {
                                               {representativeItem.reservationType && (<Badge variant={representativeItem.reservationType === 'IN_CLASS' ? 'success' : 'destructive'} className="ml-2 text-xs whitespace-nowrap">{formatReservationType(representativeItem.reservationType)}</Badge>)}
                                               {isGroupOverdue && !isIndividual && (<Badge variant="destructive" className="ml-2 text-xs whitespace-nowrap">OVERDUE ITEMS</Badge>)}
                                           </CardTitle>
-                                          <CardDescription className="text-xs mt-1">Checked out: {formatDateSafe(representativeItem.checkoutTime)} {(representativeItem as any).expectedReturnTime && ` | Expected Return: ${formatDateSafe((representativeItem as any).expectedReturnTime)}`}</CardDescription>
+                                          <CardDescription className="text-xs mt-1">Checked out: {formatDateSafe(representativeItem.checkoutTime)} {representativeItem.approvedEndTime && ` | Expected Return: ${formatDateSafe(representativeItem.approvedEndTime)}`}</CardDescription>
                                       </div>
                                   </CardHeader>
                                    <CardContent className="p-0">
                                        <ul className="divide-y divide-border">
-                                          {items.map(item => (
+                                          {items.map((item: PendingReservation) => (
                                               <li key={item.id} className="flex items-center justify-between p-3 text-sm">
                                                   <div className="flex items-center gap-3">
                                                       <Image 
@@ -1008,16 +992,16 @@ export default function DashboardPage() {
   const isPrivilegedUser = userRole === UserRole.STAFF || userRole === UserRole.FACULTY;
 
   // --- STATE for Regular User Summary ---
-  const [summaryData, setSummaryData] = useState<DashboardSummary | null>(null);
-  const [isLoadingSummary, setIsLoadingSummary] = useState(false);
+  const [summaryData, setSummaryData] = useState<DashboardSummary>({});
+  const [isLoadingSummary, setIsLoadingSummary] = useState(true);
   const [summaryError, setSummaryError] = useState<string | null>(null);
   // --- NEW STATE for Deficiencies ---
   const [activeDeficiencyCount, setActiveDeficiencyCount] = useState<number | null>(null);
   const [isLoadingDeficiencies, setIsLoadingDeficiencies] = useState(false);
   const [deficiencyError, setDeficiencyError] = useState<string | null>(null);
 
-  const queryClient = useQueryClient();
-  const router = useRouter();
+  // const queryClient = useQueryClient(); // REMOVED
+  // const router = useRouter(); // REMOVED
 
   // --- EFFECT for fetching summary data AND deficiencies --- 
    useEffect(() => {
@@ -1038,7 +1022,7 @@ export default function DashboardPage() {
                 }
                 const summaryJson: DashboardSummary = await summaryResponse.json();
                 setSummaryData(summaryJson);
-            } catch (err) {
+            } catch (err: unknown) {
                 const message = err instanceof Error ? err.message : "Could not load dashboard summary";
                 console.error("Dashboard Summary Error:", err);
                 setSummaryError(message);
@@ -1054,7 +1038,7 @@ export default function DashboardPage() {
                     const errorData = await defResponse.json().catch(() => ({}));
                     throw new Error(errorData.message || `Failed to fetch deficiencies (${defResponse.status})`);
                 }
-                const deficienciesJson: any[] = await defResponse.json();
+                const deficienciesJson: { id: string; description: string; status: string; type: string; }[] = await defResponse.json();
                 setActiveDeficiencyCount(deficienciesJson.length); // Get the count
             } catch (err) {
                  const message = err instanceof Error ? err.message : "Could not load deficiencies";

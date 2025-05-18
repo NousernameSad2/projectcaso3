@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation'; // Import useRouter
 import { Equipment, EquipmentCategory, EquipmentStatus, UserRole } from '@prisma/client';
@@ -13,12 +13,12 @@ import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
 import { Calendar as CalendarIcon, FilterX, PlusCircle } from "lucide-react"
-import { format, isValid } from "date-fns"
+import { format } from "date-fns"
 import { DateRange } from "react-day-picker"
-import ReservationModal from '@/components/equipment/ReservationModal'; // Keep if used by Card
-import BulkCheckoutModal from '@/components/equipment/BulkCheckoutModal'; // Keep if needed
-// import BulkEditStatusModal from '@/components/equipment/BulkEditStatusModal'; // <<< Removed Import
-import BulkReservationModal from '@/components/equipment/BulkReservationModal'; // Import BulkReservationModal
+// import ReservationModal from '@/components/equipment/ReservationModal'; // Removed ReservationModal
+// import BulkCheckoutModal from '@/components/equipment/BulkCheckoutModal'; // Removed BulkCheckoutModal
+// import BulkEditStatusModal from '@/components/equipment/BulkEditStatusModal'; // <<< Import already removed
+import BulkReservationModal from '@/components/equipment/BulkReservationModal';
 import Link from 'next/link'; // Keep Link
 import { toast } from 'sonner'; // Keep toast
 
@@ -60,10 +60,6 @@ export default function EquipmentPage() {
 
   // State for multi-selection and modals (Keep for now)
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([]);
-  const [isReservationModalOpen, setIsReservationModalOpen] = useState(false);
-  const [selectedEquipmentForReservation, setSelectedEquipmentForReservation] = useState<Equipment | null>(null);
-  const [isBulkCheckoutModalOpen, setIsBulkCheckoutModalOpen] = useState(false);
-  const [isBulkStatusModalOpen, setIsBulkStatusModalOpen] = useState(false);
 
   // Fetch equipment data from API - Wrapped in useCallback
   const fetchEquipment = useCallback(async (search = searchTerm, category = selectedCategory, status = selectedStatus, dates = appliedDateRange) => {
@@ -84,9 +80,10 @@ export default function EquipmentPage() {
       const data = await response.json();
       // Expect EquipmentWithCount from API
       setEquipmentList(data.items || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Error fetching equipment:", err);
-      setError(err.message || "An unknown error occurred");
+      const message = err instanceof Error ? err.message : "An unknown error occurred";
+      setError(message);
       setEquipmentList([]);
     } finally {
       setIsLoading(false);
@@ -134,31 +131,31 @@ export default function EquipmentPage() {
   };
 
   // Open Reservation Modal (for single item from card)
-  const openReservationModal = (equipment: Equipment) => {
-    setSelectedEquipmentForReservation(equipment);
-    setIsReservationModalOpen(true);
-  };
+  // const openReservationModal = (equipment: Equipment) => {
+  //   setSelectedEquipmentForReservation(equipment);
+  //   setIsReservationModalOpen(true);
+  // };
 
   // Handler for successful SINGLE item reservation from modal
-  const handleReservationSuccess = () => { 
-    toast.success("Reservation request submitted!");
-    setIsReservationModalOpen(false);
-    setSelectedEquipmentForReservation(null);
-    clearSelection(); // Clear bulk selection if single was reserved
-  };
+  // const handleReservationSuccess = () => {
+  //   toast.success("Reservation request submitted!");
+  //   setIsReservationModalOpen(false);
+  //   setSelectedEquipmentForReservation(null);
+  //   clearSelection(); // Clear bulk selection if single was reserved
+  // };
 
   // --- Handlers for Bulk Modals ---
   const handleOpenBulkCheckout = () => {
      if (selectedEquipmentIds.length === 0) return;
-     setIsBulkCheckoutModalOpen(true);
+     // setIsBulkCheckoutModalOpen(true);
   };
-  const handleBulkCheckoutSuccess = () => {
-     console.log("Bulk checkout successful");
-     clearSelection(); 
-     toast.success('Items checked out successfully!'); 
-     setIsBulkCheckoutModalOpen(false);
-     fetchEquipment(); // Refetch data
-  };
+  // const handleBulkCheckoutSuccess = () => {
+  //    console.log("Bulk checkout successful");
+  //    clearSelection();
+  //    toast.success('Items checked out successfully!');
+  //    setIsBulkCheckoutModalOpen(false);
+  //    fetchEquipment(); // Refetch data
+  // };
 
   // Handler for opening bulk reservation modal - RE-ADD
   // const handleOpenBulkReserve = () => {
@@ -177,15 +174,15 @@ export default function EquipmentPage() {
 
   const handleOpenBulkStatus = () => {
      if (selectedEquipmentIds.length === 0) return;
-     setIsBulkStatusModalOpen(true);
+     // setIsBulkStatusModalOpen(true);
   };
-  const handleBulkStatusSuccess = () => {
-     console.log("Bulk status update successful");
-     clearSelection();
-     toast.success('Equipment statuses updated successfully!');
-     setIsBulkStatusModalOpen(false);
-     fetchEquipment(); // Refetch data
-  };
+  // const handleBulkStatusSuccess = () => {
+  //    console.log("Bulk status update successful");
+  //    clearSelection();
+  //    toast.success('Equipment statuses updated successfully!');
+  //    setIsBulkStatusModalOpen(false);
+  //    fetchEquipment(); // Refetch data
+  // };
 
   // Check user permissions and authentication status
   const isAuthenticated = sessionStatus === 'authenticated';

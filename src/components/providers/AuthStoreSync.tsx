@@ -2,11 +2,19 @@
 
 import { useSession } from 'next-auth/react';
 import { useEffect, useRef } from 'react';
-import { useAuthStore, AuthUser } from '@/stores/authStore';
+import { useAuthStore, AuthUser, AuthState } from '@/stores/authStore';
+
+// Define an interface for the expected shape of session.user
+interface SessionUserWithDetails {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  role: string; // Or your actual UserRole enum/type
+}
 
 export default function AuthStoreSync() {
   const { data: session, status } = useSession();
-  const setUser = useAuthStore((state) => state.setUser);
+  const setUser = useAuthStore((state: AuthState) => state.setUser);
   const storeInitialized = useRef(false);
 
   useEffect(() => {
@@ -14,10 +22,10 @@ export default function AuthStoreSync() {
     
     if (status !== 'loading') { 
        const currentUser = session?.user ? {
-         userId: (session.user as any).id, // Map id to userId
+         userId: (session.user as SessionUserWithDetails).id, // Map id to userId
          name: session.user.name,
          email: session.user.email,
-         role: (session.user as any).role
+         role: (session.user as SessionUserWithDetails).role
        } as AuthUser : null; 
 
        // Simple sync: always update store when session changes after initial load

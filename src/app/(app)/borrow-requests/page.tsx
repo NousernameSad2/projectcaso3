@@ -1,25 +1,25 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { toast } from "sonner";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { DataTable } from "@/components/ui/data-table";
 import { columns, type BorrowRequestAdminView } from "./columns";
 import ConfirmReturnModal from "@/components/borrow/ConfirmReturnModal";
-import { DeficiencyType, BorrowStatus, Prisma, Borrow, Equipment, User, Class, ReservationType } from "@prisma/client";
+import { DeficiencyType, BorrowStatus, Borrow, Equipment, User, Class, ReservationType } from "@prisma/client";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type ColumnFiltersState } from "@tanstack/react-table";
 import { useSession } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ScrollText, Database, FileText, AlertCircle, Users, Clock } from 'lucide-react';
+import { ScrollText, Database, FileText, AlertCircle, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { format, isValid } from 'date-fns';
-import { cn, transformGoogleDriveUrl } from "@/lib/utils";
+import { transformGoogleDriveUrl } from "@/lib/utils";
 
 // --- Type Definitions ---
 type GroupBorrowWithDetails = Borrow & {
@@ -71,7 +71,7 @@ const fetchGroupBorrows = async (): Promise<GroupBorrowWithDetails[]> => {
     const response = await fetch('/api/borrows/groups');
     if (!response.ok) {
         if (response.status === 401 || response.status === 403) return [];
-        const errorData = await response.json().catch(() => ({}));
+        const errorData: { message?: string } = await response.json().catch(() => ({}));
         throw new Error(errorData.message || `Failed to fetch group borrows: ${response.statusText}`);
     }
     return await response.json() as GroupBorrowWithDetails[];
@@ -129,7 +129,7 @@ export default function BorrowRequestsPage() {
     try {
       const response = await fetch('/api/borrows/admin');
       if (!response.ok) {
-         const errorData = await response.json().catch(() => ({ error: "Failed to parse error response" }));
+         const errorData: { error?: string } = await response.json().catch(() => ({ error: "Failed to parse error response" }));
          if (response.status === 401 || response.status === 403) {
              setRequestsError(errorData.error || "You do not have permission to view this page.");
              toast.error(errorData.error || "Access Denied");
@@ -158,6 +158,10 @@ export default function BorrowRequestsPage() {
     }
   }, [status]);
 
+  useEffect(() => {
+      console.log('[BorrowRequestsPage] Column filters changed:', columnFilters);
+  }, [columnFilters]);
+
   const handleApproveGroup = async (borrowGroupId: string | null | undefined) => {
     if (!borrowGroupId) {
        toast.error("Cannot approve: Missing Group ID.");
@@ -182,9 +186,9 @@ export default function BorrowRequestsPage() {
       toast.success(result.message || "Group approved successfully!");
       fetchRequestsTableData();
 
-    } catch (error) {
-      console.error(`Bulk approve failed for group ${borrowGroupId}:`, error);
-      toast.error(error instanceof Error ? error.message : "Approval failed.");
+    } catch (e: unknown) {
+      console.error(`Bulk approve failed for group ${borrowGroupId}:`, e);
+      toast.error(e instanceof Error ? e.message : "Approval failed.");
     } finally {
       setIsSubmittingAction(false);
     }
@@ -214,9 +218,9 @@ export default function BorrowRequestsPage() {
       toast.success(result.message || "Group rejected successfully!");
       fetchRequestsTableData();
 
-    } catch (error) {
-      console.error(`Bulk reject failed for group ${borrowGroupId}:`, error);
-      toast.error(error instanceof Error ? error.message : "Rejection failed.");
+    } catch (e: unknown) {
+      console.error(`Bulk reject failed for group ${borrowGroupId}:`, e);
+      toast.error(e instanceof Error ? e.message : "Rejection failed.");
     } finally {
       setIsSubmittingAction(false);
     }
@@ -246,9 +250,9 @@ export default function BorrowRequestsPage() {
       toast.success(result.message || "Group checked out successfully!");
       fetchRequestsTableData();
 
-    } catch (error) {
-      console.error(`Bulk checkout failed for group ${borrowGroupId}:`, error);
-      toast.error(error instanceof Error ? error.message : "Checkout failed.");
+    } catch (e: unknown) {
+      console.error(`Bulk checkout failed for group ${borrowGroupId}:`, e);
+      toast.error(e instanceof Error ? e.message : "Checkout failed.");
     } finally {
       setIsSubmittingAction(false);
     }
@@ -278,9 +282,9 @@ export default function BorrowRequestsPage() {
       toast.success(result.message || "Group return confirmed successfully!");
       fetchRequestsTableData();
 
-    } catch (error) {
-      console.error(`Bulk return failed for group ${borrowGroupId}:`, error);
-      toast.error(error instanceof Error ? error.message : "Return confirmation failed.");
+    } catch (e: unknown) {
+      console.error(`Bulk return failed for group ${borrowGroupId}:`, e);
+      toast.error(e instanceof Error ? e.message : "Return confirmation failed.");
     } finally {
       setIsSubmittingAction(false);
     }
@@ -342,7 +346,7 @@ export default function BorrowRequestsPage() {
            } else {
               toast.info("Deficiency logged successfully.");
            }
-         } catch (deficiencyError) {
+         } catch (deficiencyError: unknown) {
              console.error("Error submitting deficiency log:", deficiencyError);
              toast.error("Return confirmed, but encountered an error logging the deficiency.");
          }
@@ -352,16 +356,19 @@ export default function BorrowRequestsPage() {
       setReturnTarget(null);
       fetchRequestsTableData();
 
-    } catch (error) {
-      console.error(`Confirm return process failed for borrow ${borrowId}:`, error);
-      toast.error(error instanceof Error ? error.message : "Confirmation process failed.");
+    } catch (e: unknown) {
+      console.error(`Confirm return process failed for borrow ${borrowId}:`, e);
+      toast.error(e instanceof Error ? e.message : "Confirmation process failed.");
     } finally {
       setIsSubmittingAction(false);
     }
   };
 
   const handleApproveItem = async (borrowId: string | null | undefined) => {
-     if (!borrowId) return toast.error("Missing Borrow ID.");
+     if (!borrowId) {
+       toast.error("Missing Borrow ID.");
+       return;
+     }
      if (isSubmittingAction) return;
      
      setIsSubmittingAction(true);
@@ -375,16 +382,19 @@ export default function BorrowRequestsPage() {
         if (!response.ok) throw new Error(result.error || 'Failed to approve item');
         toast.success(`Borrow request ${borrowId} approved!`);
         fetchRequestsTableData();
-     } catch (error) {
-        console.error(`Failed to approve item ${borrowId}:`, error);
-        toast.error(error instanceof Error ? error.message : 'Failed to approve item.');
+     } catch (e: unknown) {
+        console.error(`Failed to approve item ${borrowId}:`, e);
+        toast.error(e instanceof Error ? e.message : 'Failed to approve item.');
      } finally {
         setIsSubmittingAction(false);
      }
   };
   
   const handleRejectItem = async (borrowId: string | null | undefined) => {
-     if (!borrowId) return toast.error("Missing Borrow ID.");
+     if (!borrowId) {
+        toast.error("Missing Borrow ID.");
+        return;
+     }
      if (isSubmittingAction) return;
 
      setIsSubmittingAction(true);
@@ -398,15 +408,13 @@ export default function BorrowRequestsPage() {
         if (!response.ok) throw new Error(result.error || 'Failed to reject item');
         toast.success(`Borrow request ${borrowId} rejected!`);
         fetchRequestsTableData();
-     } catch (error) {
-        console.error(`Failed to reject item ${borrowId}:`, error);
-        toast.error(error instanceof Error ? error.message : 'Failed to reject item.');
+     } catch (e: unknown) {
+        console.error(`Failed to reject item ${borrowId}:`, e);
+        toast.error(e instanceof Error ? e.message : 'Failed to reject item.');
      } finally {
         setIsSubmittingAction(false);
      }
   };
-
-  const statusOptions = Object.values(BorrowStatus);
 
   if (status === 'loading') {
     return (
@@ -481,10 +489,10 @@ export default function BorrowRequestsPage() {
                                      alt={item.equipment?.name || 'Equipment'}
                                      width={24} height={24} 
                                      className="rounded object-contain aspect-square bg-background border"
-                                     onError={(e) => {
-                                       if (e.currentTarget.src !== '/images/placeholder-default.png') {
-                                         e.currentTarget.srcset = '/images/placeholder-default.png';
-                                         e.currentTarget.src = '/images/placeholder-default.png';
+                                     onError={(_e) => {
+                                       if (_e.currentTarget.src !== '/images/placeholder-default.png') {
+                                         _e.currentTarget.srcset = '/images/placeholder-default.png';
+                                         _e.currentTarget.src = '/images/placeholder-default.png';
                                        }
                                      }}
                                  />
@@ -505,10 +513,6 @@ export default function BorrowRequestsPage() {
         </div>
       );
   };
-
-  useEffect(() => {
-      console.log('[BorrowRequestsPage] Column filters changed:', columnFilters);
-  }, [columnFilters]);
 
   return (
     <div className="container mx-auto py-10 space-y-8">

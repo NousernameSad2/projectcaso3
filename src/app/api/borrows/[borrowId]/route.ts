@@ -3,13 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus, UserRole, Prisma, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-interface RouteContext {
-  params: {
-    borrowId: string; // Use borrowId consistent with folder name
-  }
-}
+import { authOptions } from "@/lib/authOptions";
 
 // Define the schema for the expected PATCH request body
 const UpdateBorrowSchema = z.object({
@@ -35,12 +29,10 @@ const UpdateBorrowSchema = z.object({
     return !(hasStatus && hasTimes);
 }, { message: "Cannot update status and approved times simultaneously." });
 
-// Define the type explicitly for clarity
-type UpdateBorrowInput = z.infer<typeof UpdateBorrowSchema>;
-
 // PATCH: Update a borrow request (Status OR Details like approved times)
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
+export async function PATCH(req: NextRequest, context: { params: Promise<{borrowId: string}>}) {
     const session = await getServerSession(authOptions);
+    const params = await context.params;
     if (!session?.user?.id) {
         return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
@@ -68,10 +60,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
              select: { 
                 borrowStatus: true, 
                 equipmentId: true, 
-                // @ts-ignore
                 requestedStartTime: true,
-                // @ts-ignore
-                requestedEndTime: true 
+                requestedEndTime: true,
+                approvedStartTime: true,
+                approvedEndTime: true
             }
         });
 
@@ -97,9 +89,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
              // Transaction for Approval + Auto-Rejection
              const { updatedBorrow, rejectedCount } = await prisma.$transaction(async (tx) => {
                   // Set approved times only on approval
-                  // @ts-ignore
                   const approvedStartTime = newStatus === BorrowStatus.APPROVED ? (borrowToUpdate.approvedStartTime || borrowToUpdate.requestedStartTime) : undefined;
-                  // @ts-ignore
                   const approvedEndTime = newStatus === BorrowStatus.APPROVED ? (borrowToUpdate.approvedEndTime || borrowToUpdate.requestedEndTime) : undefined;
                   
                   const updateData: Prisma.BorrowUpdateInput = {
@@ -135,7 +125,7 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
                   // *** NEW: Update Equipment Status on Approval ***
                   if (newStatus === BorrowStatus.APPROVED) {
                       await tx.equipment.update({
-                          where: { id: borrowToUpdate.equipmentId }, // Use equipmentId from fetched borrow
+                          where: { id: borrowToUpdate.equipmentId as string }, // CAST to string
                           data: { status: EquipmentStatus.RESERVED }, // Set to RESERVED
                       });
                        console.log(`[API PATCH /borrows/${borrowId}] Updated equipment ${borrowToUpdate.equipmentId} status to RESERVED.`);
@@ -147,13 +137,11 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
                       // Find and reject overlapping pending
                       const overlappingPending = await tx.borrow.findMany({
                           where: {
-                              equipmentId: borrowToUpdate.equipmentId,
+                              equipmentId: borrowToUpdate.equipmentId as string, // CAST to string
                               borrowStatus: BorrowStatus.PENDING,
                               id: { not: borrowId }, // Exclude the one just approved
                               AND: [
-                                  // @ts-ignore - Ignore type error for requested/approved times
                                   { requestedStartTime: { lt: approvedEndTime } }, // Pending start < Approved end
-                                  // @ts-ignore - Ignore type error for requested/approved times
                                   { requestedEndTime: { gt: approvedStartTime } }  // Pending end > Approved start
                               ]
                           },
@@ -219,86 +207,115 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         // If neither status nor details were provided (should be caught by schema?)
         return NextResponse.json({ message: 'No valid update operation specified.' }, { status: 400 });
 
-    } catch (error: any) {
-        console.error(`API Error - PATCH /api/borrows/${borrowId}:`, error);
-        if (error.code === 'P2025') { 
-            return NextResponse.json({ message: 'Borrow record not found' }, { status: 404 });
+    } catch (error: unknown) {
+        console.log(`[API PATCH /borrows/${borrowId}] Error updating borrow:`, error);
+        // Improved error handling to provide more specific messages if possible
+        let errorMessage = "An internal server error occurred.";
+        let statusCode = 500;
+
+        if (error instanceof z.ZodError) {
+            errorMessage = "Invalid input provided.";
+            statusCode = 400;
+            // Optional: include error.flatten() for more details in response
+        } else if (error instanceof Error) {
+            errorMessage = error.message; // Use the specific error message
+            // Set status code based on error message content if needed
+            if (error.message.toLowerCase().includes("not found")) {
+                statusCode = 404;
+            } else if (error.message.toLowerCase().includes("forbidden")) {
+                statusCode = 403;
+            } else if (error.message.toLowerCase().includes("cannot update status")) {
+                 statusCode = 400; // Or 409 Conflict
+            }
         }
-        return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+        
+        return NextResponse.json({ message: errorMessage }, { status: statusCode });
     }
 }
 
-// DELETE: Cancel a borrow request (Borrower or Staff/Faculty)
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
-    // 1. Authenticate the user 
+// DELETE: Cancel a PENDING borrow request
+export async function DELETE(req: NextRequest, context: { params: Promise<{ borrowId: string }> }) {
     const session = await getServerSession(authOptions);
+    const params = await context.params;
     if (!session?.user?.id) {
         return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
-    const userId = session.user.id;
-    const userRole = session.user.role as UserRole;
-    
-    // Access params.borrowId *after* await
-    const borrowId = params.borrowId;
+    const { id: actorId, role: actorRole } = session.user as { id: string; role: UserRole };
 
+    const borrowId = params.borrowId;
     if (!borrowId) {
         return NextResponse.json({ message: 'Borrow ID is required' }, { status: 400 });
     }
 
     try {
-        // 2. Find the borrow record
-        const borrow = await prisma.borrow.findUnique({
+        const borrowToDelete = await prisma.borrow.findUnique({
             where: { id: borrowId },
-            select: { // Select only necessary fields
-                borrowerId: true,
-                borrowStatus: true,
+            select: { 
+                borrowStatus: true, 
+                borrowerId: true, // For permission check
+                equipmentId: true, 
+                borrowGroupId: true // For group cancellation logic
             }
         });
 
-        if (!borrow) {
+        if (!borrowToDelete) {
             return NextResponse.json({ message: 'Borrow record not found' }, { status: 404 });
         }
 
-        // 3. Authorization Check: Allow borrower or Staff/Faculty to cancel
-        const isBorrower = borrow.borrowerId === userId;
-        const isPrivilegedUser = userRole === UserRole.STAFF || userRole === UserRole.FACULTY;
+        // Permission Check:
+        // 1. User can cancel their own PENDING request.
+        // 2. STAFF/FACULTY can cancel any PENDING request.
+        const isOwner = borrowToDelete.borrowerId === actorId;
+        const isAdminRole = actorRole === UserRole.STAFF || actorRole === UserRole.FACULTY;
 
-        if (!isBorrower && !isPrivilegedUser) {
-            return NextResponse.json({ message: 'Forbidden: You are not authorized to cancel this request' }, { status: 403 });
-        }
-        
-        // 4. Check if cancellation is allowed based on status
-        const allowedCancelStatuses: BorrowStatus[] = [BorrowStatus.PENDING, BorrowStatus.APPROVED];
-        if (!allowedCancelStatuses.includes(borrow.borrowStatus)) {
-            return NextResponse.json(
-                { message: `Cannot cancel request. Status is already ${borrow.borrowStatus}.` }, 
-                { status: 409 } // 409 Conflict
-             );
+        if (borrowToDelete.borrowStatus !== BorrowStatus.PENDING) {
+            return NextResponse.json({ message: 'Can only cancel PENDING requests.' }, { status: 400 });
         }
 
-        // 5. Update the borrow status to CANCELLED
-        const updatedBorrow = await prisma.borrow.update({
-            where: { id: borrowId },
-            data: {
-                borrowStatus: BorrowStatus.CANCELLED,
-            },
-             select: { id: true, borrowStatus: true } // Return minimal data
+        if (!isOwner && !isAdminRole) {
+            return NextResponse.json({ message: 'Forbidden: You do not have permission to cancel this request.' }, { status: 403 });
+        }
+
+        // If it's a group borrow and the user is admin, they might intend to cancel the whole group
+        // For simplicity, this DELETE targets only the specific borrowId.
+        // Group cancellation could be a separate endpoint or logic if needed.
+
+        // --- Transaction for Deletion + Equipment Status Update ---
+        await prisma.$transaction(async (tx) => {
+            await tx.borrow.delete({
+                where: { id: borrowId },
+            });
+            console.log(`[API DELETE /borrows/${borrowId}] Borrow record deleted by ${actorId} (${actorRole}).`);
+
+            // Check if the equipment should become AVAILABLE
+            const remainingBorrowsForEquipment = await tx.borrow.count({
+                where: {
+                    equipmentId: borrowToDelete.equipmentId as string, // CAST to string
+                    // Consider only statuses that make equipment unavailable
+                    borrowStatus: { in: [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.PENDING_RETURN] }
+                }
+            });
+
+            if (remainingBorrowsForEquipment === 0) {
+                // Check current status before blindly updating
+                const equipment = await tx.equipment.findUnique({ where: { id: borrowToDelete.equipmentId as string }, select: { status: true }}); // CAST to string
+                if (equipment && equipment.status === EquipmentStatus.RESERVED) { // Only if it was RESERVED
+                    await tx.equipment.update({
+                        where: { id: borrowToDelete.equipmentId as string }, // CAST to string
+                        data: { status: EquipmentStatus.AVAILABLE },
+                    });
+                    console.log(`[API DELETE /borrows/${borrowId}] Equipment ${borrowToDelete.equipmentId} status updated to AVAILABLE.`);
+                }
+            }
         });
+        // --- End Transaction ---
 
-        console.log(`User ${session.user.email} cancelled borrow request ${borrowId}`);
+        return NextResponse.json({ message: 'Borrow request cancelled successfully.' }, { status: 200 });
 
-        // 6. Return Success Response
-        return NextResponse.json(
-            { message: "Reservation cancelled successfully.", borrow: updatedBorrow }, 
-            { status: 200 }
-        );
-
-    } catch (error: any) {
-        console.error(`API Error - DELETE /api/borrows/${borrowId}:`, error);
-        if (error.code === 'P2025') { // Handle case where record was deleted between find and update
-            return NextResponse.json({ message: 'Borrow record not found' }, { status: 404 });
-        }
-        return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+    } catch (error: unknown) { // CHANGED any to unknown
+        console.error(`[API DELETE /borrows/${borrowId}] Error cancelling borrow:`, error);
+        const message = error instanceof Error ? error.message : "An internal server error occurred while cancelling the request.";
+        return NextResponse.json({ message }, { status: 500 });
     }
 }
 

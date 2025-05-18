@@ -1,20 +1,12 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, UserRole, Prisma } from '@prisma/client'; // Import Prisma namespace
+import { prisma } from '@/lib/prisma';
+import { UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 
-const prisma = new PrismaClient();
+// REMOVED SessionUser interface
 
-// Define a type for the session user to include the role
-interface SessionUser {
-  id: string;
-  role: UserRole; // Assuming role is available in the session user object
-  // Add other properties from your session user type if needed
-  name?: string | null;
-  email?: string | null;
-}
-
-export async function GET(request: Request) {
+export async function GET() { // REMOVED _request: Request
   // 1. Get User Session and Check Permissions
   const session = await getServerSession(authOptions);
   // Use optional chaining and nullish coalescing for safety

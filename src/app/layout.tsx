@@ -3,7 +3,7 @@ import { Inter } from 'next/font/google'; // Re-import Inter
 import "./globals.css";
 // Import ThemeProvider directly from next-themes
 import { ThemeProvider } from "next-themes"; 
-import { cn } from "@/lib/utils";
+// import { cn } from "@/lib/utils"; // Removed unused cn import
 import SessionProvider from "@/components/providers/SessionProvider"; // Use SessionProvider instead of the non-existent AuthProvider
 import { Toaster } from "@/components/ui/sonner"; // Import Toaster
 import "react-day-picker/style.css"; // Import react-day-picker default CSS

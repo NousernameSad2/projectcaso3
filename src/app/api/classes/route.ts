@@ -64,14 +64,13 @@ export async function GET(req: NextRequest) {
       { section: Prisma.SortOrder.asc },
     ];
 
-    // --- START: Build Where Clause --- 
-    let whereClause: Prisma.ClassWhereInput = {};
+    // --- Query Building --- 
+    const whereClause: Prisma.ClassWhereInput = {};
 
     // Apply isActive filter if provided
     if (isActiveFilter !== undefined) {
       whereClause.isActive = isActiveFilter;
     }
-    // --- END: Build Where Clause --- 
 
     if (role === UserRole.REGULAR) {
       // Students: Fetch only classes they are enrolled in
@@ -93,14 +92,13 @@ export async function GET(req: NextRequest) {
       
       // Manual sort for student view
       classes.sort((a, b) => {
+          const sectionOrder = (a!.section || '').localeCompare(b!.section || '');
+          if (sectionOrder !== 0) return sectionOrder;
           const semesterOrder = (b!.semester || '').localeCompare(a!.semester || '');
           if (semesterOrder !== 0) return semesterOrder;
-          // @ts-ignore - Keep ts-ignore for academicYear sorting
           const yearOrder = (b!.academicYear || '').localeCompare(a!.academicYear || ''); 
           if (yearOrder !== 0) return yearOrder;
-          const codeOrder = (a!.courseCode || '').localeCompare(b!.courseCode || '');
-          if (codeOrder !== 0) return codeOrder;
-          return (a!.section || '').localeCompare(b!.section || '');
+          return 0;
       });
 
     } else if (role === UserRole.FACULTY) { 

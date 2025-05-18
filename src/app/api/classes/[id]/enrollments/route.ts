@@ -3,12 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { verifyAuthAndGetPayload } from '@/lib/authUtils';
 import { UserRole } from '@prisma/client';
-
-interface RouteContext {
-  params: {
-    id: string; // Class ID from the URL
-  }
-}
+import { Prisma } from '@prisma/client';
 
 // Schema for validating enrollment input
 const EnrollmentCreateSchema = z.object({
@@ -16,12 +11,9 @@ const EnrollmentCreateSchema = z.object({
 });
 
 // POST: Enroll a user (student) into a specific class
-export async function POST(req: NextRequest, { params }: RouteContext) {
-  // Await params - experimental based on Next.js warning
-  // It's unusual to await params directly, but let's follow the warning's suggestion
-  // We might need to adjust typing if this causes issues
-  const resolvedParams = await params;
-  const classId = resolvedParams.id;
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  const classId = params.id;
   
   // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
@@ -38,7 +30,7 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     let body;
     try {
       body = await req.json();
-    } catch (error) {
+    } catch {
       return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
     }
 
@@ -118,9 +110,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
     // Return the newly created enrollment record, including nested user data
     return NextResponse.json({ message: "User enrolled successfully", enrollment: newEnrollment }, { status: 201 });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`API Error - POST /api/classes/${classId}/enrollments:`, error);
-     if (error.code === 'P2002') { // Should be caught above, but safeguard
+     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
          return NextResponse.json({ message: 'Enrollment already exists.' }, { status: 409 });
     }
      // Handle other potential errors (e.g., foreign key constraint if class/user deleted mid-request)
@@ -129,10 +121,9 @@ export async function POST(req: NextRequest, { params }: RouteContext) {
 }
 
 // DELETE: Unenroll a user (student) from a specific class
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
-  // Await params - experimental based on Next.js warning
-  const resolvedParams = await params;
-  const classId = resolvedParams.id;
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  const classId = params.id;
 
   // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
@@ -201,9 +192,9 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
     console.log(`User ${userId} unenrolled from class ${classId} by ${payload.email}`);
     return new NextResponse(null, { status: 204 }); // Success, No Content
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`API Error - DELETE /api/classes/${classId}/enrollments for user ${userId}:`, error);
-    if (error.code === 'P2025') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         // Error specific to record not found during delete operation
         return NextResponse.json({ message: 'Enrollment not found or already deleted' }, { status: 404 });
     }

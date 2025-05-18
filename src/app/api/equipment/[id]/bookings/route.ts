@@ -1,25 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus } from '@prisma/client';
-import { startOfDay, endOfDay, addMonths, eachDayOfInterval, isWithinInterval } from 'date-fns';
+import { startOfDay, addMonths, eachDayOfInterval } from 'date-fns';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-
-interface RouteContext {
-  params: {
-    id: string; // Equipment ID from the URL
-  }
-}
+import { authOptions } from "@/lib/authOptions";
 
 // GET: Fetch booking date ranges for a specific piece of equipment
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
     // Optional: Add authentication if booking info shouldn't be public
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
       return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
-    const resolvedParams = await params; 
-    const equipmentId = resolvedParams.id;
+    const params = await context.params;
+    const equipmentId = params.id;
 
     if (!equipmentId) {
         return NextResponse.json({ message: 'Equipment ID is required' }, { status: 400 });

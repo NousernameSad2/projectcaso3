@@ -11,6 +11,7 @@ interface UserMtbf {
 }
 
 // Define the expected payload structure from the Prisma query
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const deficiencyWithUser = Prisma.validator<Prisma.DeficiencyDefaultArgs>()({
   include: {
     user: { select: { name: true } } // Include user name

@@ -3,23 +3,18 @@ import { prisma } from '@/lib/prisma';
 import { verifyAuthAndGetPayload } from '@/lib/authUtils';
 import { z } from 'zod';
 import { UserRole } from '@prisma/client';
-
-interface RouteContext {
-  params: {
-    id: string; // Class ID from the URL
-  }
-}
+import { Prisma } from '@prisma/client';
 
 // GET: Get a specific class by ID, including enrolled students
-export async function GET(req: NextRequest, context: RouteContext) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  const classId = params.id;
   // Allow any authenticated user to view class details
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload) { 
     return NextResponse.json({ message: 'Authentication required or Forbidden' }, { status: 401 });
   }
   
-  const classId = context.params.id;
-
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
   }
@@ -91,15 +86,15 @@ const ClassUpdateSchema = z.object({
 });
 
 // PATCH: Update class details
-export async function PATCH(req: NextRequest, context: RouteContext) {
+export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  const classId = params.id;
   // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can update classes.' }, { status: 403 });
   }
   const { userId, role } = payload;
-
-  const classId = context.params.id;
 
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
@@ -192,12 +187,12 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
     console.log(`Class ${classId} updated by ${payload.email}`);
     return NextResponse.json({ message: "Class updated successfully", class: updatedClass });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`API Error - PATCH /api/classes/${classId}:`, error);
-    if (error.code === 'P2025') { // Record to update not found
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return NextResponse.json({ message: 'Class not found' }, { status: 404 });
     } 
-    if (error.code === 'P2002') { // Unique constraint failed (should be caught above)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
          return NextResponse.json({ message: 'Class already exists (unique constraint failed).' }, { status: 409 });
     }
     return NextResponse.json({ message: 'Internal Server Error updating class' }, { status: 500 });
@@ -205,15 +200,15 @@ export async function PATCH(req: NextRequest, context: RouteContext) {
 }
 
 // DELETE: Delete a class (sets classId to null in related records)
-export async function DELETE(req: NextRequest, context: RouteContext) {
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params;
+  const classId = params.id;
   // Verify user is STAFF or FACULTY 
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can delete classes.' }, { status: 403 });
   }
   const { userId, role } = payload;
-
-  const classId = context.params.id;
 
   if (!classId) {
     return NextResponse.json({ message: 'Class ID is missing' }, { status: 400 });
@@ -247,13 +242,11 @@ export async function DELETE(req: NextRequest, context: RouteContext) {
     // Return success with No Content status
     return new NextResponse(null, { status: 204 }); 
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`API Error - DELETE /api/classes/${classId}:`, error);
-    
-    // Specific check for Class Not Found
-    if (error.code === 'P2025') { // Prisma error code for Record to delete does not exist
-        console.log(`Attempted to delete non-existent class ${classId}`);
-        return NextResponse.json({ message: 'Class not found' }, { status: 404 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
+        // Record to delete not found
+        return NextResponse.json({ message: 'Class not found or already deleted' }, { status: 404 });
     }
     
     // Add general error handling for unexpected issues

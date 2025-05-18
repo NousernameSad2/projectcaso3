@@ -21,7 +21,6 @@ import {
 } from '@/components/ui/select';
 import { PlusCircle } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 // Update schema to use enum for semester and add academicYear
 const ClassCreateSchema = z.object({
@@ -47,8 +46,24 @@ interface FacultyUser {
   email: string | null;
 }
 
+// Define the type for the newly created class data returned by API
+interface CreatedClassData {
+  id: string;
+  courseCode: string;
+  section: string;
+  semester: string; // Assuming semester is string, adjust if it's an enum value from server
+  academicYear: string;
+  ficId?: string | null;
+  schedule?: string | null;
+  venue?: string | null;
+  isActive: boolean;
+  createdAt: string; // Assuming ISO string date
+  updatedAt: string; // Assuming ISO string date
+  // Add other fields if returned and needed by parent
+}
+
 type AddClassDialogProps = {
-  onClassAdded: (newClass: any) => void; // Callback to update parent state
+  onClassAdded: (newClass: CreatedClassData) => void; // Typed newClass
 };
 
 export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
@@ -146,12 +161,13 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
       }
 
       toast.success(result.message || 'Class created successfully!');
-      onClassAdded(result);
+      onClassAdded(result.class as CreatedClassData); // Assuming API returns { message: string, class: CreatedClassData }
       form.reset();
       setIsOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) { // Changed to unknown
       console.error('Error adding class:', error);
-      toast.error(`Error: ${error.message || 'An unknown error occurred.'}`);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      toast.error(`Error: ${message}`);
     } finally {
       setIsLoading(false);
     }

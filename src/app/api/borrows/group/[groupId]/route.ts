@@ -1,34 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import { BorrowStatus, UserRole, Prisma } from '@prisma/client';
-
-interface RouteContext {
-    params: {
-        groupId: string;
-    }
-}
-
-// Define payload structure for groupMates query
-const groupMatePayload = Prisma.validator<Prisma.BorrowGroupMateDefaultArgs>()({
-    include: { 
-        user: { select: { id: true, name: true, email: true } } 
-    }
-});
+import { authOptions } from "@/lib/authOptions";
+import { UserRole } from '@prisma/client';
 
 // GET: Fetch all borrow records for a specific borrowGroupId
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, context: { params: Promise<{ groupId: string }> }) {
     const session = await getServerSession(authOptions);
     if (!session?.user?.id) {
         return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
     const currentUser = session.user; // Assign to variable for easier access
 
-    // Access params.groupId *after* await
-    const groupId = params.groupId;
+    const params = await context.params;
 
-    if (!groupId) {
+    if (!params.groupId) {
         return NextResponse.json({ message: 'Group ID is required' }, { status: 400 });
     }
 
@@ -36,7 +22,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         // --- Fetch Borrows in Group --- 
         const borrowsInGroup = await prisma.borrow.findMany({
             where: {
-                borrowGroupId: groupId,
+                borrowGroupId: params.groupId,
             },
             select: {
                 id: true,
@@ -94,7 +80,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
         // --- Fetch Group Mates --- 
         const groupMates = await prisma.borrowGroupMate.findMany({
             where: {
-                borrowGroupId: groupId 
+                borrowGroupId: params.groupId 
             },
             include: { 
                 user: { 
@@ -131,8 +117,8 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
             groupMates: groupMates.map(gm => gm.user) 
         });
 
-    } catch (error: any) {
-        console.error(`API Error - GET /api/borrows/group/${groupId}:`, error);
+    } catch (error: unknown) {
+        console.error(`API Error - GET /api/borrows/group/${params.groupId}:`, error);
         return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
     }
 } 

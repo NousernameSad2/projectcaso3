@@ -10,7 +10,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose
 } from "@/components/ui/dialog";
 import {
-  Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage
+  Form, FormControl, /* FormDescription, */ FormField, FormItem, FormLabel, FormMessage
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -74,7 +74,7 @@ export default function ProfileEditForm({
 
         // Filter out undefined values before sending
         const dataToSend = Object.fromEntries(
-            Object.entries(values).filter(([_, v]) => v !== undefined && v !== '') // Only send defined, non-empty values
+            Object.entries(values).filter(([/* _ */, v]) => v !== undefined && v !== '') // Only send defined, non-empty values
         );
         
         if (Object.keys(dataToSend).length === 0) {

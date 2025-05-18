@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
         hasDateFilter = false;
     }
 
-    let whereClause: Prisma.EquipmentWhereInput = {
+    const whereClause: Prisma.EquipmentWhereInput = {
       OR: [
         { name: { contains: search, mode: 'insensitive' } },
         { equipmentId: { contains: search, mode: 'insensitive' } },
@@ -218,7 +218,7 @@ export async function GET(req: NextRequest) {
         derivedStatus = EquipmentStatus.AVAILABLE;
       }
       
-      const { borrowRecords, ...itemData } = item; 
+      const { ...itemData } = item;
       return { 
         ...itemData, 
         nextUpcomingReservationStart: nextUpcomingReservationStart ? nextUpcomingReservationStart.toISOString() : null,
@@ -270,21 +270,18 @@ export async function POST(request: Request) {
       );
     }
 
-    // Destructure imageUrl as well
     const { name, equipmentId, category, condition, status, stockCount, purchaseCost, imageUrl } = validation.data;
 
-    // Optional: Check if equipmentId already exists if provided
     if (equipmentId) {
       const existing = await prisma.equipment.findUnique({ where: { equipmentId } });
       if (existing) {
         return NextResponse.json(
           { message: 'Equipment ID already exists.', errors: { equipmentId: ['This ID is already in use.'] } },
-          { status: 409 } // Conflict
+          { status: 409 }
         );
       }
     }
 
-    // Create new equipment record
     const newEquipment = await prisma.equipment.create({
       data: {
         name,
@@ -294,7 +291,6 @@ export async function POST(request: Request) {
         status,
         stockCount,
         purchaseCost: purchaseCost,
-        // Save imageUrl into the images array (if provided)
         images: imageUrl ? [imageUrl] : [], 
         editHistory: [],
         maintenanceLog: [],
@@ -304,14 +300,22 @@ export async function POST(request: Request) {
     console.log("New equipment created:", newEquipment.id);
     return NextResponse.json(newEquipment, { status: 201 });
 
-  } catch (error) {
-    console.error("Error creating equipment:", error);
+  } catch (error: unknown) { // Single catch block for all errors in POST
+    console.error("Error in POST /api/equipment:", error);
     if (error instanceof z.ZodError) {
-      // Should be caught by safeParse, but added as fallback
       return NextResponse.json({ message: 'Validation error processing request.', errors: error.flatten().fieldErrors }, { status: 400 });
     }
-    // Add check for other Prisma errors if needed
-    // else if (error instanceof Prisma.PrismaClientKnownRequestError) { ... }
-    return NextResponse.json({ message: 'An unexpected error occurred.' }, { status: 500 });
+    if (error instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.code === 'P2002') {
+        const target = (error.meta?.target as string[]) || [];
+        if (target.includes('equipmentId')) {
+          return NextResponse.json({ message: 'Equipment ID already exists.', errors: { equipmentId: ['This ID is already in use.'] } }, { status: 409 });
+        }
+      }
+      // Log the detailed Prisma error for server-side debugging
+      console.error("Prisma Database Error in POST /api/equipment:", error);
+      return NextResponse.json({ message: 'A database error occurred.' }, { status: 500 });
+    }
+    return NextResponse.json({ message: 'An unexpected error occurred while creating equipment.' }, { status: 500 });
   }
 } 

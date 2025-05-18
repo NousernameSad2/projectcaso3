@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
+import { NextRequest } from 'next/server';
 
 const noteSchema = z.object({
     noteText: z.string().min(1),
 });
 
-export async function POST(request: Request, { params }: { params: { id: string } }) {
+export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     // Unique log message to verify execution
     console.log("--- EXECUTION CHECK: src/app/api/equipment/[id]/notes/route.ts POST handler ---"); 
 
@@ -17,6 +18,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     const session = await getServerSession(authOptions);
     
     // Now it's safe to access params.id
+    const params = await context.params;
     const equipmentId = params.id; 
 
     if (!session || !session.user) {

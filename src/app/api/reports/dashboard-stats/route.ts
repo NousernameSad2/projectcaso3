@@ -84,11 +84,13 @@ export async function GET() {
     let mostBorrowedEquipmentName = 'N/A';
     if (borrowCounts.length > 0) {
       const mostBorrowedId = borrowCounts[0].equipmentId;
-      const equipment = await prisma.equipment.findUnique({
-        where: { id: mostBorrowedId },
-        select: { name: true },
-      });
-      mostBorrowedEquipmentName = equipment?.name ?? 'N/A';
+      if (mostBorrowedId) { // Check if mostBorrowedId is not null
+        const equipment = await prisma.equipment.findUnique({
+          where: { id: mostBorrowedId },
+          select: { name: true },
+        });
+        mostBorrowedEquipmentName = equipment?.name ?? 'N/A';
+      }
     }
 
     // --- Response ---

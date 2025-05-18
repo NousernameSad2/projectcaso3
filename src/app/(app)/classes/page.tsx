@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useSession, signOut } from 'next-auth/react';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
@@ -12,11 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from 'sonner';
 import AddClassDialog from '@/components/classes/AddClassDialog';
 import Link from 'next/link';
-import { Trash2, Edit, PlusCircle } from 'lucide-react';
+import { Trash2, Edit } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -93,7 +93,7 @@ export default function ClassesPage() {
   console.log("[ClassesPage] Calculated canManageClasses:", canManageClasses);
 
   // Extracted fetch function
-  const fetchClasses = async (statusFilter: 'all' | 'active' | 'inactive') => {
+  const fetchClasses = useCallback(async (statusFilter: 'all' | 'active' | 'inactive') => {
       if (sessionStatus !== 'authenticated' || !token) {
           console.log("[fetchClasses] Waiting for session or token...");
           // Don't fetch if not authenticated
@@ -157,7 +157,7 @@ export default function ClassesPage() {
            setIsFetchingData(false);
         }
       }
-    };
+    }, [sessionStatus, token]);
 
   // Effect for initial data fetching and when filter changes
   useEffect(() => {
@@ -171,7 +171,7 @@ export default function ClassesPage() {
       setClasses([]); // Clear classes if unauthenticated
     }
     // Dependency array: run when session status or filterStatus changes
-  }, [sessionStatus, filterStatus]); // Add filterStatus dependency
+  }, [sessionStatus, filterStatus, fetchClasses]); // Added fetchClasses to dependency array
 
   const handleClassAdded = () => {
     console.log("[handleClassAdded] New class added, refetching list with current filter...");

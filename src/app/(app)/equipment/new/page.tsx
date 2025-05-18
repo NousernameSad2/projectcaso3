@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { EquipmentSchema, EquipmentInput } from "@/lib/schemas";

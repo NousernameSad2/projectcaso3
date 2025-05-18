@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { UserRole, DeficiencyType, DeficiencyStatus } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     let body;
     try {
         body = await req.json();
-    } catch (error) {
+    } catch {
         return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
     }
 
@@ -152,8 +152,8 @@ export async function GET(request: NextRequest) {
     // 4. Return Deficiencies
     return NextResponse.json(deficiencies);
 
-  } catch (error) {
-    console.error("Failed to fetch deficiencies:", error);
+  } catch (_error) {
+    console.error("Failed to fetch deficiencies:", _error);
     return NextResponse.json({ error: 'Database error occurred while fetching deficiencies.' }, { status: 500 });
   }
 }

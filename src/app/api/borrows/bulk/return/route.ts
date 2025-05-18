@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus, Prisma } from '@prisma/client';
+import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
                if (!exists) throw new Error(`Borrow record ${borrowId} not found.`);
                throw new Error(`Borrow record ${borrowId} is not pending return (Status: ${exists.borrowStatus}).`);
            }
-           const equipmentId = borrowToReturn.equipmentId;
+           const equipmentId = borrowToReturn.equipmentId as string; // Assert as string
 
            await tx.borrow.update({
               where: { id: borrowId },
@@ -137,7 +137,6 @@ export async function POST(request: Request) {
            // --- START: Before findMany Log ---
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Finding items with borrowGroupId: ${borrowGroupId} and status: PENDING_RETURN...`);
            // --- END: Before findMany Log ---
-           // @ts-ignore
            const itemsToReturn = await tx.borrow.findMany({
              where: {
                borrowGroupId: borrowGroupId,
@@ -150,7 +149,6 @@ export async function POST(request: Request) {
            // 2. Check if any items were found
            if (itemsToReturn.length === 0) {
               console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] No items pending return found. Checking if group exists...`);
-             // @ts-ignore 
              const groupExists = await tx.borrow.findFirst({ where: { borrowGroupId } });
              if (!groupExists) {
                 console.error(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Error: Borrow group not found.`);
@@ -164,7 +162,7 @@ export async function POST(request: Request) {
 
            // 3. Get the IDs of the items and unique equipment IDs
            const itemIdsToUpdate = itemsToReturn.map(item => item.id);
-           const uniqueEquipmentIds = Array.from(new Set(itemsToReturn.map(item => item.equipmentId)));
+           const uniqueEquipmentIds = Array.from(new Set(itemsToReturn.map(item => item.equipmentId).filter((id): id is string => id !== null)));
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] IDs to update:`, itemIdsToUpdate);
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Unique Equipment IDs:`, uniqueEquipmentIds);
 
@@ -180,7 +178,7 @@ export async function POST(request: Request) {
            
            // 5. *** NEW: Update Equipment Statuses (Bulk) ***
            console.log(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Updating equipment statuses...`);
-           for (const equipmentId of uniqueEquipmentIds) {
+           for (const equipmentId of uniqueEquipmentIds) { // equipmentId is now string
                const equipment = await tx.equipment.findUnique({ where: { id: equipmentId }, select: { stockCount: true, status: true }});
                if (!equipment) {
                    console.warn(`[API /borrows/bulk/return TX - Group ${borrowGroupId}] Equipment ${equipmentId} not found during status update. Skipping.`);

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
 import { ChangePasswordBaseSchema } from '@/lib/schemas';
 import bcrypt from 'bcryptjs';
@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
         let body;
         try {
             body = await req.json();
-        } catch (error) {
+        } catch {
             return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
         }
 

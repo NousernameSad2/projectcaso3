@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+// import { z } from 'zod'; // Removed unused z
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { AdminUserCreateSchema } from '@/lib/schemas';
-import { UserRole, UserStatus } from '@prisma/client';
+import { UserRole } from '@prisma/client'; // Removed UserStatus
 import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from '@/lib/authOptions';
 import { Prisma } from '@prisma/client';
 
 const SALT_ROUNDS = 10; // Use the same salt rounds as registration
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     let body;
     try {
       body = await req.json();
-    } catch (error) {
+    } catch { // Changed error to {}
       return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
     }
 

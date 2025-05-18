@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
 import { createId } from '@paralleldrive/cuid2';
 import { addDays } from 'date-fns'; // For calculating return date
@@ -87,9 +87,9 @@ export async function POST(request: Request) {
   const borrowGroupId = createId();
   const checkoutTime = new Date(); 
 
-  // 5. Calculate Expected Return Time
+  // 5. Calculate Expected Return Time (which will be used for approvedEndTime and requestedEndTime)
   const defaultBorrowDays = parseInt(process.env.DEFAULT_BORROW_DAYS || '7', 10);
-  const expectedReturnTime = addDays(checkoutTime, defaultBorrowDays);
+  const calculatedReturnTime = addDays(checkoutTime, defaultBorrowDays);
 
   // 6. Prepare data for batch creation
   const borrowData = equipmentIds.map((equipmentId) => ({
@@ -99,10 +99,11 @@ export async function POST(request: Request) {
     classId: classId,
     borrowStatus: BorrowStatus.ACTIVE, // Direct checkout to ACTIVE status
     checkoutTime: checkoutTime,
-    expectedReturnTime: expectedReturnTime,
+    approvedStartTime: checkoutTime, // For direct checkout, approvedStartTime is checkoutTime
+    approvedEndTime: calculatedReturnTime, // Use the calculated return time
+    requestedStartTime: checkoutTime, // Set requestedStartTime to checkoutTime
+    requestedEndTime: calculatedReturnTime, // Set requestedEndTime to the calculated return time
     approvedByStaffId: performingUserId, // ID of staff who approved/performed the checkout
-    // requestedStartDate could be set to checkoutTime or omitted if not needed for direct checkouts
-    requestedStartDate: checkoutTime,
     // Add defaults for other fields if needed
   }));
 

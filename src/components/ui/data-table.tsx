@@ -11,6 +11,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
+  type TableMeta,
 } from "@tanstack/react-table"
 
 import {
@@ -22,16 +23,16 @@ import {
   TableRow,
 } from "@/components/ui/table"
 
-import { Input } from "@/components/ui/input"
+// import { Input } from "@/components/ui/input" // Removed Input import
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { BorrowStatus } from "@prisma/client"
+// import { BorrowStatus } from "@prisma/client" // Removed BorrowStatus import
 import { cn } from "@/lib/utils"
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[]
   data: TData[]
-  meta?: any // Existing meta prop
+  meta?: TableMeta<TData> // Changed to TableMeta<TData> | undefined (optional implies undefined)
   // Remove optional props for external filter state management
   // columnFilters?: ColumnFiltersState 
   // onColumnFiltersChange?: React.Dispatch<React.SetStateAction<ColumnFiltersState>>
@@ -87,7 +88,7 @@ export function DataTable<TData, TValue>({
   })
 
   // Status Filter Options
-  const statusOptions = Object.values(BorrowStatus);
+  // const statusOptions = Object.values(BorrowStatus); // Removed unused statusOptions
 
   let currentGroupStyle = 'bg-transparent'; // Start with default
   let currentRenderedGroupId: string | null | undefined = undefined;
@@ -119,8 +120,8 @@ export function DataTable<TData, TValue>({
           </TableHeader>
           <TableBody>
             {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row, index) => {
-                 const rowData = row.original as any; // Use specific type if available and safe
+              table.getRowModel().rows.map((row) => { // Removed unused _index
+                 const rowData = row.original as TData & { borrowGroupId?: string | null }; // Typed rowData
                  const rowGroupId = rowData?.borrowGroupId;
 
                  // Determine if group changes

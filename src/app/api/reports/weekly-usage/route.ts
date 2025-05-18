@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus } from '@prisma/client';
-import { startOfDay, endOfDay, subDays, format, getDay } from 'date-fns';
+import { startOfDay, endOfDay, subDays, getDay } from 'date-fns';
 
 // Helper type for chart data
 interface DailyUsage {

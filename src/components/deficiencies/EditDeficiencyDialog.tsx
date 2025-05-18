@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Deficiency, DeficiencyStatus, UserRole, Borrow, Equipment, User } from '@prisma/client';
+import { Deficiency, DeficiencyStatus, Borrow, Equipment, User } from '@prisma/client';
 import { Button } from "@/components/ui/button";
 import { 
     Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose, DialogTrigger
@@ -11,7 +11,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import { format } from 'date-fns';
 
 // Moved type definition here
 // Type for deficiency data fetched from API

@@ -1,18 +1,18 @@
 'use client';
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
-import { ArrowLeft, AlertCircle, ArrowRightCircle, Loader2, Users, FileWarning } from 'lucide-react';
+import { ArrowLeft, ArrowRightCircle, Loader2, Users, FileWarning } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { Prisma, Borrow, Equipment, User as PrismaUser, BorrowStatus, UserRole, ReservationType } from '@prisma/client';
+import { Prisma, User as PrismaUser, BorrowStatus, UserRole, ReservationType } from '@prisma/client';
 import Image from 'next/image';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import LogDeficiencyForItemModal from '@/components/borrow/LogDeficiencyForItemModal';
@@ -25,6 +25,7 @@ const formatReservationType = (type: ReservationType | null | undefined): string
 };
 
 // Define the shape of the data returned by the API
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const borrowGroupItemSelect = Prisma.validator<Prisma.BorrowSelect>()({
     id: true,
     borrowGroupId: true,
@@ -73,7 +74,8 @@ const borrowGroupItemSelect = Prisma.validator<Prisma.BorrowSelect>()({
 type BorrowGroupItem = Prisma.BorrowGetPayload<{ select: typeof borrowGroupItemSelect }>;
 
 // Define a simple type for the user object expected for group mates
-interface GroupMateUser extends Pick<PrismaUser, 'id' | 'name' | 'email'> {}
+// interface GroupMateUser extends Pick<PrismaUser, 'id' | 'name' | 'email'> {} // OLD
+type GroupMateUser = Pick<PrismaUser, 'id' | 'name' | 'email'>; // NEW
 
 // Define the expected API response structure
 interface GroupDetailsResponse {
@@ -121,8 +123,8 @@ export default function BorrowGroupDetailPage() {
         staleTime: 1000 * 60,
     });
 
-    const borrowItems = data?.borrows || [];
-    const groupMates = data?.groupMates || [];
+    const borrowItems = useMemo(() => data?.borrows || [], [data]);
+    const groupMates = useMemo(() => data?.groupMates || [], [data]);
 
     const handleCheckoutGroup = async () => {
         console.log("[Checkout Group Frontend] handleCheckoutGroup entered.");

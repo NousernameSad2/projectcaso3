@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Edit, KeyRound, Users, Clock, BookUser } from 'lucide-react'; // Added BookUser
 import Image from 'next/image';
-import { cn, transformGoogleDriveUrl } from '@/lib/utils';
+import { transformGoogleDriveUrl } from '@/lib/utils';
 import ProfileEditForm from '@/components/profile/ProfileEditForm'; // Import the form
 import ChangePasswordForm from '@/components/profile/ChangePasswordForm'; // Import the change password form
 import Link from 'next/link'; // Add Link import
@@ -180,6 +180,9 @@ export default function ProfilePage() {
   });
   // *** END NEW ***
 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory || (isFaculty && isLoadingFacultyBorrows);
+
   // Fetch user profile details
   useEffect(() => {
     if (sessionStatus === 'authenticated') {
@@ -283,8 +286,6 @@ export default function ProfilePage() {
       return dateB - dateA; // Descending order
   });
   // --- END NEW ---
-
-  const isLoading = sessionStatus === 'loading' || isLoadingProfile || isLoadingHistory || (isFaculty && isLoadingFacultyBorrows);
 
   // Callback function for successful profile update
   const handleUpdateSuccess = (updatedData: Partial<UserProfile>) => {

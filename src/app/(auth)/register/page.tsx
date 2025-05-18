@@ -4,7 +4,6 @@ import { useState } from "react"; // Import useState
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRouter } from 'next/navigation'; // Import useRouter for redirection
 import Link from 'next/link'; // Import Link for the login link
 import Image from 'next/image'; // Import Image
 
@@ -29,7 +28,6 @@ import {
 } from "@/components/ui/select";
 
 export default function RegisterPage() {
-  const router = useRouter(); // Initialize router
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);

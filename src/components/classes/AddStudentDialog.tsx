@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useSession } from 'next-auth/react';
-import { UserRole } from '@prisma/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,19 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Check, UserPlus, Search } from 'lucide-react';
-import { cn } from "@/lib/utils"
+import { UserPlus, Search } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 
 interface SelectableUser {
   id: string;
   name: string | null;
   email: string | null;
-}
-
-interface BulkEnrollmentResponse {
-    count: number;
-    message: string;
 }
 
 type AddStudentDialogProps = {
@@ -129,9 +122,10 @@ export default function AddStudentDialog({ classId, enrolledStudentIds, onStuden
       toast.success(result.message || `${result.count} students enrolled successfully!`);
       onStudentsAdded();
       setIsOpen(false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error bulk enrolling students:', error);
-      toast.error(`Error: ${error.message || 'An unknown error occurred.'}`);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      toast.error(`Error: ${message}`);
     } finally {
       setIsLoading(false);
     }

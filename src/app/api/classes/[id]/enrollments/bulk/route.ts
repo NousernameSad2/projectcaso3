@@ -4,20 +4,15 @@ import { prisma } from '@/lib/prisma';
 import { verifyAuthAndGetPayload } from '@/lib/authUtils';
 import { UserRole } from '@prisma/client';
 
-interface RouteContext {
-  params: {
-    id: string; // Class ID from the URL
-  }
-}
-
 // Schema for validating the incoming array of user IDs
 const BulkEnrollmentSchema = z.object({
   userIds: z.array(z.string().min(1, { message: "User ID cannot be empty" })).min(1, { message: "At least one user ID must be provided." }),
 });
 
 // POST: Bulk enroll students into a class
-export async function POST(req: NextRequest, { params: { id: classId } }: RouteContext) {
-  // const classId = params.id; // No longer needed
+export async function POST(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const params = await context.params; // Await params
+  const classId = params.id; // Extract classId
   
   // 1. Verify Authentication and Authorization
   const payload = await verifyAuthAndGetPayload(req);
@@ -136,7 +131,7 @@ export async function POST(req: NextRequest, { params: { id: classId } }: RouteC
       requestedCount: userIds.length,
     }, { status: 201 }); // 201 Created
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`API Error - POST /api/classes/${classId}/enrollments/bulk:`, error);
     // Handle specific Prisma errors if necessary (e.g., foreign key constraints)
     return NextResponse.json({ message: 'Internal Server Error during bulk enrollment' }, { status: 500 });

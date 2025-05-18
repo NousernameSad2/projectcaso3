@@ -1,19 +1,13 @@
 import { NextResponse, NextRequest } from 'next/server';
-import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus, Prisma } from '@prisma/client';
+import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 
 const prisma = new PrismaClient();
 
-// Define RouteContext using borrowId
-interface RouteContext {
-  params: {
-    borrowId: string; // This will actually contain the borrowGroupId from the URL
-  };
-}
-
-export async function PATCH(req: NextRequest, { params }: RouteContext) {
+export async function PATCH(req: NextRequest, context: { params: Promise<{ borrowId: string }> }) {
   const session = await getServerSession(authOptions);
+  const params = await context.params;
   const userRole = session?.user?.role as UserRole;
   const userId = session?.user?.id;
 
@@ -54,7 +48,10 @@ export async function PATCH(req: NextRequest, { params }: RouteContext) {
         }
 
         const borrowIdsToReject = borrowsToReject.map(b => b.id);
-        const equipmentIdsToUpdate = [...new Set(borrowsToReject.map(b => b.equipmentId))]; // Get unique equipment IDs
+        // Ensure equipmentIdsToUpdate does not contain nulls and is explicitly string[]
+        const equipmentIdsToUpdate = [
+            ...new Set(borrowsToReject.map(b => b.equipmentId).filter(id => id !== null) as string[])
+        ]; 
 
         // 3. Update the status of these borrows to the determined rejection status
         const updateBorrowsResult = await tx.borrow.updateMany({

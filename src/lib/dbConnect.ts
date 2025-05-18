@@ -10,7 +10,8 @@ if (!MONGODB_URI) {
 
 // Augment the NodeJS Global type
 declare global {
-  var mongoose_cache: {
+  // eslint-disable-next-line no-var
+  var mongoose_cache: { // Keeping var, but disabling the lint rule for this line
     conn: Mongoose | null;
     promise: Promise<Mongoose> | null;
   }
@@ -42,11 +43,11 @@ async function dbConnect(): Promise<Mongoose> {
     };
 
     console.log('Attempting to connect to MongoDB...');
-    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongooseInstance) => {
+    cached.promise = mongoose.connect(MONGODB_URI!, opts).then((mongooseInstance: Mongoose) => {
       console.log("MongoDB Connected Successfully");
       return mongooseInstance;
-    }).catch(err => {
-        console.error("MongoDB Connection Error:", err);
+    }).catch((err: Error) => {
+        console.error("MongoDB ConnectionError:", err);
         cached.promise = null; // Reset promise on error
         throw err; // Re-throw error to indicate connection failure
     });
@@ -54,9 +55,13 @@ async function dbConnect(): Promise<Mongoose> {
 
   try {
     cached.conn = await cached.promise;
-  } catch (e) {
+  } catch (e: unknown) {
     cached.promise = null; // Reset promise if connection fails
-    console.error('Failed to establish MongoDB connection:', e);
+    if (e instanceof Error) {
+      console.error('Failed to establish MongoDB connection:', e.message);
+    } else {
+      console.error('Failed to establish MongoDB connection: An unknown error occurred', e);
+    }
     throw e;
   }
 

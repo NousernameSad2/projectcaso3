@@ -1,20 +1,20 @@
 'use client';
 
-import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { toast } from "sonner";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
-import { format, isValid, formatDistanceStrict, differenceInHours, isPast, isToday, isFuture, addDays } from 'date-fns';
+import { format, isValid, formatDistanceStrict } from 'date-fns';
 import Link from 'next/link';
-import { Users, List, AlertCircle, Info, CheckCircle, XCircle, Package, CalendarDays, Clock, ExternalLink, MessageSquare } from 'lucide-react';
+import { Users } from 'lucide-react';
 // Import types
 import { Borrow, Equipment, Class, BorrowStatus, ReservationType } from '@prisma/client';
 // Import the new modal
 import ReportDeficiencyModal from '@/components/deficiencies/ReportDeficiencyModal';
-import { cn, transformGoogleDriveUrl } from "@/lib/utils";
+import { transformGoogleDriveUrl } from "@/lib/utils";
 
 // Define the shape of the data expected from the user borrows endpoint
 // Make sure this includes fields needed by the modal (id, borrowGroupId, equipment details)
@@ -138,40 +138,57 @@ export default function MyBorrowsPage() {
   }, [borrows]);
 
   // --- Function to initiate the ACTUAL return request PATCH ---
-  const triggerActualReturnRequest = async (identifier: string, isGroup: boolean) => {
-      setIsSubmittingReturn(true);
-      const url = isGroup 
-          ? `/api/borrows/bulk/request-return?groupId=${identifier}`
-          : `/api/borrows/${identifier}/request-return`;
-      const successMessage = isGroup 
-          ? `Return requested for group ${identifier}.`
-          : "Return requested successfully! Proceed to designated return area.";
-      const errorMessage = isGroup
-          ? `Failed to request return for group ${identifier}.`
-          : "Failed to request return.";
+  const handleReturnRequest = async (identifier: string, isGroup: boolean) => {
+    console.log(`[handleReturnRequest] Initiating for ${isGroup ? 'group' : 'item'}: ${identifier}`);
+    // const isSubmittingThisGroup = isGroup && (submittingGroupId === identifier);
+    // const isSubmittingThisItem = !isGroup && (submittingItemId === identifier);
 
-      try {
-          const response = await fetch(url, { method: 'PATCH' });
-          const result = await response.json();
-          if (!response.ok) {
-              throw new Error(result.message || result.error || `Request failed (${response.status})`);
-          }
-          toast.success(result.message || successMessage);
-          // Update status locally
-          setBorrows(prev => 
-              prev.map(b => 
-                  (isGroup && b.borrowGroupId === identifier) || (!isGroup && b.id === identifier) 
-                      ? { ...b, borrowStatus: BorrowStatus.PENDING_RETURN } 
-                      : b
-              )
-          );
-      } catch (error) {
-          console.error(errorMessage, error);
-          toast.error(error instanceof Error ? error.message : errorMessage);
-          throw error; // Re-throw error so modal knows it failed
-      } finally {
-          setIsSubmittingReturn(false);
-      }
+    // if (isSubmittingThisGroup || isSubmittingThisItem) {
+    //   console.log("[handleReturnRequest] Already submitting for this identifier, skipping.");
+    //   return; // Prevent multiple submissions if already in progress
+    // }
+
+    // if (isGroup) {
+    //   setSubmittingGroupId(identifier);
+    // } else {
+    //   setSubmittingItemId(identifier);
+    // }
+    
+    // const itemsToReport = isGroup ? (groupedBorrows[identifier] || []) : (borrows.filter(b => b.id === identifier)); // REMOVED
+
+    setIsSubmittingReturn(true);
+    const url = isGroup 
+        ? `/api/borrows/bulk/request-return?groupId=${identifier}`
+        : `/api/borrows/${identifier}/request-return`;
+    const successMessage = isGroup 
+        ? `Return requested for group ${identifier}.`
+        : "Return requested successfully! Proceed to designated return area.";
+    const errorMessage = isGroup
+        ? `Failed to request return for group ${identifier}.`
+        : "Failed to request return.";
+
+    try {
+        const response = await fetch(url, { method: 'PATCH' });
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.message || result.error || `Request failed (${response.status})`);
+        }
+        toast.success(result.message || successMessage);
+        // Update status locally
+        setBorrows(prev => 
+            prev.map(b => 
+                (isGroup && b.borrowGroupId === identifier) || (!isGroup && b.id === identifier) 
+                    ? { ...b, borrowStatus: BorrowStatus.PENDING_RETURN } 
+                    : b
+            )
+        );
+    } catch (error) {
+        console.error(errorMessage, error);
+        toast.error(error instanceof Error ? error.message : errorMessage);
+        throw error; // Re-throw error so modal knows it failed
+    } finally {
+        setIsSubmittingReturn(false);
+    }
   };
 
   // --- Modified handler to OPEN the modal for individual items ---
@@ -272,7 +289,7 @@ export default function MyBorrowsPage() {
                 const groupItems = groupedBorrows[groupId];
                 const representativeItem = groupItems[0];
                 // Disable button if submitting this group OR any individual item (simplification)
-                const isSubmittingThisGroup = isSubmittingReturn; 
+                // const isSubmittingThisGroup = isSubmittingReturn; // REMOVED
 
                 return (
                     <Card key={groupId} className="overflow-hidden bg-card/60 border">
@@ -375,7 +392,7 @@ export default function MyBorrowsPage() {
               isOpen={isDeficiencyModalOpen}
               onOpenChange={setIsDeficiencyModalOpen}
               itemsToReport={itemsToReportForModal}
-              onReturnRequestInitiated={triggerActualReturnRequest}
+              onReturnRequestInitiated={handleReturnRequest}
           />
       </div>
   );

@@ -3,23 +3,23 @@
 import React, { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Equipment, EquipmentStatus as PrismaEquipmentStatus, EquipmentCategory } from '@prisma/client'; // Renamed to avoid conflict
+import { Equipment, EquipmentStatus as PrismaEquipmentStatus } from '@prisma/client'; // Removed EquipmentCategory
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { cn, transformGoogleDriveUrl } from '@/lib/utils';
-import { Eye, ArrowRight, CalendarDays, CheckCircle, Info, Package, Slash, Wrench, XCircle } from 'lucide-react';
-import { useSession } from 'next-auth/react';
-import { UserRole } from '@prisma/client';
-import { 
-    Tooltip, 
-    TooltipContent, 
-    TooltipProvider, 
-    TooltipTrigger 
-} from "@/components/ui/tooltip";
-import ReservationModal from "./ReservationModal";
+import { Eye } from 'lucide-react'; // Removed ArrowRight, CalendarDays, CheckCircle, Info, Package, Slash, Wrench, XCircle
+// import { useSession } from 'next-auth/react'; // Commented out useSession
+// import { UserRole } from '@prisma/client'; // Removed UserRole
+// import { 
+//     Tooltip, 
+//     TooltipContent, 
+//     TooltipProvider, 
+//     TooltipTrigger 
+// } from "@/components/ui/tooltip"; // Removed Tooltip components
+// import ReservationModal from "./ReservationModal"; // Removed ReservationModal
 // If you use useRouter, uncomment the import:
 // import { useRouter } from 'next/navigation';
 
@@ -70,8 +70,8 @@ export default function EquipmentCard({
   canSelect,
   canManageEquipment,
 }: EquipmentCardProps) {
-  const { data: session } = useSession();
-  const canReserve = equipment.status !== EquipmentStatus.OUT_OF_COMMISSION && equipment.status !== EquipmentStatus.DEFECTIVE;
+  // const { data: session } = useSession(); // Commented out session
+  // const canReserve = equipment.status !== EquipmentStatus.OUT_OF_COMMISSION && equipment.status !== EquipmentStatus.DEFECTIVE; // Commented out canReserve
 
   const { displayStatus, statusLabel, statusVariant } = useMemo(() => {
     const now = new Date();

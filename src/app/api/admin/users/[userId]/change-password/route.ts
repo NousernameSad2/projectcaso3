@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
 import { AdminChangePasswordSchema } from '@/lib/schemas';
 import bcrypt from 'bcryptjs';
@@ -8,7 +8,7 @@ import { UserRole } from '@prisma/client'; // Assuming UserRole is from prisma c
 
 export async function POST(
     req: NextRequest,
-    { params }: { params: { userId: string } }
+    context: { params: Promise<{ userId: string }> } // params is a Promise
 ) {
     const session = await getServerSession(authOptions);
 
@@ -23,7 +23,8 @@ export async function POST(
         return NextResponse.json({ message: 'Forbidden: Insufficient privileges' }, { status: 403 });
     }
 
-    const { userId: targetUserId } = params; // The ID of the user whose password is to be changed
+    const params = await context.params; // Await the params object
+    const { userId: targetUserId } = params; // Destructure userId from the resolved params
 
     if (!targetUserId) {
         return NextResponse.json({ message: 'User ID parameter is missing' }, { status: 400 });
@@ -33,7 +34,7 @@ export async function POST(
         let body;
         try {
             body = await req.json();
-        } catch (error) {
+        } catch {
             return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
         }
 

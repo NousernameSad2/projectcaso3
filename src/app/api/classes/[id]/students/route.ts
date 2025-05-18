@@ -1,25 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { UserRole, UserStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next'; // To potentially check if requester is allowed to see students
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-
-interface RouteContext {
-  params: {
-    id: string; // Class ID from the URL
-  }
-}
+import { authOptions } from '@/lib/authOptions';
 
 // GET: Fetch students enrolled in a specific class
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
     const session = await getServerSession(authOptions);
     // Optional: Add auth check - ensure user is logged in?
     if (!session?.user?.id) {
         return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
 
-    // Access params.id *after* await
-    const classId = params.id;
+    const params = await context.params; // Await params
+    const classId = params.id; // Extract classId
 
     if (!classId) {
         return NextResponse.json({ message: 'Class ID is required' }, { status: 400 });
@@ -55,7 +48,7 @@ export async function GET(req: NextRequest, { params }: RouteContext) {
 
         return NextResponse.json(students);
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error(`API Error - GET /api/classes/${classId}/students:`, error);
         // Handle specific errors like invalid classId if needed
         return NextResponse.json({ message: 'Internal Server Error fetching students' }, { status: 500 });

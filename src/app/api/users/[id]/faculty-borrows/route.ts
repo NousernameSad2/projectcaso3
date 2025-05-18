@@ -2,16 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { UserRole, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path as necessary
-
-interface RouteContext {
-  params: {
-    id: string; // This will be the facultyId whose borrows are being fetched
-  };
-}
+import { authOptions } from '@/lib/authOptions'; // Updated import
 
 // Helper to verify if the logged-in user is STAFF
-async function verifyStaffRole(req: NextRequest) {
+async function verifyStaffRole() {
     const session = await getServerSession(authOptions);
     if (!session?.user) {
         return { authorized: false, response: NextResponse.json({ message: 'Authentication required' }, { status: 401 }) };
@@ -25,13 +19,18 @@ async function verifyStaffRole(req: NextRequest) {
     return { authorized: true, response: null };
 }
 
-export async function GET(req: NextRequest, { params }: RouteContext) {
-    const authResult = await verifyStaffRole(req);
-    if (!authResult.authorized) {
-        return authResult.response;
-    }
-
+export async function GET(_req: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const params = await context.params;
     const facultyId = params.id;
+
+    const authResult = await verifyStaffRole();
+    if (!authResult.authorized) {
+        if (authResult.response) { // Explicitly check non-null for TS
+            return authResult.response;
+        }
+        // This case should ideally not be reached if verifyStaffRole ensures a response when not authorized.
+        return NextResponse.json({ message: 'Authorization check failed unexpectedly.' }, { status: 500 });
+    }
 
     if (!facultyId) {
         return NextResponse.json({ message: 'Faculty ID parameter is missing.' }, { status: 400 });

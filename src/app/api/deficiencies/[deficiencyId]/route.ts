@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, DeficiencyStatus, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { z } from 'zod';
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { Prisma } from '@prisma/client';
 
 const prismaClient = new PrismaClient();
 
@@ -13,19 +14,15 @@ interface SessionUser {
   role: UserRole;
 }
 
-interface RouteContext {
-  params: {
-    deficiencyId: string;
-  }
-}
-
 // Zod schema for updating (resolving) a deficiency
 const resolveDeficiencySchema = z.object({
   status: z.literal(DeficiencyStatus.RESOLVED), // Only allow setting to RESOLVED here
   resolution: z.string().optional(), // Optional resolution notes
 });
 
-export async function PATCH(request: Request, context: RouteContext) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ deficiencyId: string }> }) {
+  const params = await context.params;
+  const deficiencyId = params.deficiencyId;
   // 1. Get User Session and Check Permissions (Staff/Faculty can resolve)
   const session = await getServerSession(authOptions);
   const user = session?.user as SessionUser | undefined;
@@ -40,13 +37,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   }
   // --- End Permission Check --- 
 
-  // 2. Get deficiencyId from route parameters
-  const { deficiencyId } = context.params;
-  if (!deficiencyId) {
-    return NextResponse.json({ error: 'Missing deficiencyId parameter.' }, { status: 400 });
-  }
-
-  // 3. Parse and Validate Request Body (must include status: RESOLVED)
+  // 2. Parse and Validate Request Body (must include status: RESOLVED)
   let validatedData;
   try {
     const body = await request.json();
@@ -89,17 +80,19 @@ export async function PATCH(request: Request, context: RouteContext) {
     // 5. Return Success Response
     return NextResponse.json(updatedDeficiency);
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`Failed to update deficiency ${deficiencyId}:`, error);
     // Handle potential Prisma errors (e.g., record not found during update - though checked above)
-    if (error.code === 'P2025') { 
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
         return NextResponse.json({ error: `Deficiency with ID ${deficiencyId} not found.` }, { status: 404 });
     }
     return NextResponse.json({ error: 'Database error occurred while resolving deficiency.' }, { status: 500 });
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteContext) {
+export async function DELETE(request: NextRequest, context: { params: Promise<{ deficiencyId: string }> }) {
+    const params = await context.params;
+    const deficiencyId = params.deficiencyId;
     // 1. Get User Session & Authorization
     const session = await getServerSession(authOptions);
     const user = session?.user as SessionUser | undefined;
@@ -108,8 +101,6 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     if (!user?.id || !(user.role === UserRole.STAFF || user.role === UserRole.FACULTY)) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
-
-    const { deficiencyId } = params;
 
     if (!deficiencyId) {
         return NextResponse.json({ error: 'Deficiency ID is required' }, { status: 400 });

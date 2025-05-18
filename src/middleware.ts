@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+// import type { NextRequest } from 'next/server'; // Removed unused NextRequest
 import { withAuth } from "next-auth/middleware";
 import { UserRole } from '@prisma/client'; // Import UserRole if you have it defined
 

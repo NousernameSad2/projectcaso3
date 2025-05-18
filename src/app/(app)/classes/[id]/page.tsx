@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import {
@@ -35,7 +35,7 @@ import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { useQuery } from '@tanstack/react-query';
 import { Prisma, BorrowStatus as PrismaBorrowStatus, ReservationType } from '@prisma/client';
-import { cn, transformGoogleDriveUrl } from "@/lib/utils";
+import { transformGoogleDriveUrl } from "@/lib/utils";
 
 // Define the structure for enrolled user data within the class details
 interface EnrolledUser {
@@ -68,25 +68,13 @@ interface ClassDetailData {
   venue?: string | null;
 }
 
-// Define ClassData explicitly to override inference issues
-interface ClassData {
-  id: string;
-  courseCode: string;
-  section: string;
-  semester: string;
-  academicYear: string;
-  isActive: boolean;
-  ficId: string | null;
-  schedule?: string | null | undefined; // <<< Explicitly allow null/undefined
-  venue?: string | null | undefined;    // <<< Explicitly allow null/undefined
-}
-
 // --- Types for client-side sorting ---
 type EnrolledSortField = 'name' | 'email';
 type SortOrder = 'asc' | 'desc';
 // -------------------------------------
 
 // --- Type Definition for Borrow History Item --- 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const classBorrowHistoryItem = Prisma.validator<Prisma.BorrowSelect>()({
     id: true,
     borrowGroupId: true,

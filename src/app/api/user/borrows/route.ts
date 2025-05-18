@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, BorrowStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path
+import { authOptions } from '@/lib/authOptions';
 
 const prisma = new PrismaClient();
 
-export async function GET(request: Request) {
+export async function GET() {
   // 1. Get User Session
   const session = await getServerSession(authOptions);
   if (!session?.user?.id) {
@@ -62,7 +62,7 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Failed to fetch user borrows:', error);
     // Provide a more generic error in production, but log specific error
-    const message = error instanceof Error ? error.message : 'Database error occurred while fetching borrows.';
+    // const message = error instanceof Error ? error.message : 'Database error occurred while fetching borrows.';
     // In development, maybe return the specific error message
     // if (process.env.NODE_ENV === 'development') { 
     //   return NextResponse.json({ error: message }, { status: 500 });

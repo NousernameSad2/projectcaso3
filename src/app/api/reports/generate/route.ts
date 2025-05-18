@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { parseISO, isValid, format as formatDate, differenceInHours } from 'date-fns';
-import { Borrow, User, Equipment, Class, BorrowStatus, DeficiencyType, DeficiencyStatus, UserRole } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import { BorrowStatus } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 // Define possible report types (must match frontend enum/values)
@@ -27,40 +28,41 @@ const QuerySchema = z.object({
 });
 
 // --- Helper function to convert data array to CSV string ---
-function arrayToCsv(data: any[], headers: string[]): string {
+function arrayToCsv(data: Record<string, unknown>[], headers: string[]): string {
     const csvRows = [
         headers.join(','), // Header row
     ];
 
     for (const row of data) {
         const values = headers.map(header => {
-            // Access nested properties if needed (e.g., 'borrower.name')
             const keys = header.split('.');
-            let value = row;
+            let currentValue: unknown = row;
             for (const key of keys) {
-                if (value === null || typeof value === 'undefined') break;
-                value = value[key];
+                if (typeof currentValue === 'object' && currentValue !== null && key in currentValue) {
+                    currentValue = (currentValue as Record<string, unknown>)[key];
+                } else {
+                    currentValue = undefined;
+                    break;
+                }
             }
             
+            let formattedValue = currentValue;
             // Format dates nicely
-            if (value instanceof Date) {
-                value = formatDate(value, 'yyyy-MM-dd HH:mm:ss');
+            if (formattedValue instanceof Date) {
+                formattedValue = formatDate(formattedValue, 'yyyy-MM-dd HH:mm:ss');
             }
 
             // Handle null/undefined
-            if (value === null || typeof value === 'undefined') {
-                value = '';
+            if (formattedValue === null || typeof formattedValue === 'undefined') {
+                formattedValue = '';
             }
 
             // Escape commas and quotes
-            const stringValue = String(value);
+            const stringValue = String(formattedValue);
             if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
-                // Enclose in double quotes and escape existing double quotes
-                value = `"${stringValue.replace(/"/g, '""')}"`;
-            } else {
-                value = stringValue;
+                return `"${stringValue.replace(/"/g, '""')}"`;
             }
-            return value;
+            return stringValue;
         });
         csvRows.push(values.join(','));
     }
@@ -69,7 +71,7 @@ function arrayToCsv(data: any[], headers: string[]): string {
 }
 
 // --- Basic PDF Generation Helper ---
-async function generateBasicPdf(reportType: string, data: any[], headers: string[]): Promise<Uint8Array> {
+async function generateBasicPdf(reportType: string, data: Record<string, unknown>[], headers: string[]): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
     const timesRomanFont = await pdfDoc.embedFont(StandardFonts.TimesRoman);
     const page = pdfDoc.addPage();
@@ -115,18 +117,22 @@ async function generateBasicPdf(reportType: string, data: any[], headers: string
         }
         currentX = margin;
         for (const header of headers) {
-            // Access nested properties if needed
             const keys = header.split('.');
-            let value = row;
+            let currentValue: unknown = row;
             for (const key of keys) {
-                if (value === null || typeof value === 'undefined') break;
-                value = value[key];
+                if (typeof currentValue === 'object' && currentValue !== null && key in currentValue) {
+                    currentValue = (currentValue as Record<string, unknown>)[key];
+                } else {
+                    currentValue = undefined;
+                    break;
+                }
             }
             
-            if (value instanceof Date) value = formatDate(value, 'yyyy-MM-dd HH:mm'); // Shorter date format
-            if (value === null || typeof value === 'undefined') value = '';
+            let formattedValue = currentValue;
+            if (formattedValue instanceof Date) formattedValue = formatDate(formattedValue, 'yyyy-MM-dd HH:mm');
+            if (formattedValue === null || typeof formattedValue === 'undefined') formattedValue = '';
 
-            page.drawText(String(value), { 
+            page.drawText(String(formattedValue), { 
                 x: currentX + 2, 
                 y: currentY - fontSize * 1.2,
                 size: fontSize, 
@@ -157,8 +163,8 @@ export async function GET(req: NextRequest) {
     const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId } = queryParseResult.data;
 
     // --- Build Filters --- 
-    const borrowFilters: any = {}; // Filters applicable to Borrow model
-    const deficiencyFilters: any = {}; // Filters applicable to Deficiency model
+    const borrowFilters: Prisma.BorrowWhereInput = {}; // Typed
+    const deficiencyFilters: Prisma.DeficiencyWhereInput = {}; // Typed
 
     // Date range filter (Apply to Deficiency createdAt or Borrow request time based on report)
     if (reportType === 'borrowing_activity' || reportType === 'equipment_utilization') {
@@ -194,7 +200,10 @@ export async function GET(req: NextRequest) {
              borrowFilters.classId = courseId;
          } else if (reportType === 'deficiency_summary') {
              // Filter deficiencies linked to borrows from a specific class
-             deficiencyFilters.borrow = { ...deficiencyFilters.borrow, classId: courseId };
+             deficiencyFilters.borrow = {
+                 ...(deficiencyFilters.borrow || {}),
+                 classId: courseId
+             } as Prisma.BorrowWhereInput;
          }
      }
 
@@ -202,7 +211,10 @@ export async function GET(req: NextRequest) {
     if (ficId && ficId !== 'all') {
         if (reportType === 'borrowing_activity') {
             // Filter by ficId through the class association for borrows
-            borrowFilters.class = { ...borrowFilters.class, ficId: ficId }; 
+            borrowFilters.class = {
+                ...(borrowFilters.class || {}),
+                ficId: ficId
+            } as Prisma.ClassWhereInput;
         } else if (reportType === 'deficiency_summary') {
             // Filter by the FIC directly intended to be notified on the deficiency
             deficiencyFilters.ficToNotifyId = ficId;
@@ -226,9 +238,9 @@ export async function GET(req: NextRequest) {
     }
     
     try {
-        let data: any[] = [];
+        let data: Record<string, unknown>[] = [];
         let csvHeaders: string[] = [];
-        let isImplemented = true; // Flag for implemented reports
+        const isImplemented = true; // Changed to const
         let pdfImplemented = false; // Flag for implemented PDF reports
         let pdfHeaders: string[] = []; // Store headers for PDF separately if needed
 
@@ -344,7 +356,7 @@ export async function GET(req: NextRequest) {
                 });
 
                 // Get borrow counts by class within the date range
-                const systemUsageBorrowFilters: any = { classId: { not: null } }; // Only count borrows linked to a class
+                const systemUsageBorrowFilters: Prisma.BorrowWhereInput = { classId: { not: null } }; // Only count borrows linked to a class
                 if (startDate || endDate) {
                     systemUsageBorrowFilters.requestSubmissionTime = {};
                     if (startDate) systemUsageBorrowFilters.requestSubmissionTime.gte = parseISO(startDate);
@@ -433,7 +445,7 @@ export async function GET(req: NextRequest) {
         } else {
             // Default to JSON
             if (!isImplemented) {
-                return NextResponse.json({ message: `Report type '${reportType}' is not yet implemented.` });
+                return NextResponse.json({ message: `Report type '${reportType}' is not yet implemented.` }, { status: 400 });
             }
             return NextResponse.json(data);
         }
@@ -442,4 +454,4 @@ export async function GET(req: NextRequest) {
         console.error(`[API_REPORTS_GENERATE_${reportType.toUpperCase()}_GET]`, error);
         return new NextResponse('Internal Server Error', { status: 500 });
     }
-} 
+} // End of GET function

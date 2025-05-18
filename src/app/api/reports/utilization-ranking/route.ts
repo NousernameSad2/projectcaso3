@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { parseISO, isValid, differenceInHours } from 'date-fns';
-import { BorrowStatus, EquipmentStatus } from '@prisma/client';
+import { BorrowStatus, EquipmentStatus, type Prisma } from '@prisma/client';
 
 const UtilizationRankingQuerySchema = z.object({
     startDate: z.string().optional().refine(val => !val || isValid(parseISO(val)), { message: "Invalid start date format" }),
@@ -44,7 +44,7 @@ export async function GET(req: NextRequest) {
 
         // 2. For each equipment, calculate its contact hours within the date range
         for (const equip of allEquipment) {
-            const borrowWhereClause: any = {
+            const borrowWhereClause: Prisma.BorrowWhereInput = {
                 equipmentId: equip.id,
                 checkoutTime: { not: null },
                 actualReturnTime: { not: null },

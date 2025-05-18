@@ -1,14 +1,14 @@
 'use client';
 
 import { zodResolver } from '@hookform/resolvers/zod';
-import { CalendarIcon, Check, ChevronsUpDown } from 'lucide-react';
-import { useSession } from 'next-auth/react';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { useSession, SessionContextValue } from 'next-auth/react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
+import { UserRole } from '@prisma/client';
 
 import { Button } from '@/components/ui/button';
-import { Calendar } from '@/components/ui/calendar';
 import {
   Command,
   CommandEmpty,
@@ -49,13 +49,28 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
-import { format } from 'date-fns';
 
 // Define a basic FacultyUser interface locally - Align with API response
 interface FacultyUser {
   id: string;
   name: string | null; // Use 'name' field as returned by API
   email?: string | null; // Include email for display/search uniqueness if needed
+}
+
+// Define local types for session and user to avoid `as any`
+interface SessionUser {
+  id?: string;
+  role?: UserRole | string; 
+  // Add other relevant user fields if accessed from session?.user
+}
+
+// Correctly type AugmentedSessionData by picking and overriding from SessionContextValue
+interface AugmentedSessionData extends Omit<SessionContextValue, 'data'> { // Omit original data
+  data: { // Redefine data structure
+    user?: SessionUser;
+    accessToken?: string;
+  } | null;
+  // status and update will be inherited from SessionContextValue
 }
 
 // Define the schema for class updates
@@ -121,13 +136,15 @@ export function EditClassDialog({
   onOpenChange,
   onClassUpdated,
 }: EditClassDialogProps) {
-  const { data: session } = useSession();
-  const user = session?.user as any; // Cast to any temporarily - proper fix involves type augmentation
+  const { data: sessionData } = useSession() as AugmentedSessionData;
+  const session = sessionData;
+  const user = session?.user;
   const isStaff = user?.role === 'STAFF';
   const [facultyUsers, setFacultyUsers] = useState<FacultyUser[]>([]);
   const [isFetchingFaculty, setIsFetchingFaculty] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const token = (session as any)?.accessToken; // Extract token
+  const token = session?.accessToken;
 
   const form = useForm<ClassUpdateInput>({
     resolver: zodResolver(ClassUpdateSchema),
@@ -172,7 +189,7 @@ export function EditClassDialog({
 
   useEffect(() => {
     async function fetchFaculty() {
-      if (!isStaff || !isOpen) return; // Only fetch if staff and dialog is open
+      if (!isStaff || !isOpen) return;
       setIsFetchingFaculty(true);
       try {
         if (!token) {
@@ -202,7 +219,6 @@ export function EditClassDialog({
   async function onSubmit(values: ClassUpdateInput) {
     if (!classData) return;
 
-    const token = (session as any)?.accessToken; // Cast to any temporarily
     if (!token) {
       toast.error('Authentication Error: You must be logged in to update a class.');
       return;
@@ -259,14 +275,13 @@ export function EditClassDialog({
       }
     }
 
-    if (Object.keys(changedValues).length === 0) {
-      toast.info('No changes were detected.');
-      onOpenChange(false); // Close dialog if no changes
+    if (Object.keys(changedValues).length === 0 && values.ficId === classData.ficId) {
+      toast.info('No changes were made.');
       return;
     }
 
-    console.log('Submitting changed values:', changedValues);
-
+    console.log(`Updating class ${classData.id} with:`, changedValues);
+    setIsSubmitting(true);
     try {
       const response = await fetch(`/api/classes/${classData.id}`, {
         method: 'PATCH',
@@ -277,17 +292,22 @@ export function EditClassDialog({
         body: JSON.stringify(changedValues),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update class.');
+        console.error("Update failed with status:", response.status, "and result:", result);
+        throw new Error(result.message || 'Failed to update class.');
       }
 
-      toast.success('Class updated successfully.');
-      onClassUpdated(); // Notify parent component
-      onOpenChange(false); // Close the dialog
-    } catch (error: any) {
-      console.error('Update failed:', error);
-      toast.error(`Update Failed: ${error.message || 'An unexpected error occurred.'}`);
+      toast.success(result.message || 'Class updated successfully!');
+      onClassUpdated(); // Call the callback
+      onOpenChange(false); // Close dialog on success
+    } catch (error: unknown) {
+      console.error('Error updating class:', error);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred';
+      toast.error(`Error: ${message}`);
+    } finally {
+      setIsSubmitting(false);
     }
   }
 
@@ -306,7 +326,7 @@ export function EditClassDialog({
         <DialogHeader>
           <DialogTitle>Edit Class</DialogTitle>
           <DialogDescription>
-            Make changes to the class details here. Click save when you're
+            Make changes to the class details here. Click save when you&apos;re
             done.
           </DialogDescription>
         </DialogHeader>
@@ -407,16 +427,7 @@ export function EditClassDialog({
                         </FormControl>
                       </PopoverTrigger>
                       <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                        <Command filter={(value, search) => { 
-                           // Custom filter to search name and potentially email
-                           const faculty = facultyUsers.find(f => f.id === value); // value might be id here if set differently
-                           // Or more likely, filter based on displayed text vs search term
-                           const nameMatch = faculty?.name?.toLowerCase().includes(search.toLowerCase());
-                           const emailMatch = faculty?.email?.toLowerCase().includes(search.toLowerCase());
-                           // A simple text search against the item text might be handled by Command automatically
-                           // Let's simplify and assume Command default filter works on the text content
-                           return 1; // Default Command filter is likely sufficient
-                          }}>
+                        <Command>
                           <CommandInput placeholder="Search faculty..." />
                           <CommandEmpty>No faculty found.</CommandEmpty>
                           <CommandGroup>
@@ -545,8 +556,8 @@ export function EditClassDialog({
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={!form.formState.isDirty || form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Saving...' : 'Save Changes'}
+              <Button type="submit" disabled={!form.formState.isDirty || isSubmitting}>
+                {isSubmitting ? 'Saving...' : 'Save Changes'}
               </Button>
             </DialogFooter>
           </form>

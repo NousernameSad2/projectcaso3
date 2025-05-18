@@ -1,24 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
-import { BorrowStatus, UserRole, Prisma } from '@prisma/client';
-
-interface RouteContext {
-    params: {
-        id: string; // Represents classId
-    }
-}
+import { authOptions } from '@/lib/authOptions';
 
 // GET: Fetch group borrow records for a specific class
-export async function GET(req: NextRequest, context: RouteContext) {
+export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const session = await getServerSession(authOptions);
-    // Allow any authenticated user to view class borrow history
-    if (!session?.user?.id) {
+    const params = await context.params;
+
+    if (!session || !session.user || !session.user.id) {
         return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
     }
-    const userId = session.user.id;
-    const classId = context.params.id;
+    const classId = params.id;
 
     if (!classId) {
         return NextResponse.json({ message: 'Class ID is required' }, { status: 400 });

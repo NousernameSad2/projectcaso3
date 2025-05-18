@@ -3,31 +3,24 @@ import { PrismaClient, BorrowStatus, EquipmentStatus, UserRole } from '@prisma/c
 import { EquipmentSchema } from '@/lib/schemas'; // Import schema for validation
 import { z } from 'zod';
 import { getServerSession } from "next-auth/next"; // Added import
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Added import
+import { authOptions } from "@/lib/authOptions"; // Updated import
 import { NextRequest } from 'next/server'; // Added NextRequest
+import { Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-// Define RouteContext for params type
-interface RouteContext {
-  params: {
-    id: string; // Equipment ID from the URL
-  };
-}
-
 // GET Handler for fetching a single equipment item by ID
 export async function GET(
-  request: Request, 
-  { params }: { params: { id: string } }
+  request: NextRequest, // Changed Request to NextRequest for consistency
+  context: { params: Promise<{ id: string }> } // Updated signature
 ) {
   const session = await getServerSession(authOptions); 
   if (!session) {
       return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
   
-  // *** FIX: Await params before accessing ***
-  const resolvedParams = await params;
-  const equipmentId = resolvedParams.id; 
+  const params = await context.params; // Await context.params
+  const equipmentId = params.id; 
 
   if (!equipmentId) {
     return NextResponse.json({ message: 'Equipment ID is required' }, { status: 400 });
@@ -114,17 +107,16 @@ export async function GET(
 
 // PUT Handler for updating equipment by ID
 export async function PUT(
-  request: Request, 
-  { params }: { params: { id: string } }
+  request: NextRequest, // Changed Request to NextRequest for consistency
+  context: { params: Promise<{ id: string }> } // Updated signature
 ) {
   const session = await getServerSession(authOptions);
   if (!session || !session.user || (session.user.role !== 'STAFF' && session.user.role !== 'FACULTY')) {
     return NextResponse.json({ message: 'Forbidden' }, { status: 403 });
   }
   
-  // *** FIX: Await params before accessing ***
-  const resolvedParams = await params;
-  const equipmentId = resolvedParams.id; 
+  const params = await context.params; // Await context.params
+  const equipmentId = params.id; 
   
   try {
     const body = await request.json();
@@ -156,11 +148,11 @@ export async function PUT(
     }
 
     // Prepare data for update
-    const updateData: any = {
+    const updateData: Prisma.EquipmentUpdateInput = {
         name,
-        equipmentId: bodyEquipmentId || null,
+        equipmentId: bodyEquipmentId || undefined,
         category,
-        condition: condition || null,
+        condition: condition || undefined,
         status,
         stockCount,
         purchaseCost: purchaseCost,
@@ -179,7 +171,7 @@ export async function PUT(
         // Ensure existing log is an array
         const currentLog = Array.isArray(existingEquipment.maintenanceLog) ? existingEquipment.maintenanceLog : [];
         // Add the new entry
-        updateData.maintenanceLog = [...currentLog, newLogEntry];
+        updateData.maintenanceLog = [...currentLog, newLogEntry] as Prisma.InputJsonValue[];
     }
 
     // Optional: Check for equipment ID conflict (no change here)
@@ -204,7 +196,7 @@ export async function PUT(
     console.log(`Equipment updated successfully: ${updatedEquipment.id}`);
     return NextResponse.json(updatedEquipment, { status: 200 });
 
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`Error updating equipment ${equipmentId}:`, error); 
     if (error instanceof z.ZodError) {
       return NextResponse.json({ message: 'Validation error processing request.', errors: error.flatten().fieldErrors }, { status: 400 });
@@ -215,16 +207,15 @@ export async function PUT(
 }
 
 // DELETE: "Delete" an equipment record by archiving it or permanently deleting if already archived
-export async function DELETE(req: NextRequest, { params }: RouteContext) {
-  // Permission check (ensure user is STAFF or FACULTY)
+export async function DELETE(req: NextRequest, context: { params: Promise<{ id: string }> }) { // Updated signature
   const session = await getServerSession(authOptions);
   const userRole = session?.user?.role as UserRole;
   if (!session?.user || !(userRole === UserRole.STAFF || userRole === UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 });
   }
 
-  const resolvedParams = await params;
-  const equipmentId = resolvedParams.id;
+  const params = await context.params; // Await context.params
+  const equipmentId = params.id;
 
   if (!equipmentId) {
     return NextResponse.json({ message: 'Equipment ID is missing' }, { status: 400 });
@@ -261,11 +252,11 @@ export async function DELETE(req: NextRequest, { params }: RouteContext) {
       return new NextResponse(null, { status: 204 });
     }
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error(`API Error - DELETE /api/equipment/${equipmentId}:`, error);
 
     // Specific check for Record Not Found during the initial findUnique, update, or delete
-    if (error.code === 'P2025') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') {
       return NextResponse.json({ message: 'Equipment not found' }, { status: 404 });
     }
 

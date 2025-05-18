@@ -10,18 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Deficiency, User, Borrow, Equipment, DeficiencyStatus } from '@prisma/client';
-import { format } from 'date-fns';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import EditDeficiencyDialog from '@/components/deficiencies/EditDeficiencyDialog';
-import { DeficiencyWithDetails } from '@/components/deficiencies/EditDeficiencyDialog';
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { DataTable } from "@/components/ui/data-table";
 import { columns as allDeficiencyColumns, type DeficiencyAdminView } from "./columns";
@@ -36,18 +26,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Trash2 } from 'lucide-react';
 import BorrowSelectorModal from '@/components/borrows/BorrowSelectorModal';
-
-// Helper to get badge variant for DeficiencyStatus
-const getDeficiencyStatusVariant = (status: DeficiencyStatus): "default" | "destructive" | "success" => {
-  switch (status) {
-    case DeficiencyStatus.UNRESOLVED: return "destructive";
-    case DeficiencyStatus.RESOLVED: return "success";
-    case DeficiencyStatus.UNDER_REVIEW: return "default"; // Or another color?
-    default: return "default";
-  }
-};
 
 // Type for User data fetched for dropdowns
 interface UserSelectItem {
@@ -55,47 +34,47 @@ interface UserSelectItem {
   label: string; // User Name (Email)
 }
 
+// Type for user data from the API in fetchUsers
+interface ApiUser {
+  id: string;
+  name: string | null;
+  email: string | null;
+}
+
 // --- COMPONENTS ---
 
 // Form Component
 function CreateDeficiencyForm() {
-    const [borrowId, setBorrowId] = useState(''); // Reverted to string, initially empty
+    const [borrowId, setBorrowId] = useState('');
     const [userId, setUserId] = useState<string | undefined>(undefined);
     const [type, setType] = useState<DeficiencyType | undefined>(undefined);
     const [description, setDescription] = useState('');
-    const [ficToNotifyId, setFicToNotifyId] = useState<string | undefined>(undefined); // Store selected FIC/Staff ID
+    const [ficToNotifyId, setFicToNotifyId] = useState<string | undefined>(undefined);
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
 
-    // State for user dropdowns
     const [regularUsers, setRegularUsers] = useState<UserSelectItem[]>([]);
     const [privilegedUsers, setPrivilegedUsers] = useState<UserSelectItem[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
-
-    // State for the borrow selector modal
     const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
 
-    // Fetch users for dropdowns
     useEffect(() => {
         const fetchUsers = async () => {
             setIsLoadingUsers(true);
             try {
-                // Fetch Regular Users
                 const regRes = await fetch('/api/users?role=REGULAR');
                 if (!regRes.ok) throw new Error('Failed to fetch regular users');
                 const regData = await regRes.json();
-                setRegularUsers(regData.map((u: any) => ({ value: u.id, label: `${u.name} (${u.email})` })) || []);
+                setRegularUsers(regData.map((u: ApiUser) => ({ value: u.id, label: `${u.name} (${u.email})` })) || []);
 
-                // Fetch Staff and Faculty
-                const privRes = await fetch('/api/users?role=STAFF&role=FACULTY'); // Use multiple params
+                const privRes = await fetch('/api/users?role=STAFF&role=FACULTY');
                 if (!privRes.ok) throw new Error('Failed to fetch staff/faculty');
                 const privData = await privRes.json();
-                setPrivilegedUsers(privData.map((u: any) => ({ value: u.id, label: `${u.name} (${u.email})` })) || []);
+                setPrivilegedUsers(privData.map((u: ApiUser) => ({ value: u.id, label: `${u.name} (${u.email})` })) || []);
                 
             } catch (error) {
                 console.error("Failed to fetch users for dropdowns:", error);
                 toast.error("Could not load users for dropdowns.");
-                // Set empty arrays on error
                 setRegularUsers([]);
                 setPrivilegedUsers([]);
             } finally {
@@ -335,7 +314,7 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
 
     // --- State for Delete Confirmation Dialog --- 
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-    const [deletingDeficiencyId, setDeletingDeficiencyId] = useState<string | null>(null);
+    const [deficiencyToDelete, setDeficiencyToDelete] = useState<string | null>(null);
     // -------------------------------------------
 
     const { data: session } = useSession(); // Get session data for token
@@ -387,10 +366,6 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
         }
     }, [isPrivileged]);
 
-    const handleUpdateSuccess = () => {
-        fetchDeficiencies(filter);
-    };
-
     // Handler to Mark Deficiency as Resolved
     const handleResolveDeficiency = async (deficiencyId: string) => {
         console.log(`[handleResolveDeficiency] Attempting to resolve ID: ${deficiencyId}`); // Log start
@@ -429,15 +404,15 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
     };
 
     // --- Modified handleDeleteDeficiency to open dialog ---
-    const openDeleteConfirmation = (deficiencyId: string) => {
-        setDeletingDeficiencyId(deficiencyId);
+    const openDeleteConfirmation = async (deficiencyId: string) => {
+        setDeficiencyToDelete(deficiencyId);
         setIsDeleteDialogOpen(true);
     };
 
     // --- Actual deficiency deletion logic (extracted and corrected) ---
     const performDeleteDeficiency = async () => {
-        if (!deletingDeficiencyId) return;
-        const deficiencyId = deletingDeficiencyId;
+        if (!deficiencyToDelete) return;
+        const deficiencyId = deficiencyToDelete;
         
         // Check for token
         if (!token) {
@@ -462,7 +437,7 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
             toast.success("Deficiency record deleted successfully.");
             fetchDeficiencies(filter); // Refresh the list by re-fetching
             setIsDeleteDialogOpen(false); // Close dialog on success
-            setDeletingDeficiencyId(null); // Clear the target ID
+            setDeficiencyToDelete(null); // Clear the target ID
         } catch (err) {
             toast.error(err instanceof Error ? err.message : "Failed to delete deficiency.");
             // Optionally keep dialog open on error
@@ -530,7 +505,7 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
                             This action will permanently delete deficiency record 
-                            <strong>ID: {deletingDeficiencyId}</strong>. 
+                            <strong>ID: {deficiencyToDelete}</strong>. 
                             This cannot be undone.
                         </AlertDialogDescription>
                     </AlertDialogHeader>

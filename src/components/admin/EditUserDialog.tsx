@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useForm, SubmitHandler, Control } from 'react-hook-form';
+import { useForm, SubmitHandler } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useSession } from 'next-auth/react';
@@ -68,7 +68,6 @@ export default function EditUserDialog({
   const [newPassword, setNewPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
   const { data: session, status: sessionStatus } = useSession();
-  const token = session?.accessToken;
 
   const form = useForm<AdminUserUpdateInput>({
     resolver: zodResolver(AdminUserUpdateSchema),
@@ -146,9 +145,10 @@ export default function EditUserDialog({
       toast.success(result.message || 'User updated successfully!');
       onUserUpdated(result.user as UserData); // Pass the updated user data back, assert type
       onOpenChange(false); // Close the dialog
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating user:', error);
-      toast.error(`Error: ${error.message || 'An unknown error occurred.'}`);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      toast.error(`Error: ${message}`);
     } finally {
       setIsLoading(false);
     }
@@ -202,9 +202,10 @@ export default function EditUserDialog({
       setNewPassword(''); // Clear the password field
       // Optionally, close the dialog or refresh data if needed
       // onOpenChange(false); 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error changing password:', error);
-      toast.error(`Error: ${error.message || 'An unknown error occurred.'}`);
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      toast.error(`Error: ${message}`);
     } finally {
       setIsChangingPassword(false);
     }

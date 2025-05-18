@@ -7,13 +7,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
-  DialogClose,
 } from "@/components/ui/dialog";
 import {
   Form,
   FormControl,
-  FormDescription,
   FormField,
   FormItem,
   FormLabel,
@@ -24,7 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Borrow, Equipment, Class, BorrowStatus, DeficiencyType, Prisma } from '@prisma/client'; 
+import { Borrow, Equipment, DeficiencyType } from '@prisma/client';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
@@ -78,13 +75,13 @@ export default function ReportDeficiencyModal({
 
   // Update selectedItem when dropdown changes
   useEffect(() => {
-    const subscription = form.watch((value, { name, type }) => {
+    const subscription = form.watch((value, { name }) => {
       if (name === 'selectedBorrowId') {
         setSelectedItem(itemsToReport.find(item => item.id === value.selectedBorrowId) || null);
       }
     });
     return () => subscription.unsubscribe();
-  }, [form.watch, itemsToReport]);
+  }, [form, itemsToReport]);
 
   const handleReportDeficiency = async (values: DeficiencyReportInput) => {
     setIsSubmittingDeficiency(true);
@@ -167,8 +164,8 @@ export default function ReportDeficiencyModal({
           <DialogTitle>Request Return & Report Issues</DialogTitle>
           <DialogDescription>
             Select items with issues and report them one by one. 
-            When finished, click "Initiate Return Request".
-            If there are no issues, just click "Initiate Return Request".
+            When finished, click &quot;Initiate Return Request&quot;.
+            If there are no issues, just click &quot;Initiate Return Request&quot;.
           </DialogDescription>
         </DialogHeader>
         

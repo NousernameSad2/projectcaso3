@@ -1,14 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
-import { ReservationSchema, AdminUserCreateSchema } from '@/lib/schemas';
-import { UserRole, UserStatus, BorrowStatus } from '@prisma/client';
-import { Prisma } from '@prisma/client';
-import { getServerSession } from "next-auth/next"; // Import next-auth session
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"; // Import auth options
-import { startOfDay, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns'; // Import date-fns helpers
-import { createId } from '@paralleldrive/cuid2'; // Correct import for cuid2
+import { ReservationSchema } from '@/lib/schemas';
+import { UserRole, BorrowStatus, Prisma } from '@prisma/client';
+import { getServerSession } from 'next-auth/next';
+import { authOptions } from "@/lib/authOptions";
+import { createId } from '@paralleldrive/cuid2';
 
 // GET: Fetch borrow records, optionally filtering by status
 export async function GET(req: NextRequest) {
@@ -48,7 +45,7 @@ export async function GET(req: NextRequest) {
         // --- END: Update Overdue Status --- 
 
         // --- START: Build Prisma Where Clause with Role-Based Filtering ---
-        let whereClause: Prisma.BorrowWhereInput = {};
+        const whereClause: Prisma.BorrowWhereInput = {};
 
         if (statusFilter) {
             whereClause.borrowStatus = { in: statusFilter };
@@ -86,8 +83,8 @@ export async function GET(req: NextRequest) {
             },
         });
         return NextResponse.json(borrows);
-    } catch (error) {
-        console.error("API Error - GET /api/borrows:", error);
+    } catch (_error) {
+        console.error("API Error - GET /api/borrows:", _error);
         return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
     }
 }
@@ -105,7 +102,7 @@ export async function POST(req: NextRequest) {
     let body;
     try {
       body = await req.json();
-    } catch (error) {
+    } catch {
       return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
     }
 
@@ -147,18 +144,14 @@ export async function POST(req: NextRequest) {
                 AND: [
                     { // Existing borrow starts before requested ends
                         OR: [
-                           { // @ts-ignore - Ignore potential type error for approvedStartTime
-                            approvedStartTime: { lt: requestedEndTime } },
-                           { // @ts-ignore - Ignore potential type error for approvedStartTime/requestedStartTime
-                            approvedStartTime: null, requestedStartTime: { lt: requestedEndTime } }
+                            { approvedStartTime: { lt: requestedEndTime } },
+                            { approvedStartTime: null, requestedStartTime: { lt: requestedEndTime } }
                         ]
                     },
                     { // Existing borrow ends after requested starts
                         OR: [
-                           { // @ts-ignore - Ignore potential type error for approvedEndTime
-                            approvedEndTime: { gt: requestedStartTime } }, 
-                           { // @ts-ignore - Ignore potential type error for approvedEndTime/requestedEndTime
-                            approvedEndTime: null, requestedEndTime: { gt: requestedStartTime } }
+                            { approvedEndTime: { gt: requestedStartTime } }, 
+                            { approvedEndTime: null, requestedEndTime: { gt: requestedStartTime } }
                         ]
                     }
                 ]
@@ -238,9 +231,11 @@ export async function POST(req: NextRequest) {
             return createdBorrows; 
         });
         
-    } catch (transactionError: any) {
-        console.error("Transaction Error creating borrow records or links:", transactionError);
-        return NextResponse.json({ message: 'Database error during reservation creation.' }, { status: 500 });
+    } catch (error: unknown) {
+        console.error("API Error - POST /api/borrows:", error);
+        // Basic error handling, can be expanded
+        const message = error instanceof Error ? error.message : "An unexpected error occurred during reservation.";
+        return NextResponse.json({ message }, { status: 500 });
     }
     
     // 4. Return Success Response

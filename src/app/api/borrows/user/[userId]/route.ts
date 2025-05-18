@@ -1,18 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { prisma } from '@/lib/prisma';
 import { UserRole } from '@prisma/client';
 
-interface RouteContext {
-    params: {
-        userId: string;
-    }
-}
-
 // GET handler to fetch borrow history for a specific user ID (Admin only)
-export async function GET(req: NextRequest, { params }: RouteContext) {
+export async function GET(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
     const session = await getServerSession(authOptions);
+    const params = await context.params;
     const requestingUser = session?.user;
     const targetUserId = params.userId;
 

@@ -57,7 +57,7 @@ export default function LoginPage() {
       } else {
         setError("Login failed. Please try again.");
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred. Please try again later.");
     } finally {
       setIsLoading(false);
@@ -159,7 +159,7 @@ export default function LoginPage() {
         </CardContent>
          {/* Moved Register link outside CardContent but logically grouped */}
          <p className="mt-6 mb-8 text-center text-sm text-muted-foreground">
-           Don't have an account?{" "}
+           Don&apos;t have an account?{" "}
            <Link href="/register" className={`font-medium text-primary hover:underline ${isLoading ? 'pointer-events-none opacity-50' : ''}`}>
              Register
            </Link>

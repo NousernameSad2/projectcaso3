@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { BorrowStatus } from '@prisma/client';
 
 // GET: Fetch dashboard summary counts for the currently logged-in user
-export async function GET(req: NextRequest) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     // 1. Authentication
@@ -49,6 +49,7 @@ export async function GET(req: NextRequest) {
             [BorrowStatus.REJECTED_FIC]: 0,
             [BorrowStatus.REJECTED_STAFF]: 0,
             [BorrowStatus.CANCELLED]: 0,
+            [BorrowStatus.REJECTED_AUTOMATIC]: 0,
         };
 
         statusCounts.forEach((group) => {

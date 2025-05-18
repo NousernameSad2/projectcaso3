@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from "zod";
-import { Prisma, UserRole, DeficiencyStatus, EquipmentStatus, ReservationType, BorrowStatus } from '@prisma/client';
+import { Prisma, UserRole, ReservationType, BorrowStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { authOptions } from "@/lib/authOptions";
 import { createId } from '@paralleldrive/cuid2'; 
 // Remove date-fns imports if no longer needed for calculation
 // import { startOfDay, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
@@ -83,17 +83,13 @@ export async function POST(request: Request) {
               AND: [
                    { // Existing borrow starts before requested ends
                        OR: [
-                           // @ts-ignore - Ignore type error if persist
                            { approvedStartTime: { lt: endTime } },
-                           // @ts-ignore - Ignore type error if persist
                            { approvedStartTime: null, requestedStartTime: { lt: endTime } } 
                        ]
                    },
                    { // Existing borrow ends after requested starts
                        OR: [
-                           // @ts-ignore - Ignore type error if persist
                            { approvedEndTime: { gt: startTime } }, 
-                           // @ts-ignore - Ignore type error if persist
                            { approvedEndTime: null, requestedEndTime: { gt: startTime } } 
                        ]
                    }
@@ -241,36 +237,29 @@ export async function PATCH(request: NextRequest) {
         return NextResponse.json({ error: 'groupId parameter is required' }, { status: 400 });
     }
 
-    // Reverted: Removed 'reject' from valid actions
     const validActions = ['checkout', 'approve'];
     if (!action || !validActions.includes(action)) { 
         return NextResponse.json({ error: `Invalid or missing action specified. Valid actions: ${validActions.join(', ')}` }, { status: 400 });
     }
 
     try {
-        // 3. Identify Target Borrows based on groupId
         const borrowsToUpdate = await prisma.borrow.findMany({
             where: { borrowGroupId: groupId },
-            select: { id: true, borrowStatus: true, equipmentId: true } // Select needed fields
+            select: { id: true, borrowStatus: true, equipmentId: true } 
         });
 
         if (borrowsToUpdate.length === 0) {
             return NextResponse.json({ error: `No borrows found for group ${groupId}` }, { status: 404 });
         }
 
-        // 4. Perform Action based on 'action' parameter
-        let updateResult: Prisma.BatchPayload = { count: 0 }; // Initialize updateResult
-        let successMessage = ''; // Initialize successMessage
-        let autoRejectedCount = 0; // <<< Add counter for auto-rejected borrows
+        let updateResult: Prisma.BatchPayload = { count: 0 }; 
+        let successMessage = ''; 
+        let autoRejectedCount = 0; 
 
         if (action === 'approve') {
-            // --- Bulk Approve Logic (with Auto-Rejection) ---
             console.log(`[API Bulk PATCH - Group ${groupId}] Approving with auto-rejection...`);
-
-            // Use a transaction to ensure atomicity
             try {
                 const { approvedCount, rejectedCount } = await prisma.$transaction(async (tx) => {
-                    // 1. Find PENDING items in the target group
                     const borrowsToApprove = await tx.borrow.findMany({
                         where: { 
                             borrowGroupId: groupId, 
@@ -286,13 +275,12 @@ export async function PATCH(request: NextRequest) {
 
                     if (borrowsToApprove.length === 0) {
                         console.log(`[API Bulk PATCH - Group ${groupId}] No PENDING borrows to approve.`);
-                        return { approvedCount: 0, rejectedCount: 0 }; // Nothing to do
+                        return { approvedCount: 0, rejectedCount: 0 };
                     }
                     
                     const equipmentIdsToApprove = borrowsToApprove.map(b => b.equipmentId);
                     const borrowIdsToApprove = borrowsToApprove.map(b => b.id);
 
-                    // 2. Update Borrow Status to APPROVED
                     const approvedResult = await tx.borrow.updateMany({
                         where: { id: { in: borrowIdsToApprove } },
                         data: {
@@ -304,42 +292,18 @@ export async function PATCH(request: NextRequest) {
                         },
                     });
                     
-                    // 3. *** NEW: Update Equipment Status to RESERVED ***
-                    // Ensure we only update equipment linked to the *successfully* approved borrows
-                    // if (approvedResult.count > 0) {
-                    //     const updatedEquipmentResult = await tx.equipment.updateMany({
-                    //         where: { 
-                    //             id: { in: equipmentIdsToApprove },
-                    //             status: EquipmentStatus.AVAILABLE 
-                    //         },
-                    //         data: {
-                    //             status: EquipmentStatus.RESERVED,
-                    //         },
-                    //     });
-                    //     console.log(`[API Bulk PATCH - Group ${groupId}] Updated status to RESERVED for ${updatedEquipmentResult.count} equipment items.`);
-                    // }
-                    // *** END NEW ***
-
-                    // 4. Auto-reject logic (if needed, seems commented out/removed in original)
-                    // ... (Keep existing auto-reject logic if present) ...
                     let autoRejectedCountTx = 0; 
-
-                    // New Auto-Reject Logic Starts
                     if (approvedResult.count > 0 && borrowsToApprove.length > 0) {
-                        const approvedStartTime = borrowsToApprove[0].requestedStartTime; // Assuming all have same time
-                        const approvedEndTime = borrowsToApprove[0].requestedEndTime;   // Assuming all have same time
+                        const approvedStartTime = borrowsToApprove[0].requestedStartTime; 
+                        const approvedEndTime = borrowsToApprove[0].requestedEndTime;   
 
-                        // Find other PENDING reservations for the same equipment that overlap
                         const overlappingPendingBorrows = await tx.borrow.findMany({
                             where: {
                                 NOT: {
-                                    // Exclude the borrows we just approved
                                     id: { in: borrowIdsToApprove }
                                 },
-                                equipmentId: { in: equipmentIdsToApprove },
+                                equipmentId: { in: equipmentIdsToApprove.filter((id): id is string => id !== null) }, // Filter nulls here
                                 borrowStatus: BorrowStatus.PENDING,
-                                // Overlap condition:
-                                // Requested start is before approved end AND Requested end is after approved start
                                 requestedStartTime: { lt: approvedEndTime }, 
                                 requestedEndTime: { gt: approvedStartTime },
                             },
@@ -351,20 +315,17 @@ export async function PATCH(request: NextRequest) {
                             const rejectionResult = await tx.borrow.updateMany({
                                 where: { id: { in: idsToReject } },
                                 data: {
-                                    borrowStatus: BorrowStatus.REJECTED_AUTOMATIC, // Use the new status
-                                    // remarks: "Automatically rejected due to conflict with an approved reservation." // Removed remarks
+                                    borrowStatus: BorrowStatus.REJECTED_AUTOMATIC,
                                 }
                             });
                             autoRejectedCountTx = rejectionResult.count;
                             console.log(`[API Bulk PATCH - Group ${groupId}] Auto-rejected ${autoRejectedCountTx} conflicting PENDING reservations using REJECTED_AUTOMATIC.`);
                         }
                     }
-                    // New Auto-Reject Logic Ends
                     
                     return { approvedCount: approvedResult.count, rejectedCount: autoRejectedCountTx };
                 });
 
-                // Update outer variables after transaction
                 updateResult = { count: approvedCount }; 
                 autoRejectedCount = rejectedCount;
 
@@ -376,52 +337,28 @@ export async function PATCH(request: NextRequest) {
 
             } catch (txError) {
                 console.error(`[API Bulk PATCH - Group ${groupId}] Transaction failed during approval:`, txError);
-                // Rethrow or handle specific transaction errors
                  throw new Error('Transaction failed during bulk approval.');
             }
-            // --- End Bulk Approve Logic ---
         } else if (action === 'checkout') {
-            // --- Bulk Checkout Logic ---
             console.log(`[API Bulk PATCH - Group ${groupId}] Checking out...`);
 
-            // Identify APPROVED items in the group
             const approvedBorrows = borrowsToUpdate.filter(b => b.borrowStatus === BorrowStatus.APPROVED);
             const borrowIdsToCheckOut = approvedBorrows.map(b => b.id);
-            const equipmentIdsToCheckOut = approvedBorrows.map(b => b.equipmentId);
+            // const equipmentIdsToCheckOut = approvedBorrows.map(b => b.equipmentId); // This line was present but equipmentIdsToCheckOut is not used
 
             if (borrowIdsToCheckOut.length === 0) {
                 return NextResponse.json({ message: `No approved borrows found in group ${groupId} to checkout.` }, { status: 400 });
             }
 
-            // Perform checkout within a transaction
             try {
                 updateResult = await prisma.$transaction(async (tx) => {
-                    // 1. Update Borrow status to ACTIVE
                     const checkoutUpdate = await tx.borrow.updateMany({
                         where: { id: { in: borrowIdsToCheckOut } },
                         data: {
                             borrowStatus: BorrowStatus.ACTIVE,
-                            checkoutTime: new Date(), // Set checkout time
-                            // Clear approval flags?
+                            checkoutTime: new Date(), 
                         },
                     });
-
-                    // 2. *** NEW: Update Equipment status to BORROWED ***
-                    // if (checkoutUpdate.count > 0) {
-                    //     const updatedEquipmentResult = await tx.equipment.updateMany({
-                    //         where: { 
-                    //             id: { in: equipmentIdsToCheckOut },
-                    //             // Update only if RESERVED or AVAILABLE (don\'t override MAINTENANCE etc.)
-                    //             status: { in: [EquipmentStatus.RESERVED, EquipmentStatus.AVAILABLE] }
-                    //         },
-                    //         data: {
-                    //             status: EquipmentStatus.BORROWED,
-                    //         },
-                    //     });
-                    //     console.log(`[API Bulk PATCH - Group ${groupId}] Updated status to BORROWED for ${updatedEquipmentResult.count} equipment items.`);
-                    // }
-                    // *** END NEW ***
-                    
                     return checkoutUpdate;
                 });
             } catch (txError) {
@@ -431,16 +368,13 @@ export async function PATCH(request: NextRequest) {
 
             successMessage = `Successfully checked out ${updateResult.count} item(s) for group ${groupId}.`;
             console.log(`[API Bulk PATCH - Group ${groupId}] Checkout transaction complete: ${updateResult.count} items updated.`);
-            // --- End Bulk Checkout Logic ---
         }
-        // Add a check in case action was invalid but bypassed initial check (defensive)
         else {
-             console.error(`[API PATCH /api/borrows/bulk] Invalid action '{action}' reached processing block for group ${groupId}.`);
+             console.error(`[API PATCH /api/borrows/bulk] Invalid action '${action || ''}' reached processing block for group ${groupId}.`); // Safely access action
              return NextResponse.json({ error: 'Internal server error: Invalid action processed.' }, { status: 500 });
         }
 
-        // 5. Return Overall Success Response
-        console.log(`[API Bulk PATCH - Group ${groupId}] Action '${action}' completed. Count: ${updateResult.count}`);
+        console.log(`[API Bulk PATCH - Group ${groupId}] Action '${action || ''}' completed. Count: ${updateResult.count}`); // Safely access action
         return NextResponse.json({ 
             message: successMessage, 
             count: updateResult.count 
@@ -448,7 +382,7 @@ export async function PATCH(request: NextRequest) {
 
     } catch (error: unknown) {
         const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-        console.error(`[API Bulk PATCH - Group ${groupId}] Error during bulk action '${action}':`, error);
+        console.error(`[API Bulk PATCH - Group ${groupId}] Error during bulk action '${action || ''}':`, error); // Safely access action
         return NextResponse.json({ error: message }, { status: 500 });
     }
 } 

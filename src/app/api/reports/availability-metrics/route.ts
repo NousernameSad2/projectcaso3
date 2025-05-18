@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
+import type { Prisma } from '@prisma/client'; // Import Prisma namespace
 
 const prisma = new PrismaClient();
 
@@ -22,15 +23,15 @@ interface EditHistoryEntry {
     user?: string;
     changes: Array<{
         field: string;
-        oldValue: any; // Kept as any to match Prisma JsonValue flexibility initially
-        newValue: any; // Kept as any for the same reason
+        oldValue: Prisma.JsonValue; // Changed from any
+        newValue: Prisma.JsonValue; // Changed from any
     }>;
     // Simpler alternative if editHistory stores full snapshots:
     // snapshot?: Partial<Equipment>; // If it stores snapshots of the equipment state
 }
 
 
-export async function GET(request: Request) {
+export async function GET() {
     const session = await getServerSession(authOptions);
     if (!session || !session.user || (session.user.role !== 'STAFF' && session.user.role !== 'FACULTY')) {
         return NextResponse.json({ message: 'Forbidden' }, { status: 403 });

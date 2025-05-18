@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
     let body;
     try {
       body = await req.json();
-    } catch (error) {
+    } catch {
       return NextResponse.json({ message: 'Invalid JSON body' }, { status: 400 });
     }
 
@@ -139,7 +139,8 @@ export async function POST(req: NextRequest) {
     console.log(`Login successful, token generated for ${user.email}`);
 
     // 5. Return token and user data (excluding password and brute force fields)
-    const { password: _, failedLoginAttempts, lockoutUntil, ...userWithoutSensitiveData } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _, failedLoginAttempts: _failedLoginAttempts, lockoutUntil: _lockoutUntil, ...userWithoutSensitiveData } = user;
     return NextResponse.json({ 
       message: "Login successful", 
       token: token, 

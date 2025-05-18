@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
-import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus, Prisma } from '@prisma/client';
+import { PrismaClient, BorrowStatus, UserRole, EquipmentStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -82,7 +82,9 @@ export async function POST(request: Request) {
           data: { borrowStatus: rejectionStatus },
         });
         updatedCount = 1;
-        equipmentToCheck.push({ id: borrowToReject.equipmentId });
+        if (borrowToReject.equipmentId) {
+            equipmentToCheck.push({ id: borrowToReject.equipmentId });
+        }
 
       } else if (borrowGroupId) {
         // --- Bulk Item Rejection --- 
@@ -103,7 +105,10 @@ export async function POST(request: Request) {
         }
 
         const borrowIdsToUpdate = borrowsToReject.map(b => b.id);
-        equipmentToCheck = borrowsToReject.map(b => ({ id: b.equipmentId }));
+        equipmentToCheck = borrowsToReject
+            .map(b => b.equipmentId)
+            .filter((id): id is string => id !== null)
+            .map(id => ({ id }));
 
         const updateResult = await tx.borrow.updateMany({
           where: { id: { in: borrowIdsToUpdate } },
@@ -116,11 +121,12 @@ export async function POST(request: Request) {
       }
       
       // --- Update Equipment Status --- 
-      if (updatedCount > 0) {
+      if (updatedCount > 0 && equipmentToCheck.length > 0) {
           const uniqueEquipmentIds = Array.from(new Set(equipmentToCheck.map(eq => eq.id)));
           console.log(`[Reject TX] Checking equipment status for IDs: ${uniqueEquipmentIds.join(', ')}`);
 
           for (const eqId of uniqueEquipmentIds) {
+              if (!eqId) continue;
               // Check if ANY other borrows for this equipment are active/approved/reserved
               const otherActiveBorrowsCount = await tx.borrow.count({
                   where: {

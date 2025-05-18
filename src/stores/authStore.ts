@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 // Remove persist imports
 // import { persist, createJSONStorage } from 'zustand/middleware';
-import { UserRole, UserStatus } from '@prisma/client'; // Import from prisma
+import { UserRole /*, UserStatus*/ } from '@prisma/client'; // Removed UserStatus import
 
 // Revert to original AuthUser structure if needed, or define one
 // Assuming this structure was used before
@@ -13,7 +13,7 @@ export interface AuthUser {
     // status?: UserStatus; // Optional status if stored
 }
 
-interface AuthState {
+export interface AuthState { // Export AuthState
     token: string | null; // Keep for now if needed for API headers
     user: AuthUser | null; 
     isAuthenticated: boolean;

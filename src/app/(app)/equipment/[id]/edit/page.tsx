@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { EquipmentSchema, EquipmentInput } from "@/lib/schemas";
@@ -277,7 +276,7 @@ export default function EditEquipmentPage() {
                   />
                 </FormControl>
                 <FormDescription>
-                  These notes will be added to the maintenance log if the status is being changed to 'Under Maintenance'.
+                  These notes will be added to the maintenance log if the status is being changed to &apos;Under Maintenance&apos;.
                 </FormDescription>
               </FormItem>
            )}

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { Equipment } from '@prisma/client';
 import { differenceInMilliseconds } from 'date-fns';
 
 // Define the structure expected within the maintenanceLog JSON array

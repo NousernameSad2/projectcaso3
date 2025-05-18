@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { PrismaClient, BorrowStatus, UserRole } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route'; // Adjust path if needed
+import { authOptions } from '@/lib/authOptions'; // Updated import
 import { z } from 'zod';
 
 const prisma = new PrismaClient();
@@ -87,7 +87,6 @@ export async function POST(request: Request) {
        // --- Bulk Item Approval --- 
        result = await prisma.borrow.updateMany({
          where: {
-           // @ts-ignore // TODO: Remove after running prisma generate
            borrowGroupId: borrowGroupId,
            borrowStatus: BorrowStatus.PENDING, 
          },
@@ -98,7 +97,6 @@ export async function POST(request: Request) {
        });
        // Handle bulk count 0 scenario (moved inside)
        if (result.count === 0) {
-         // @ts-ignore // Ignore for findFirst check too
          const groupExists = await prisma.borrow.findFirst({ where: { borrowGroupId } });
          if (!groupExists) {
            return NextResponse.json({ error: `Borrow group ${borrowGroupId} not found.` }, { status: 404 });

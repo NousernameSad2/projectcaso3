@@ -1,42 +1,23 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Equipment, EquipmentStatus, EquipmentCategory, Borrow, BorrowStatus, UserRole, Prisma, Deficiency, DeficiencyType, User, Class, ReservationType } from '@prisma/client';
-import { useSession } from 'next-auth/react';
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { format, isValid, startOfDay } from 'date-fns';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ArrowLeft, Edit, Trash2, Loader2, CalendarDays, AlertCircle, Wrench, History, PackagePlus, ArrowUpRight, ArrowDownLeft, CheckCircle, XCircle, MessageSquare, User as UserIcon, School, FilePenLine } from 'lucide-react';
-import { cn, transformGoogleDriveUrl } from "@/lib/utils";
-import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import ReservationModal from '@/components/equipment/ReservationModal';
+import { ArrowLeft, Edit3, Trash2, XCircle, CheckCircle, CalendarDays, Wrench, PackagePlus, ArrowUpRight, ArrowDownLeft, MessageSquare, User as UserIcon, School, Loader2, AlertCircle, History } from 'lucide-react';
+import { EquipmentStatus, Prisma, ReservationType, UserRole, Equipment, EquipmentCategory, Borrow, BorrowStatus, User, Class, Deficiency } from '@prisma/client';
+import { transformGoogleDriveUrl } from "@/lib/utils";
+import { useSession } from 'next-auth/react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
-import { addDays, eachDayOfInterval, startOfDay, isSameDay, format, isValid } from 'date-fns';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { 
-  Tooltip, 
-  TooltipContent, 
-  TooltipProvider, 
-  TooltipTrigger 
-} from "@/components/ui/tooltip";
-import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
 
 // Extended Borrow interface for detailed views
 interface BorrowWithDetails extends Borrow {
@@ -48,6 +29,30 @@ interface BorrowWithDetails extends Borrow {
   checkoutTime: Date | null;
   actualReturnTime: Date | null;
   reservationType: ReservationType | null;
+}
+
+// Interface for Maintenance Log entries (more specific than Prisma.JsonValue)
+interface MaintenanceLogEntryData {
+  timestamp: string | Date;
+  type: string; 
+  user?: { name?: string; id?: string };
+  details?: string | Record<string, unknown>; 
+  notes?: string;
+}
+
+// Interface for Edit History Log entries (more specific than Prisma.JsonValue)
+interface EditHistoryLogEntryData {
+  timestamp: string | Date;
+  user?: { name?: string; id?: string };
+  changes: Record<string, { oldValue: unknown; newValue: unknown }>; 
+}
+
+// Interface for Custom Note Log entries
+interface CustomNoteLogData {
+  timestamp: string | Date;
+  userId: string;
+  userDisplay: string;
+  text: string;
 }
 
 // Extended Equipment interface including counts and related records
@@ -62,39 +67,12 @@ interface EquipmentWithDetails extends Equipment {
   customNotesLog: Prisma.JsonValue[]; // Add the new field
 }
 
-// Define interface for booking data fetched from API
-interface BookingData {
-    id: string;
-    requestedStartDate: string | Date; // API might return string
-    expectedReturnTime: string | Date;
-    borrowStatus: BorrowStatus;
-}
-
-// Interface for recent borrow data
-interface RecentBorrowData {
-    id: string;
-    actualReturnTime: string | Date;
-    borrower: {
-        id: string;
-        name: string | null;
-        email: string | null;
-    };
-}
-
 // Interface for unified Activity Log entries
 interface ActivityLogEntry {
   timestamp: Date;
   type: 'CREATED' | 'BORROW_REQUEST' | 'BORROW_APPROVED' | 'BORROW_REJECTED' | 'BORROW_CHECKOUT' | 'BORROW_RETURN' | 'BORROW_COMPLETED' | 'MAINTENANCE' | 'EDIT';
   details: React.ReactNode; // Use ReactNode for flexible rendering
   user?: { name: string | null; email: string | null }; // Optional user associated with the event
-}
-
-// Define interface for custom notes (optional, but good for type safety)
-interface CustomNote {
-  timestamp: string | Date;
-  userId: string;
-  userDisplay: string;
-  text: string;
 }
 
 // Helper function for safe date formatting
@@ -183,15 +161,21 @@ const getReservationTypeVariant = (type: ReservationType | null | undefined): "s
     return type === 'IN_CLASS' ? 'success' : 'destructive';
 };
 
-export default function EquipmentDetailPage() {
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface EquipmentDetailPageProps {
+  // No props expected from Next.js page structure
+}
+
+// Initial equipment data state, explicitly typed
+// const initialEquipmentData: EquipmentWithDetails | null = null;
+
+export default function EquipmentDetailPage({}: EquipmentDetailPageProps) {
   const params = useParams();
-  const router = useRouter();
+  const equipmentId = params.id as string;
   const { data: session } = useSession();
-  const id = params.id as string;
 
   const [equipment, setEquipment] = useState<EquipmentWithDetails | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   
   const [unavailableDates, setUnavailableDates] = useState<Date[]>([]);
@@ -200,10 +184,6 @@ export default function EquipmentDetailPage() {
   
   // Add state for the calendar's displayed month
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
-  
-  const [recentBorrows, setRecentBorrows] = useState<RecentBorrowData[]>([]);
-  const [isLoadingRecent, setIsLoadingRecent] = useState(true);
-  const [recentError, setRecentError] = useState<string | null>(null);
   
   // State for the new custom note input
   const [newNoteText, setNewNoteText] = useState<string>("");
@@ -252,8 +232,8 @@ export default function EquipmentDetailPage() {
     }
     // Assuming logs are pushed chronologically, the last one is the latest.
     // If logs could be out of order, we'd need to sort by timestamp first.
-    const latestLog = equipment.maintenanceLog[equipment.maintenanceLog.length - 1] as any;
-    return latestLog?.notes || null; // Return notes or null if notes field is missing/empty
+    const latestLog = equipment.maintenanceLog[equipment.maintenanceLog.length - 1] as unknown;
+    return (latestLog as { notes?: string })?.notes || null;
   }, [equipment?.maintenanceLog]);
 
   // Sort borrow records for the history panel (most recent first)
@@ -269,12 +249,12 @@ export default function EquipmentDetailPage() {
 
   // Need fetchEquipmentDetail accessible for refresh
   const fetchEquipmentDetail = useMemo(() => async () => {
-    if (!id) return;
+    if (!equipmentId) return;
     // Keep original setIsLoading outside if it controls the whole page
     // setIsFetching(true); // Use a different loading state? Or maybe not needed if submit button handles it
     // setError(null);
     try {
-      const response = await fetch(`/api/equipment/${id}`);
+      const response = await fetch(`/api/equipment/${equipmentId}`);
       if (!response.ok) {
         if (response.status === 404) {
           throw new Error('Equipment not found');
@@ -296,7 +276,7 @@ export default function EquipmentDetailPage() {
     } finally {
       // setIsFetching(false);
     }
-  }, [id]); // Dependency array for useMemo
+  }, [equipmentId]); // Dependency array for useMemo
 
   // Initial fetch effect
   useEffect(() => {
@@ -305,12 +285,12 @@ export default function EquipmentDetailPage() {
   }, [fetchEquipmentDetail]); // Depend on the memoized function
 
   useEffect(() => {
-    if (!id) return;
+    if (!equipmentId) return;
     const fetchBookings = async () => {
         setIsLoadingBookings(true);
         setBookingError(null);
         try {
-            const response = await fetch(`/api/equipment/${id}/bookings`);
+            const response = await fetch(`/api/equipment/${equipmentId}/bookings`);
             if (!response.ok) {
                 throw new Error('Failed to fetch availability data');
             }
@@ -330,34 +310,12 @@ export default function EquipmentDetailPage() {
         }
     };
     fetchBookings();
-  }, [id]);
-
-  useEffect(() => {
-      if (!id) return;
-      const fetchRecent = async () => {
-          setIsLoadingRecent(true);
-          setRecentError(null);
-          try {
-              const response = await fetch(`/api/equipment/${id}/recent-borrows`);
-              if (!response.ok) {
-                  throw new Error('Failed to fetch recent borrows');
-              }
-              const data = await response.json();
-              setRecentBorrows(data as RecentBorrowData[]);
-          } catch (err) {
-              console.error("Error fetching recent borrows:", err);
-              setRecentError(err instanceof Error ? err.message : "Could not load recent borrows");
-          } finally {
-              setIsLoadingRecent(false);
-          }
-      };
-      fetchRecent();
-  }, [id]);
+  }, [equipmentId]);
 
   const handleDeleteConfirm = async () => {
     setIsDeleting(true);
     try {
-      const response = await fetch(`/api/equipment/${id}`, {
+      const response = await fetch(`/api/equipment/${equipmentId}`, {
         method: 'DELETE',
       });
 
@@ -366,13 +324,13 @@ export default function EquipmentDetailPage() {
          try {
            const errorData = await response.json();
            message = errorData.message || message;
-         } catch (_) {}
+         } catch {} // Removed _error as it's unused
          throw new Error(message);
       }
       
       console.log("Equipment deleted successfully");
       toast.success("Equipment deleted successfully!");
-      router.push('/equipment');
+      // router.push('/equipment');
 
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
@@ -381,11 +339,6 @@ export default function EquipmentDetailPage() {
     } finally {
       setIsDeleting(false);
     }
-  };
-
-  const handleReservationSuccess = () => {
-    toast.success("Reservation submitted successfully!");
-    fetchEquipmentDetail(); // Refresh details after reservation
   };
 
   // useMemo hook to process and sort activity log entries
@@ -494,51 +447,49 @@ export default function EquipmentDetailPage() {
     });
 
     // 3. Process Maintenance Log (with defensive checks)
-    equipment.maintenanceLog?.forEach((logItem) => {
-      const log = logItem as any; 
-      if (log && typeof log === 'object' && log.timestamp && typeof log.timestamp === 'string') { 
+    equipment.maintenanceLog?.forEach((logItem: Prisma.JsonValue) => {
+      // Type guard to ensure logItem is an object and has a timestamp
+      if (typeof logItem === 'object' && logItem !== null && 'timestamp' in logItem) {
+        const log = logItem as unknown as MaintenanceLogEntryData;
         try {
-          const timestamp = new Date(log.timestamp);
-          if (isValid(timestamp)) { 
-            // Use more descriptive fallbacks
-            const notesText = log.notes || 'No notes provided';
-            const userText = log.user || 'User not specified'; 
-            // Simplify log.type usage assuming 'MAINTENANCE' is standard from our PUT logic
-            // If other types exist, this might need adjustment
-            const maintenanceType = log.type === 'MAINTENANCE' ? 'Maintenance' : (log.type || 'Maintenance Event'); 
-            logEntries.push({
-              timestamp: timestamp,
-              type: 'MAINTENANCE',
-              details: `${maintenanceType}. Notes: ${notesText}. By: ${userText}`,
-            });
-          } else {
-             console.warn("Skipping invalid maintenance log timestamp:", log.timestamp);
-          }
+            const logTimestamp = new Date(log.timestamp);
+            if (isValid(logTimestamp)) {
+                logEntries.push({
+                    timestamp: logTimestamp,
+                    type: 'MAINTENANCE',
+                    user: log.user ? { name: log.user.name || null, email: null } : undefined, // Adapt as needed
+                    details: `Type: ${log.type || 'N/A'}, Details: ${typeof log.details === 'string' ? log.details : JSON.stringify(log.details)}, Notes: ${log.notes || 'N/A'}`
+                });
+            } else {
+                console.warn("Skipping invalid maintenance log timestamp:", log.timestamp);
+            }
         } catch (e) {
-          console.warn("Error processing maintenance log timestamp:", log.timestamp, e);
+             console.warn("Error processing maintenance log timestamp:", log.timestamp, e);
         }
+      } else {
+        console.warn("Skipping invalid maintenance log item (not an object or no timestamp):", logItem);
       }
     });
 
-    // 4. Process Edit History (with defensive checks)
-    equipment.editHistory?.forEach((logItem) => {
-      const log = logItem as any;
-      if (log && typeof log === 'object' && log.timestamp && typeof log.timestamp === 'string') { 
+    // 4. Process Edit History
+    equipment.editHistory?.forEach((logItem: Prisma.JsonValue) => {
+      if (typeof logItem === 'object' && logItem !== null && 'timestamp' in logItem && 'changes' in logItem) {
+        const log = logItem as unknown as EditHistoryLogEntryData; // Use EditHistoryLogEntryData
         try {
-          const timestamp = new Date(log.timestamp);
-          if (isValid(timestamp)) { 
-             const changes = Array.isArray(log.changes) ? log.changes : [];
-             const changesStr = changes.map((c: any) => `${c.field} changed from \"${c.oldValue}\" to \"${c.newValue}\"`).join('; ') || 'Details updated';
-             // Use more descriptive fallback for user
-             const userText = log.user || 'User not specified';
-             logEntries.push({
-               timestamp: timestamp,
-               type: 'EDIT',
-               details: `${changesStr}. By: ${userText}`,
-             });
-           } else {
-               console.warn("Skipping invalid edit log timestamp:", log.timestamp);
-           }
+            const logTimestamp = new Date(log.timestamp);
+            if (isValid(logTimestamp)) {
+                const changesSummary = Object.entries(log.changes)
+                    .map(([key, value]) => `${key}: '${value.oldValue}' -> '${value.newValue}'`)
+                    .join(', ');
+                logEntries.push({
+                    timestamp: logTimestamp,
+                    type: 'EDIT',
+                    user: log.user ? { name: log.user.name || null, email: null } : undefined,
+                    details: `Changes: ${changesSummary}`
+                });
+            } else {
+                console.warn("Skipping invalid edit log timestamp:", log.timestamp);
+            }
         } catch (e) {
           console.warn("Error processing edit log timestamp:", log.timestamp, e);
         }
@@ -576,11 +527,11 @@ export default function EquipmentDetailPage() {
   // Function to handle submitting a new note
   const handleNoteSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!newNoteText.trim() || !id) return;
+    if (!newNoteText.trim() || !equipmentId) return;
 
     setIsSubmittingNote(true);
     try {
-      const response = await fetch(`/api/equipment/${id}/notes`, {
+      const response = await fetch(`/api/equipment/${equipmentId}/notes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -608,14 +559,14 @@ export default function EquipmentDetailPage() {
 
   // --- NEW: Function to handle deleting a note ---
   const handleDeleteNote = async (noteTimestamp: string) => {
-    if (!id || !noteTimestamp) return;
+    if (!equipmentId || !noteTimestamp) return;
 
     setIsDeletingNote(noteTimestamp); // Set the timestamp of the note being deleted
 
     try {
       // Important: Encode the timestamp for the URL
       const encodedTimestamp = encodeURIComponent(noteTimestamp);
-      const response = await fetch(`/api/equipment/${id}/notes/${encodedTimestamp}`, {
+      const response = await fetch(`/api/equipment/${equipmentId}/notes/${encodedTimestamp}`, {
         method: 'DELETE',
       });
 
@@ -640,15 +591,6 @@ export default function EquipmentDetailPage() {
     return (
       <div className="flex justify-center items-center min-h-[60vh]">
         <LoadingSpinner size="lg" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-center text-destructive py-10">
-        <p>Error: {error}</p>
-        <Button variant="outline" onClick={() => router.back()} className="mt-4">Go Back</Button>
       </div>
     );
   }
@@ -687,7 +629,7 @@ export default function EquipmentDetailPage() {
   const getLogIcon = (type: ActivityLogEntry['type']) => {
     switch (type) {
       case 'CREATED': return <PackagePlus className="h-4 w-4 text-blue-500" />;
-      case 'EDIT': return <Edit className="h-4 w-4 text-yellow-500" />;
+      case 'EDIT': return <Edit3 className="h-4 w-4 text-yellow-500" />;
       case 'MAINTENANCE': return <Wrench className="h-4 w-4 text-orange-500" />;
       case 'BORROW_REQUEST': return <CalendarDays className="h-4 w-4 text-purple-500" />;
       case 'BORROW_CHECKOUT': return <ArrowUpRight className="h-4 w-4 text-red-500" />;
@@ -820,8 +762,8 @@ export default function EquipmentDetailPage() {
               {/* Commented out the individual ReservationModal trigger above */}
               {canManage && (
                 <Button variant="outline" className="w-full justify-start gap-2" asChild>
-                  <Link href={`/equipment/${id}/edit`} >
-                    <Edit className="h-4 w-4" /> Edit Equipment
+                  <Link href={`/equipment/${equipmentId}/edit`} >
+                    <Edit3 className="h-4 w-4" /> Edit Equipment
                   </Link>
                 </Button>
               )}
@@ -1043,7 +985,7 @@ export default function EquipmentDetailPage() {
                   ) : (
                     [...equipment.customNotesLog].reverse().map((logItem, index) => {
                       if (typeof logItem !== 'object' || logItem === null) return null; 
-                      const note = logItem as any; 
+                      const note = logItem as unknown as CustomNoteLogData; // Use CustomNoteLogData
                       if (!note.timestamp || !note.userDisplay || !note.text) return null;
                       
                       const isCurrentlyDeleting = isDeletingNote === note.timestamp;
@@ -1087,7 +1029,7 @@ export default function EquipmentDetailPage() {
                                 <AlertDialogFooter>
                                   <AlertDialogCancel>Cancel</AlertDialogCancel>
                                   <AlertDialogAction 
-                                    onClick={() => handleDeleteNote(note.timestamp)}
+                                    onClick={() => handleDeleteNote(typeof note.timestamp === 'string' ? note.timestamp : note.timestamp.toISOString())}
                                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                                   >
                                     Delete Note

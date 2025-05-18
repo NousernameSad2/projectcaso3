@@ -1,12 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { BorrowStatus, UserRole, DeficiencyStatus } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/lib/authOptions';
 import { Prisma } from '@prisma/client';
 
 // GET: Fetch borrow records with PENDING_RETURN status for Staff/Faculty dashboard
-export async function GET(req: NextRequest) {
+export async function GET() {
     const session = await getServerSession(authOptions);
 
     // 1. Authentication & Authorization: Ensure user is Staff/Faculty/Admin
@@ -23,7 +23,7 @@ export async function GET(req: NextRequest) {
 
     try {
         // --- START: Build Prisma Where Clause with Role-Based Filtering ---
-        let whereClause: Prisma.BorrowWhereInput = {
+        const whereClause: Prisma.BorrowWhereInput = {
             borrowStatus: BorrowStatus.PENDING_RETURN, // Base filter
         };
 
