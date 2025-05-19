@@ -108,27 +108,42 @@ export const authOptions: AuthOptions = {
       }
 
       if (token?.id) {
-          try {
-              const dbUser = await prisma.user.findUnique({
-                  where: { id: token.id as string },
-                  select: { role: true, name: true, status: true }
-              });
+          let retries = 1; // Max 1 retry (total 2 attempts)
+          let dbUserFetched = false;
 
-              if (dbUser) {
-                 console.log("[JWT Shared] Refreshing token with DB data for user:", token.id);
-                 token.role = dbUser.role;
-                 token.name = dbUser.name;
-                 if (dbUser.status === 'INACTIVE') {
-                     console.log(`[JWT Shared] User ${token.id} is INACTIVE. Throwing error.`);
-                     throw new Error("User account is inactive.");
-                 }
-              } else {
-                 console.warn("[JWT Shared] User not found in DB during refresh:", token.id);
-                 throw new Error("User not found.");
+          while (retries >= 0 && !dbUserFetched) {
+              try {
+                  const dbUser = await prisma.user.findUnique({
+                      where: { id: token.id as string },
+                      select: { role: true, name: true, status: true }
+                  });
+
+                  if (dbUser) {
+                     console.log(`[JWT Shared] DB user data fetched successfully for ${token.id} on attempt.`);
+                     token.role = dbUser.role;
+                     token.name = dbUser.name;
+                     if (dbUser.status === 'INACTIVE') {
+                         console.log(`[JWT Shared] User ${token.id} is INACTIVE. Throwing error.`);
+                         throw new Error("User account is inactive."); // Non-retryable error
+                     }
+                     dbUserFetched = true; // Mark as fetched to exit loop
+                  } else {
+                     console.warn(`[JWT Shared] User not found in DB during refresh for ${token.id}.`);
+                     throw new Error("User not found."); // Non-retryable error
+                  }
+              } catch (error: any) {
+                  console.error(`[JWT Shared] Error during token refresh logic (retries left: ${retries}):`, error.message);
+                  if (error.message === "User account is inactive." || error.message === "User not found.") {
+                      throw error; // Re-throw non-retryable errors immediately
+                  }
+                  if (retries === 0) {
+                      console.error(`[JWT Shared] All retries failed for ${token.id}. Re-throwing last error.`);
+                      throw error; // All retries failed, re-throw the last error
+                  }
+                  // Wait a bit before retrying for transient errors
+                  await new Promise(resolve => setTimeout(resolve, 300)); // 300ms delay
+                  retries--;
               }
-          } catch (error) {
-              console.error("[JWT Shared] Error during token refresh logic:", error);
-              throw error;
           }
       }
       console.log("[JWT Shared] Returning final token:", JSON.stringify(token));
