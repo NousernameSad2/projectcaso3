@@ -131,9 +131,13 @@ export const authOptions: AuthOptions = {
                      console.warn(`[JWT Shared] User not found in DB during refresh for ${token.id}.`);
                      throw new Error("User not found."); // Non-retryable error
                   }
-              } catch (error: any) {
-                  console.error(`[JWT Shared] Error during token refresh logic (retries left: ${retries}):`, error.message);
-                  if (error.message === "User account is inactive." || error.message === "User not found.") {
+              } catch (error: unknown) {
+                  let errorMessage = "An unknown error occurred during token refresh.";
+                  if (error instanceof Error) {
+                      errorMessage = error.message;
+                  }
+                  console.error(`[JWT Shared] Error during token refresh logic (retries left: ${retries}):`, errorMessage);
+                  if (errorMessage === "User account is inactive." || errorMessage === "User not found.") {
                       throw error; // Re-throw non-retryable errors immediately
                   }
                   if (retries === 0) {
