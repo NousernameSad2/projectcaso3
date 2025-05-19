@@ -133,7 +133,7 @@ export async function POST(req: NextRequest) {
     };
 
     const token = jwt.sign(payload, JWT_SECRET, { 
-      expiresIn: '1d' // Example: token expires in 1 day
+      expiresIn: '1d' // Reverted to 1 day
     });
 
     console.log(`Login successful, token generated for ${user.email}`);

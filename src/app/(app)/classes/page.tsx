@@ -93,85 +93,82 @@ export default function ClassesPage() {
   console.log("[ClassesPage] Calculated canManageClasses:", canManageClasses);
 
   // Extracted fetch function
-  const fetchClasses = useCallback(async (statusFilter: 'all' | 'active' | 'inactive') => {
+  const fetchClasses = useCallback(async (currentFilterStatus: 'all' | 'active' | 'inactive') => {
+      console.log(`[ClassesPage - fetchClasses] Attempting fetch. Session status: ${sessionStatus}, Filter: ${currentFilterStatus}`);
       if (sessionStatus !== 'authenticated' || !token) {
-          console.log("[fetchClasses] Waiting for session or token...");
-          // Don't fetch if not authenticated
+          console.warn("[ClassesPage - fetchClasses] Pre-flight check failed: Not authenticated or no token. Session status:", sessionStatus, "Token available:", !!token);
           setIsFetchingData(false); 
           setClasses([]); 
           return;
       }
       
-      console.log(`[fetchClasses] Token found, attempting fetch with filter: ${statusFilter}...`);
+      console.log(`[ClassesPage - fetchClasses] Token found. Token (first 30 chars): ${token ? token.substring(0, 30) + '...' : 'N/A'}`);
       setIsFetchingData(true);
       setError(null);
       let response: Response | null = null; 
       
-      // --- Build API URL with filter ---
       let apiUrl = '/api/classes';
-      if (statusFilter === 'active') {
+      if (currentFilterStatus === 'active') {
         apiUrl += '?isActive=true';
-      } else if (statusFilter === 'inactive') {
+      } else if (currentFilterStatus === 'inactive') {
         apiUrl += '?isActive=false';
       }
-      // 'all' doesn't add a query parameter
-      // --- End Build API URL ---
+      console.log(`[ClassesPage - fetchClasses] Fetching from API URL: ${apiUrl}`);
       
       try {
-        console.log(`Fetching classes from: ${apiUrl}`);
-        response = await fetch(apiUrl, { // Use dynamic URL
+        response = await fetch(apiUrl, {
           headers: { Authorization: `Bearer ${token}` },
         });
         
-        // --- Check for 401 Unauthorized specifically --- 
+        console.log(`[ClassesPage - fetchClasses] API Response Status: ${response.status} for URL: ${apiUrl}`);
+
         if (response.status === 401) {
-            console.error("Token expired or invalid (401). Signing out.");
-            toast.error("Your session has expired. Please log in again.");
-            await signOut({ redirect: true, callbackUrl: '/auth/signin' }); // Force sign out and redirect
-            // No need to throw error here, as we are navigating away
-            return; // Stop further execution in this function
+            console.error("[ClassesPage - fetchClasses] API returned 401 Unauthorized. Token may be invalid or expired. Forcing signOut.");
+            toast.error("Your session has expired or is invalid. Please log in again.");
+            await signOut({ redirect: true, callbackUrl: '/login' });
+            return;
         }
-        // --- End 401 Check ---
 
         if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          // Include status in the error message for clarity
+          const errorData = await response.json().catch(() => ({ message: "Failed to parse error JSON." }));
+          console.error(`[ClassesPage - fetchClasses] API request failed. Status: ${response.status}, Response:`, errorData);
           throw new Error(errorData.message || `HTTP error ${response.status}`);
         }
         
         const data: ClassData[] = await response.json();
+        console.log(`[ClassesPage - fetchClasses] Successfully fetched ${data.length} classes.`);
         setClasses(data);
       } catch (err: unknown) {
-        console.error("Error fetching classes:", err);
-        // Avoid setting general error state if it was a 401 we already handled by signing out
-        if (response?.status !== 401) { 
-            // Type check added
-            const message = err instanceof Error ? err.message : 'Failed to fetch classes.';
+        if (!(response && response.status === 401)) {
+            const message = err instanceof Error ? err.message : 'Failed to fetch classes due to an unexpected error.';
+            console.error("[ClassesPage - fetchClasses] Catch block error:", message, "Original error:", err);
             setError(message);
             toast.error(message);
-            setClasses([]); // Clear classes on error
         }
+        setClasses([]);
       } finally {
-        // Only set loading false if we didn't trigger a sign out
-        if (response?.status !== 401) {
+        if (!(response && response.status === 401)) {
            setIsFetchingData(false);
+           console.log("[ClassesPage - fetchClasses] Fetch operation complete (setIsFetchingData(false)).");
         }
       }
-    }, [sessionStatus, token]);
+    }, [sessionStatus, token]); // Dependencies for useCallback: sessionStatus and token
 
   // Effect for initial data fetching and when filter changes
   useEffect(() => {
-    // Only fetch if authenticated
+    console.log(`[ClassesPage - useEffect] Triggered. Session status: ${sessionStatus}, Filter: ${filterStatus}`);
     if (sessionStatus === 'authenticated') {
+      console.log("[ClassesPage - useEffect] Session authenticated, calling fetchClasses.");
       fetchClasses(filterStatus); 
     } else if (sessionStatus === 'unauthenticated') {
+      console.warn("[ClassesPage - useEffect] Session unauthenticated. Clearing data and not fetching.");
       setIsFetchingData(false);
-      // Don't set error here, let potential redirects handle it
-      // setError('Authentication required to view classes.');
-      setClasses([]); // Clear classes if unauthenticated
+      setClasses([]);
+    } else {
+      console.log("[ClassesPage - useEffect] Session status is pending ('loading'). Waiting.");
     }
-    // Dependency array: run when session status or filterStatus changes
-  }, [sessionStatus, filterStatus, fetchClasses]); // Added fetchClasses to dependency array
+    // fetchClasses is stable due to useCallback, filterStatus and sessionStatus are prime triggers.
+  }, [sessionStatus, filterStatus, fetchClasses]);
 
   const handleClassAdded = () => {
     console.log("[handleClassAdded] New class added, refetching list with current filter...");
