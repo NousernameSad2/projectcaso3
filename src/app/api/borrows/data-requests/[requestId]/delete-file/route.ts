@@ -51,10 +51,11 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ requ
         try {
             await fs.unlink(filePathOnDisk);
             console.log(`File ${filePathOnDisk} deleted successfully from disk.`);
-        } catch (fileError: any) {
+        } catch (fileError: unknown) {
             // Log the error but proceed to remove metadata if file not found (ENOENT)
             // If it's another error (e.g., permissions), it might be more serious.
-            if (fileError.code === 'ENOENT') {
+            const errorWithCode = fileError as { code?: string };
+            if (errorWithCode.code === 'ENOENT') {
                 console.warn(`File ${filePathOnDisk} was already deleted or not found on disk.`);
             } else {
                 console.error(`API Error - Failed to delete file ${filePathOnDisk} from disk:`, fileError);

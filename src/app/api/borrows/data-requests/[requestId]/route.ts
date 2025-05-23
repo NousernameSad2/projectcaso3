@@ -93,8 +93,9 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ requ
                 try {
                     await fs.unlink(filePathOnDisk);
                     console.log(`Deleted file ${filePathOnDisk} as part of data request cancellation.`);
-                } catch (fileError: any) {
-                    if (fileError.code === 'ENOENT') {
+                } catch (fileError: unknown) {
+                    const errorWithCode = fileError as { code?: string };
+                    if (errorWithCode.code === 'ENOENT') {
                         console.warn(`File ${filePathOnDisk} not found during data request cancellation (already deleted?).`);
                     } else {
                         // Log error but continue to attempt to cancel the request in the DB
@@ -108,7 +109,7 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ requ
         }
 
         // Now, update the borrow record to cancel the data request
-        const updatedBorrow = await prisma.borrow.update({
+        /*const updatedBorrow = */ await prisma.borrow.update({
             where: {
                 id: requestId,
                 // No need to re-check dataRequested: true here, as we fetched based on it.
@@ -124,11 +125,12 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ requ
         // No need to check !updatedBorrow here again, as prisma.borrow.update would throw if not found after the initial findUnique.
 
         return NextResponse.json({ message: 'Data request cancelled successfully and associated files deleted.' }, { status: 200 });
-    } catch (error) {
+    } catch (error: unknown) {
         console.error(`API Error - DELETE /api/borrows/data-requests/${requestId}:`, error);
         // It's good practice to check the instance of error if you have specific Prisma error codes to handle
         // For example, PrismaClientKnownRequestError for P2025 (Record to update not found)
-        if (error instanceof Error && (error as any).code === 'P2025') { // Prisma's Record Not Found error
+        const prismaError = error as { code?: string };
+        if (prismaError.code === 'P2025') { // Prisma's Record Not Found error
              return NextResponse.json({ message: 'Data request not found when attempting to update.' }, { status: 404 });
         }
         return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
