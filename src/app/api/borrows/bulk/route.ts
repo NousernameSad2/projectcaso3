@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from "@/lib/authOptions";
 import { createId } from '@paralleldrive/cuid2'; 
+import { formatInTimeZone } from 'date-fns-tz';
 // Remove date-fns imports if no longer needed for calculation
 // import { startOfDay, setHours, setMinutes, setSeconds, setMilliseconds } from 'date-fns';
 
@@ -43,29 +44,35 @@ export async function POST(request: Request) {
      return NextResponse.json({ error: 'Failed to parse request body' }, { status: 400 });
   }
 
-  // Destructure validated data
   const {
     equipmentIds,
     classId,
-    requestedStartTime,
-    requestedEndTime,
+    requestedStartTime: requestedStartTimeStr, // Renaming to avoid confusion with Date object
+    requestedEndTime: requestedEndTimeStr,     // Renaming to avoid confusion with Date object
     groupMateIds,
-    reservationType // Destructure reservationType
+    reservationType
   } = validatedData;
 
-  // Convert ISO strings to Date objects
-  const startTime = new Date(requestedStartTime);
-  const endTime = new Date(requestedEndTime);
+  const requestedStartTime = new Date(requestedStartTimeStr);
+  const requestedEndTime = new Date(requestedEndTimeStr);
+  const facilityTimeZone = 'Asia/Manila';
 
-  // --- START: Validate Reservation Time Window ---  
-  const startHour = startTime.getHours();
-  const endHour = endTime.getHours();
+  // Optional: Add detailed logging similar to the other route if needed for debugging
+  console.log(`[BULK API] Original Start: ${requestedStartTimeStr}, Parsed UTC: ${requestedStartTime.toISOString()}`);
+  console.log(`[BULK API] Original End: ${requestedEndTimeStr}, Parsed UTC: ${requestedEndTime.toISOString()}`);
 
-  if (startHour < 6 || startHour >= 20 || endHour < 6 || endHour >= 20) {
-    return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM.' }, { status: 400 });
+  // --- START: Validate Reservation Time Window (Philippine Time) ---  
+  const startHourPHT = parseInt(formatInTimeZone(requestedStartTime, facilityTimeZone, 'H'), 10);
+  const endHourPHT = parseInt(formatInTimeZone(requestedEndTime, facilityTimeZone, 'H'), 10);
+
+  console.log(`[BULK API] Start Hour (${facilityTimeZone}):`, startHourPHT, `End Hour (${facilityTimeZone}):`, endHourPHT);
+
+  if (startHourPHT < 6 || startHourPHT >= 20 || endHourPHT < 6 || endHourPHT >= 20) {
+    return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM Philippine Time.' }, { status: 400 });
   }
   // --- END: Validate Reservation Time Window --- 
 
+  // Use requestedStartTime and requestedEndTime (which are Date objects) for further logic like overlap checks
   // --- START: Check for Equipment Availability (Using Updated Logic) ---
   const blockingStatuses: BorrowStatus[] = [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE];
   const unavailableItemsInfo: { name: string; id: string }[] = [];
@@ -84,7 +91,7 @@ export async function POST(request: Request) {
            continue;
       }
 
-      // Use converted startTime and endTime for overlap check
+      // Use converted requestedStartTime and requestedEndTime for overlap check
       const overlappingBorrowsCount = await prisma.borrow.count({
           where: {
               equipmentId: eqId,
@@ -92,14 +99,14 @@ export async function POST(request: Request) {
               AND: [
                    { // Existing borrow starts before requested ends
                        OR: [
-                           { approvedStartTime: { lt: endTime } },
-                           { approvedStartTime: null, requestedStartTime: { lt: endTime } } 
+                           { approvedStartTime: { lt: requestedEndTime } },
+                           { approvedStartTime: null, requestedStartTime: { lt: requestedEndTime } } 
                        ]
                    },
                    { // Existing borrow ends after requested starts
                        OR: [
-                           { approvedEndTime: { gt: startTime } }, 
-                           { approvedEndTime: null, requestedEndTime: { gt: startTime } } 
+                           { approvedEndTime: { gt: requestedStartTime } }, 
+                           { approvedEndTime: null, requestedStartTime: { gt: requestedStartTime } } 
                        ]
                    }
               ]
@@ -132,8 +139,8 @@ export async function POST(request: Request) {
     borrowerId: userId,
     equipmentId: equipmentId,
     classId: classId || null, // Use null if classId is undefined/empty
-    requestedStartTime: startTime, 
-    requestedEndTime: endTime,   
+    requestedStartTime: requestedStartTime, 
+    requestedEndTime: requestedEndTime,   
     borrowStatus: BorrowStatus.PENDING,
     reservationType: reservationType, // Add reservationType to the data
   }));
