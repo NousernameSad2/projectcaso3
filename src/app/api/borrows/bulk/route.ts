@@ -57,6 +57,15 @@ export async function POST(request: Request) {
   const startTime = new Date(requestedStartTime);
   const endTime = new Date(requestedEndTime);
 
+  // --- START: Validate Reservation Time Window ---  
+  const startHour = startTime.getHours();
+  const endHour = endTime.getHours();
+
+  if (startHour < 6 || startHour >= 20 || endHour < 6 || endHour >= 20) {
+    return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM.' }, { status: 400 });
+  }
+  // --- END: Validate Reservation Time Window --- 
+
   // --- START: Check for Equipment Availability (Using Updated Logic) ---
   const blockingStatuses: BorrowStatus[] = [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE];
   const unavailableItemsInfo: { name: string; id: string }[] = [];

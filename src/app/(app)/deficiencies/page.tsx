@@ -53,19 +53,23 @@ function CreateDeficiencyForm() {
     const [isLoading, setIsLoading] = useState(false);
     const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
 
-    const [regularUsers, setRegularUsers] = useState<UserSelectItem[]>([]);
+    const [allRegularUsers, setAllRegularUsers] = useState<UserSelectItem[]>([]); // Store all regular users
+    const [filteredRegularUsers, setFilteredRegularUsers] = useState<UserSelectItem[]>([]); // Users for the dropdown
     const [privilegedUsers, setPrivilegedUsers] = useState<UserSelectItem[]>([]);
     const [isLoadingUsers, setIsLoadingUsers] = useState(true);
     const [isBorrowModalOpen, setIsBorrowModalOpen] = useState(false);
+    const [isLoadingBorrowDetails, setIsLoadingBorrowDetails] = useState(false);
 
     useEffect(() => {
-        const fetchUsers = async () => {
+        const fetchAllUsers = async () => {
             setIsLoadingUsers(true);
             try {
                 const regRes = await fetch('/api/users?role=REGULAR');
                 if (!regRes.ok) throw new Error('Failed to fetch regular users');
                 const regData = await regRes.json();
-                setRegularUsers(regData.map((u: ApiUser) => ({ value: u.id, label: `${u.name} (${u.email})` })) || []);
+                const allReg = regData.map((u: ApiUser) => ({ value: u.id, label: `${u.name} (${u.email})` })) || [];
+                setAllRegularUsers(allReg);
+                setFilteredRegularUsers(allReg); // Initially, show all
 
                 const privRes = await fetch('/api/users?role=STAFF&role=FACULTY');
                 if (!privRes.ok) throw new Error('Failed to fetch staff/faculty');
@@ -75,14 +79,101 @@ function CreateDeficiencyForm() {
             } catch (error) {
                 console.error("Failed to fetch users for dropdowns:", error);
                 toast.error("Could not load users for dropdowns.");
-                setRegularUsers([]);
+                setAllRegularUsers([]);
+                setFilteredRegularUsers([]);
                 setPrivilegedUsers([]);
             } finally {
                 setIsLoadingUsers(false);
             }
         };
-        fetchUsers();
+        fetchAllUsers();
     }, []);
+
+    // New useEffect to fetch borrow details and filter users/set FIC when borrowId changes
+    useEffect(() => {
+        if (borrowId) {
+            const fetchBorrowDetails = async () => {
+                setIsLoadingBorrowDetails(true);
+                setUserId(undefined); // Reset user selection
+                setFicToNotifyId(undefined); // Reset FIC selection
+                try {
+                    const res = await fetch(`/api/borrows/${borrowId}/details`);
+                    if (!res.ok) {
+                        const errorData = await res.json().catch(() => ({}));
+                        throw new Error(errorData.message || `Failed to fetch borrow details for ${borrowId}`);
+                    }
+                    const borrowDetails = await res.json(); // API now includes groupMates
+
+                    const relevantStudents: UserSelectItem[] = [];
+                    let preSelectedUserId: string | undefined = undefined;
+
+                    if (borrowDetails.borrower) {
+                        const borrowerAsUserItem = {
+                            value: borrowDetails.borrower.id,
+                            label: `${borrowDetails.borrower.name} (${borrowDetails.borrower.email})`
+                        };
+                        // Ensure the main borrower is in the allRegularUsers list before adding
+                        if (allRegularUsers.some(u => u.value === borrowerAsUserItem.value)) {
+                            relevantStudents.push(borrowerAsUserItem);
+                            preSelectedUserId = borrowerAsUserItem.value; // Pre-select the main borrower
+                        }
+                    }
+
+                    if (borrowDetails.groupMates && Array.isArray(borrowDetails.groupMates)) {
+                        borrowDetails.groupMates.forEach((mate: ApiUser) => {
+                            // Add groupmate only if they are in allRegularUsers and not already added (e.g. not the main borrower)
+                            if (allRegularUsers.some(u => u.value === mate.id) && !relevantStudents.some(rs => rs.value === mate.id)) {
+                                relevantStudents.push({ value: mate.id, label: `${mate.name} (${mate.email})` });
+                            }
+                        });
+                    }
+
+                    if (relevantStudents.length > 0) {
+                        setFilteredRegularUsers(relevantStudents);
+                        if (preSelectedUserId) {
+                           setUserId(preSelectedUserId);
+                        }
+                    } else {
+                        console.warn("No relevant students (borrower or group mates) found or they are not in regular users list. Displaying all regular users.");
+                        setFilteredRegularUsers(allRegularUsers); // Fallback
+                    }
+
+                    if (borrowDetails.fic) {
+                        const ficId = typeof borrowDetails.fic === 'object' ? borrowDetails.fic.id : borrowDetails.fic;
+                        // Check if this FIC exists in the privilegedUsers list
+                        const ficExists = privilegedUsers.some(pUser => pUser.value === ficId);
+                        if (ficExists) {
+                            setFicToNotifyId(ficId);
+                        } else {
+                            console.warn(`FIC with ID ${ficId} from borrow record not found in privileged users list.`);
+                            // Optionally, clear ficToNotifyId or leave it, depending on desired UX
+                        }
+                    } else if (borrowDetails.ficId) { // Fallback if ficId is directly on borrowDetails
+                        const ficId = borrowDetails.ficId;
+                        const ficExists = privilegedUsers.some(pUser => pUser.value === ficId);
+                        if (ficExists) {
+                            setFicToNotifyId(ficId);
+                        } else {
+                            console.warn(`FIC with ID ${ficId} from borrow record not found in privileged users list.`);
+                        }
+                    }
+
+                } catch (error) {
+                    console.error("Error fetching borrow details:", error);
+                    toast.error(error instanceof Error ? error.message : "Could not load borrow details.");
+                    setFilteredRegularUsers(allRegularUsers); // Fallback on error
+                } finally {
+                    setIsLoadingBorrowDetails(false);
+                }
+            };
+            fetchBorrowDetails();
+        } else {
+            // If borrowId is cleared, reset to show all regular users and clear selections
+            setFilteredRegularUsers(allRegularUsers);
+            setUserId(undefined);
+            setFicToNotifyId(undefined);
+        }
+    }, [borrowId, allRegularUsers, privilegedUsers]); // Add privilegedUsers to dependency array
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -147,7 +238,7 @@ function CreateDeficiencyForm() {
 
     // Handler for when a borrow record is selected in the modal
     const handleBorrowSelect = (selectedId: string) => {
-        setBorrowId(selectedId);
+        setBorrowId(selectedId); // This will trigger the useEffect above
         setErrors(prev => ({ ...prev, borrowId: undefined })); // Clear potential error
         setIsBorrowModalOpen(false); // Close modal
     };
@@ -193,21 +284,21 @@ function CreateDeficiencyForm() {
                         {/* Responsible User ID (Select) - Corrected back to shadcn Select */}
                         <div>
                             <Label htmlFor="userId">Responsible User (Student) *</Label>
-                            <Select value={userId} onValueChange={(value) => setUserId(value ? value : undefined)}>
-                                <SelectTrigger id="userId" disabled={isLoadingUsers}>
+                            <Select value={userId} onValueChange={(value) => setUserId(value ? value : undefined)} disabled={isLoadingBorrowDetails || isLoadingUsers}>
+                                <SelectTrigger id="userId" disabled={isLoadingUsers || isLoadingBorrowDetails}>
                                     <SelectValue placeholder="Select student..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {isLoadingUsers ? (
+                                    {(isLoadingUsers || isLoadingBorrowDetails) ? (
                                         <div className="flex items-center justify-center p-2"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</div>
-                                    ) : regularUsers.length > 0 ? (
-                                        regularUsers.map((user) => (
+                                    ) : filteredRegularUsers.length > 0 ? (
+                                        filteredRegularUsers.map((user) => (
                                             <SelectItem key={user.value} value={user.value}>
                                                 {user.label}
                                             </SelectItem>
                                         ))
                                     ) : (
-                                        <div className="p-2 text-sm text-muted-foreground">No students found.</div>
+                                        <div className="p-2 text-sm text-muted-foreground">{borrowId ? 'No relevant students found for this borrow record.' : 'No students found.'}</div>
                                     )}
                                 </SelectContent>
                             </Select>
@@ -262,12 +353,12 @@ function CreateDeficiencyForm() {
                         {/* FIC to Notify ID (Select) - Corrected back to shadcn Select */}
                         <div>
                             <Label htmlFor="ficToNotifyId">FIC / Staff to Notify (Optional)</Label>
-                             <Select value={ficToNotifyId} onValueChange={(value) => setFicToNotifyId(value ? value : undefined)}>
-                                <SelectTrigger id="ficToNotifyId" disabled={isLoadingUsers}>
+                             <Select value={ficToNotifyId} onValueChange={(value) => setFicToNotifyId(value ? value : undefined)} disabled={isLoadingBorrowDetails || isLoadingUsers}>
+                                <SelectTrigger id="ficToNotifyId" disabled={isLoadingUsers || isLoadingBorrowDetails}>
                                     <SelectValue placeholder="Select faculty/staff..." />
                                 </SelectTrigger>
                                 <SelectContent>
-                                     {isLoadingUsers ? (
+                                     {(isLoadingUsers || isLoadingBorrowDetails) ? (
                                         <div className="flex items-center justify-center p-2"><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Loading...</div>
                                     ) : privilegedUsers.length > 0 ? (
                                         privilegedUsers.map((user) => (
@@ -283,9 +374,9 @@ function CreateDeficiencyForm() {
                             {errors.ficToNotifyId && <p className="text-xs text-destructive mt-1">{errors.ficToNotifyId.join(', ')}</p>}
                         </div>
 
-                        <Button type="submit" disabled={isLoading || isLoadingUsers} className="w-full">
+                        <Button type="submit" disabled={isLoading || isLoadingUsers || isLoadingBorrowDetails} className="w-full">
                             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" /> }
-                            {isLoading ? 'Submitting...' : (isLoadingUsers ? 'Loading Users...' : 'Create Deficiency Record')}
+                            {isLoading ? 'Submitting...' : (isLoadingUsers || isLoadingBorrowDetails ? 'Loading Details...' : 'Create Deficiency Record')}
                         </Button>
                     </form>
                 </CardContent>

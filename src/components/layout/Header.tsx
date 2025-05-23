@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useSession, signOut } from 'next-auth/react';
@@ -57,6 +57,7 @@ export default function Header() {
     const router = useRouter();
     const pathname = usePathname();
     const [isSheetOpen, setIsSheetOpen] = useState(false);
+    const [pendingUsersCount, setPendingUsersCount] = useState(0);
     
     // Extract user role
     const userRole = session?.user?.role as UserRole | undefined;
@@ -65,6 +66,30 @@ export default function Header() {
     const isAuthenticated = status === 'authenticated';
     const isPrivilegedUser = userRole === UserRole.STAFF || userRole === UserRole.FACULTY;
     const isLoading = status === 'loading'; 
+
+    useEffect(() => {
+        const fetchPendingUsersCount = async () => {
+            if (session?.accessToken && isPrivilegedUser) {
+                try {
+                    const response = await fetch('/api/users?status=PENDING_APPROVAL', {
+                        headers: {
+                            Authorization: `Bearer ${session.accessToken}`,
+                        },
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        setPendingUsersCount(data.count);
+                    } else {
+                        console.error('Failed to fetch pending users count');
+                    }
+                } catch (error) {
+                    console.error('Error fetching pending users count:', error);
+                }
+            }
+        };
+
+        fetchPendingUsersCount();
+    }, [session, isPrivilegedUser]);
 
     // Use next-auth signOut for logout
     const handleLogout = async () => {
@@ -134,6 +159,11 @@ export default function Header() {
                                 <>
                                   <Icon className="h-4 w-4" />
                                   <span>{item.label}</span>
+                                  {item.label === 'Manage Users' && pendingUsersCount > 0 && (
+                                    <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                                      {pendingUsersCount}
+                                    </span>
+                                  )}
                                 </>
                             </Link>
                         );
@@ -232,6 +262,11 @@ export default function Header() {
                                                 <>
                                                   <Icon className="h-5 w-5" />
                                                   <span>{item.label}</span>
+                                                  {item.label === 'Manage Users' && pendingUsersCount > 0 && (
+                                                    <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
+                                                      {pendingUsersCount}
+                                                    </span>
+                                                  )}
                                                 </>
                                             </Link>
                                         </SheetClose>

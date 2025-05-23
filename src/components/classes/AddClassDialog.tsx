@@ -33,7 +33,7 @@ const ClassCreateSchema = z.object({
   academicYear: z.string().regex(/^\d{4}-\d{4}$/, { message: "Must be in YYYY-YYYY format (e.g., 2023-2024)." }), // Added academic year
   // FIC is optional for FACULTY, required for STAFF
   ficId: z.string().optional(), 
-  schedule: z.string().optional(),
+  schedule: z.string().min(1, { message: "Class schedule is required." }),
   venue: z.string().optional(),
 });
 
@@ -74,9 +74,9 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
   const token = session?.accessToken;
   const user = session?.user;
   const userRole = user?.role; // Store role for easier access
-  // Show FIC dropdown for STAFF or FACULTY
-  const canSelectFIC = userRole === UserRole.STAFF || userRole === UserRole.FACULTY; 
-  const isStaff = userRole === UserRole.STAFF; // Keep isStaff for submission logic
+  const isStaff = userRole === UserRole.STAFF;
+  const isFaculty = userRole === UserRole.FACULTY; // Added isFaculty
+  const canSelectFIC = userRole === UserRole.STAFF || userRole === UserRole.FACULTY;
 
   // *** Logging - keep for now ***
   console.log("[AddClassDialog] Debug Info:");
@@ -94,18 +94,27 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
       section: '',
       semester: undefined, // Default to undefined for enum select
       academicYear: '', // Added default value
-      ficId: '',
+      ficId: isFaculty && user?.id ? user.id : '', // Pre-fill for faculty
       schedule: '',
       venue: '',
     },
   });
 
-  // Fetch faculty list when dialog opens if user is Staff or Faculty
+  // Effect to set FIC for faculty when dialog opens or user changes
+  useEffect(() => {
+    if (isFaculty && user?.id) {
+      form.setValue('ficId', user.id, { shouldValidate: true, shouldDirty: true });
+    } else if (!isStaff) { // If not staff and not faculty (e.g. admin opening it, or faculty logs out)
+        // Reset if not faculty, or if faculty but no user.id (though unlikely with session)
+        // form.setValue('ficId', ''); // No, staff should still select, this line can be removed
+    }
+  }, [isFaculty, user, form, isOpen, isStaff]); // Add isOpen and isStaff
+
+  // Fetch faculty list when dialog opens if user is Staff (Faculty doesn't need to select)
   useEffect(() => {
     const fetchFaculty = async () => {
-      // Fetch if dialog is open, user is authenticated, and role is STAFF or FACULTY
-      if (isOpen && canSelectFIC && sessionStatus === 'authenticated' && token) {
-        console.log("Fetching faculty using NextAuth token (User Role:", userRole, ")");
+      if (isOpen && isStaff && sessionStatus === 'authenticated' && token) { // Only staff needs the list for selection
+        console.log("Fetching faculty for Staff user using NextAuth token");
         try {
           const response = await fetch('/api/users?role=FACULTY', {
             headers: { Authorization: `Bearer ${token}` },
@@ -121,7 +130,7 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
       }
     };
     fetchFaculty();
-  }, [isOpen, canSelectFIC, sessionStatus, token, userRole]);
+  }, [isOpen, isStaff, sessionStatus, token]);
 
   const onSubmit: SubmitHandler<ClassCreateInput> = async (values) => {
     const currentToken = session?.accessToken;
@@ -134,15 +143,16 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
       toast.error('Faculty in Charge must be selected by Staff.');
       return;
     }
+    // If user is FACULTY, ensure their own ID is used if ficId is somehow not set (should be by defaultValues/useEffect)
+    const submissionValues = { ...values };
+    if (isFaculty && user?.id) {
+        submissionValues.ficId = user.id;
+    }
 
     setIsLoading(true);
-    console.log('Submitting new class:', values);
+    console.log('Submitting new class:', submissionValues);
 
-    // If user is FACULTY and didn't select an FIC, ficId will be empty/undefined.
-    // The backend should handle assigning the creator as FIC in this case.
-    // If user is STAFF, ficId must be present (checked above).
-    // If user is FACULTY and DID select an FIC, that value is sent.
-    const payload = { ...values }; 
+    const payload = { ...submissionValues }; 
 
     try {
       const response = await fetch('/api/classes', {
@@ -263,30 +273,37 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
                 name="ficId"
                 render={({ field }) => (
                   <FormItem>
-                    {/* Label adjustment based on role */}
                     <FormLabel>
                       Faculty in Charge (FIC) 
-                      {isStaff ? ' (Required)' : ' (Optional - defaults to you if empty)'}
+                      {isStaff ? ' (Required) *' : (isFaculty ? ' (Auto-assigned to you)' : ' *')}
                     </FormLabel>
                     <Select 
                         onValueChange={field.onChange} 
-                        value={field.value || ''} // Ensure value is controlled, handle undefined
-                        disabled={isLoading || sessionStatus === 'loading' || facultyList.length === 0}
+                        value={field.value || ''} 
+                        disabled={isLoading || sessionStatus === 'loading' || (isFaculty && !!user?.id) || (isStaff && facultyList.length === 0)}
                     >
                       <FormControl>
                         <SelectTrigger>
-                          <SelectValue placeholder={sessionStatus === 'loading' ? "Checking auth..." : "Select Faculty"} />
+                          <SelectValue placeholder={isFaculty && user?.name ? user.name : (sessionStatus === 'loading' ? "Checking auth..." : "Select Faculty")} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {facultyList.length === 0 && <SelectItem value="loading" disabled>Loading faculty...</SelectItem>}
-                        {/* Add an empty option for FACULTY if they want to default to themselves? */}
-                        {/* Or just let them submit empty. Let's keep it simple for now. */}
-                        {facultyList.map((faculty) => (
+                        {(isStaff && facultyList.length === 0 && sessionStatus !== 'loading') && <SelectItem value="loading" disabled>Loading faculty...</SelectItem>}
+                        {/* For Staff, show list. For Faculty, their name is shown in SelectValue, and field is disabled. */}
+                        {isStaff && facultyList.map((faculty) => (
                           <SelectItem key={faculty.id} value={faculty.id}>
                             {faculty.name || faculty.email}
                           </SelectItem>
                         ))}
+                        {/* If it's a faculty user and their ID is set, we might not need to render any items, 
+                            or render just their name as a disabled option if preferred. 
+                            The disabled state of the Select itself handles non-interaction for faculty.
+                        */}
+                         {isFaculty && user?.id && user?.name && (
+                            <SelectItem key={user.id} value={user.id} disabled>
+                                {user.name || user.email}
+                            </SelectItem>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -301,7 +318,7 @@ export default function AddClassDialog({ onClassAdded }: AddClassDialogProps) {
               name="schedule"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Class Schedule (Optional)</FormLabel>
+                  <FormLabel>Class Schedule *</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., MWF 10:00-11:30 / TTh 1:00-2:30" {...field} />
                   </FormControl>

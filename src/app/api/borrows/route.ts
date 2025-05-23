@@ -116,6 +116,15 @@ export async function POST(req: NextRequest) {
     // Destructure data using correct field names from reverted schema
     const { equipmentIds, requestedStartTime, requestedEndTime, classId, groupMateIds } = parsedData.data;
 
+    // --- START: Validate Reservation Time Window ---    
+    const startHour = new Date(requestedStartTime).getHours();
+    const endHour = new Date(requestedEndTime).getHours();
+
+    if (startHour < 6 || startHour >= 20 || endHour < 6 || endHour >= 20) {
+      return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM.' }, { status: 400 });
+    }
+    // --- END: Validate Reservation Time Window --- 
+
     // --- START: Check for Equipment Availability (Updated Logic) ---
     const blockingStatuses: BorrowStatus[] = [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE]; 
     const unavailableItemsInfo: { name: string; id: string }[] = [];

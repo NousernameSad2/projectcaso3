@@ -138,9 +138,9 @@ export default function RegisterPage() {
                 name="studentNumber"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Student Number</FormLabel>
+                    <FormLabel>ID Number</FormLabel>
                     <FormControl>
-                      <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading} />
+                      <Input placeholder="Your ID number" {...field} value={field.value ?? ""} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>

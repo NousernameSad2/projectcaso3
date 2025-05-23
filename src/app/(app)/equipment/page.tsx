@@ -186,7 +186,7 @@ export default function EquipmentPage() {
 
   // Check user permissions and authentication status
   const isAuthenticated = sessionStatus === 'authenticated';
-  const canManageEquipment = isAuthenticated && !!session?.user && session.user.role !== UserRole.REGULAR;
+  const canManageEquipment = isAuthenticated && !!session?.user && session.user.role === UserRole.STAFF;
   const hasSelection = selectedEquipmentIds.length > 0;
 
   // ... Session status checks and return ...

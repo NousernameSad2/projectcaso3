@@ -197,7 +197,7 @@ export default function AddUserDialog({ onUserAdded }: AddUserDialogProps) {
                   name="studentNumber"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Student Number</FormLabel>
+                      <FormLabel>ID Number</FormLabel>
                       <FormControl>
                         <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
                       </FormControl>

@@ -39,8 +39,14 @@ import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 const BulkReservationFormSchema = z.object({
-    requestedStartTime: z.date({ required_error: "Start time is required." }),
-    requestedEndTime: z.date({ required_error: "End time is required." }),
+    requestedStartTime: z.date({ required_error: "Start time is required." }).refine(date => {
+      const hours = date.getHours();
+      return hours >= 6 && hours < 20;
+    }, { message: "Reservation must be between 6:00 AM and 8:00 PM." }),
+    requestedEndTime: z.date({ required_error: "End time is required." }).refine(date => {
+      const hours = date.getHours();
+      return hours >= 6 && hours < 20;
+    }, { message: "Reservation must be between 6:00 AM and 8:00 PM." }),
     classId: z.string().optional(),
 }).refine(data => !data.requestedStartTime || !data.requestedEndTime || isAfter(data.requestedEndTime, data.requestedStartTime), {
     message: "End time must be after start time.",

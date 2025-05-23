@@ -61,6 +61,10 @@ declare module '@tanstack/react-table' {
     isSubmittingAction?: boolean
     confirmReturnGroupHandler?: (borrowGroupId: string | null | undefined) => Promise<void>
     // Add other handlers/state as needed
+    onApprove?: (id: string | null | undefined) => Promise<void>
+    onReject?: (id: string | null | undefined) => Promise<void>
+    onCheckout?: (id: string | null | undefined) => Promise<void>
+    onConfirmReturn?: (item: BorrowRequestAdminView | null | undefined) => void
   }
 }
 

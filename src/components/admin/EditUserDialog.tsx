@@ -258,37 +258,33 @@ export default function EditUserDialog({
             </div>
 
             {/* Row 2: Student Number and Contact Number */}
-            <div className="flex flex-row space-x-4">
-              <div className="w-1/2">
-                <FormField
-                  control={form.control}
-                  name="studentNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Student Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="w-1/2">
-                <FormField
-                  control={form.control}
-                  name="contactNumber"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Contact Number</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., 09171234567" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
+            <div className="grid grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="studentNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>ID Number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., 2020-12345" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="contactNumber"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Contact Number</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g., 09171234567" {...field} value={field.value ?? ""} disabled={isLoading || isSessionLoading} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
             </div>
 
             {/* Row 3: Role and Status */}

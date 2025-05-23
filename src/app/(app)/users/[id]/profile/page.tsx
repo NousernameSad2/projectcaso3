@@ -339,7 +339,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
             <div>{profile.name}</div>
             <div className="font-medium text-muted-foreground">Email:</div>
             <div>{profile.email}</div>
-            <div className="font-medium text-muted-foreground">Student Number:</div>
+            <div className="font-medium text-muted-foreground">ID Number:</div>
             <div>{profile.studentNumber || '-'}</div>
             <div className="font-medium text-muted-foreground">Contact Number:</div>
             <div>{profile.contactNumber || '-'}</div>

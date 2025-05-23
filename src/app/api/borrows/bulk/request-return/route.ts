@@ -21,6 +21,41 @@ export async function PATCH(request: Request) {
         return NextResponse.json({ error: 'Missing groupId parameter' }, { status: 400 });
     }
 
+    // Attempt to parse the request body for data request fields
+    let parsedBody: unknown = {};
+    let requestDataValue = false;
+    let dataRequestRemarksValue: string | undefined = undefined;
+    let parsedRequestedEquipmentIds: string[] | undefined = undefined; // Store parsed IDs here first
+
+    try {
+        if (request.method !== 'GET' && request.method !== 'HEAD') {
+            try {
+                parsedBody = await request.json();
+                console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) received body:`, JSON.stringify(parsedBody, null, 2));
+                if (typeof parsedBody === 'object' && parsedBody !== null) {
+                    if ('requestData' in parsedBody && typeof (parsedBody as { requestData: unknown }).requestData === 'boolean') {
+                        requestDataValue = (parsedBody as { requestData: boolean }).requestData;
+                    }
+                    if ('dataRequestRemarks' in parsedBody && typeof (parsedBody as { dataRequestRemarks: unknown }).dataRequestRemarks === 'string') {
+                        dataRequestRemarksValue = (parsedBody as { dataRequestRemarks: string }).dataRequestRemarks;
+                    }
+                    if ('requestedEquipmentIds' in parsedBody && Array.isArray((parsedBody as { requestedEquipmentIds: unknown }).requestedEquipmentIds)) {
+                        const ids = (parsedBody as { requestedEquipmentIds: string[] }).requestedEquipmentIds;
+                        if (ids.every(id => typeof id === 'string')) {
+                            parsedRequestedEquipmentIds = ids; // Store here
+                        } else {
+                            console.warn(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - requestedEquipmentIds contained non-string elements.`);
+                        }
+                    }
+                }
+            } catch (e) {
+                console.warn(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - error parsing JSON body:`, e);
+            }
+        }
+    } catch (error) {
+        console.error(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - error accessing request body:`, error);
+    }
+
     try {
         // 3. Authorization Check: Verify user is part of the group or the original borrower
         // Find one borrow record associated with the group to get the borrowerId
@@ -54,20 +89,45 @@ export async function PATCH(request: Request) {
              return NextResponse.json({ error: 'Forbidden: You are not authorized to request return for this group.' }, { status: 403 });
         }
 
-        // 4. Update eligible borrow items in the group to PENDING_RETURN
+        // 4. Prepare data for update
+        // Define a type for the update payload
+        interface BorrowUpdatePayload {
+            borrowStatus: BorrowStatus;
+            dataRequested?: boolean;
+            dataRequestStatus?: string | null;
+            dataRequestRemarks?: string | null;
+            requestedEquipmentIds?: string[];
+        }
+
+        const updateDataPayload: BorrowUpdatePayload = {
+            borrowStatus: BorrowStatus.PENDING_RETURN,
+        };
+
+        if (requestDataValue) {
+            updateDataPayload.dataRequested = true;
+            updateDataPayload.dataRequestStatus = 'Pending';
+            if (dataRequestRemarksValue) {
+                updateDataPayload.dataRequestRemarks = dataRequestRemarksValue;
+            }
+            updateDataPayload.requestedEquipmentIds = parsedRequestedEquipmentIds || []; // Use parsed IDs or default to empty array
+        } else {
+            updateDataPayload.dataRequested = false;
+            updateDataPayload.dataRequestRemarks = null;
+            updateDataPayload.dataRequestStatus = null;
+            updateDataPayload.requestedEquipmentIds = [];
+        }
+        
+        console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Prisma updateMany data:`, JSON.stringify(updateDataPayload, null, 2));
+
+        // Update eligible borrow items in the group
         const updateResult = await prisma.borrow.updateMany({
             where: {
                 borrowGroupId: groupId,
-                // Only update items that are currently checked out
                 borrowStatus: {
                     in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE]
                 }
             },
-            data: {
-                borrowStatus: BorrowStatus.PENDING_RETURN,
-                // Optionally, could add a field like `returnRequestedById: userId`
-                // Optionally, could add a field like `returnRequestedAt: new Date()`
-            },
+            data: updateDataPayload,
         });
 
         // 5. Handle Response

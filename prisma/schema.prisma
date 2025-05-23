@@ -110,6 +110,7 @@ model User {
   taggedDeficiencies      Deficiency[]          @relation("TaggedDeficiencies")
   notifiedFicDeficiencies Deficiency[]          @relation("NotifiedFicDeficiencies")
   borrowGroupMemberships  BorrowGroupMate[]     // Relation to group memberships
+  acceptedReservations Borrow[] @relation("AcceptedReservations")
 }
 
 model Equipment {
@@ -129,6 +130,7 @@ model Equipment {
   borrowRecords    Borrow[]          // Relation to Borrow records
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
+  isDataGenerating Boolean         @default(false)
 }
 
 model Class {
@@ -205,6 +207,19 @@ model Borrow {
 
   // *** NEW: Add Reservation Type ***
   reservationType     ReservationType?  
+
+  // Data Request Fields
+  dataRequested       Boolean?          @default(false)
+  dataRequestRemarks  String?
+  dataRequestStatus   String?           // e.g., Pending, Fulfilled
+  dataFiles           Json[]            // To store paths or identifiers of uploaded files
+  requestedEquipmentIds String[]       @db.ObjectId // New: Store IDs of equipment for which data is requested
+
+  // ---- Acceptance Details ---- ADDED HERE
+  acceptedById        String?           @db.ObjectId
+  acceptedBy          User?             @relation("AcceptedReservations", fields: [acceptedById], references: [id])
+  acceptedAt          DateTime?
+  // ----------------------------
 
   @@index([borrowGroupId]) 
 }

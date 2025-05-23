@@ -138,9 +138,9 @@ export default function ProfileEditForm({
                             name="studentNumber"
                             render={({ field }) => (
                                 <FormItem>
-                                    <FormLabel>Student Number</FormLabel>
+                                    <FormLabel>ID Number</FormLabel>
                                     <FormControl>
-                                        <Input placeholder="Your student number" {...field} value={field.value ?? ''} />
+                                        <Input placeholder="ID Number" {...field} value={field.value ?? ''} />
                                     </FormControl>
                                     <FormMessage />
                                 </FormItem>

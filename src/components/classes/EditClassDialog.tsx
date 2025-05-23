@@ -60,6 +60,8 @@ interface FacultyUser {
 // Define local types for session and user to avoid `as any`
 interface SessionUser {
   id?: string;
+  name?: string | null; // Added name
+  email?: string | null; // Added email
   role?: UserRole | string; 
   // Add other relevant user fields if accessed from session?.user
 }
@@ -87,9 +89,9 @@ const ClassUpdateSchema = z.object({
     errorMap: () => ({ message: 'Invalid semester value.' }),
   }),
   academicYear: z.string().regex(/^\d{4}-\d{4}$/, { message: "Must be in YYYY-YYYY format (e.g., 2023-2024)." }),
-  ficId: z.string().optional(),
+  ficId: z.string().optional(), // Made ficId optional in schema again, backend will enforce for Staff
   isActive: z.boolean(),
-  schedule: z.string().optional(),
+  schedule: z.string().min(1, { message: "Class schedule is required." }),
   venue: z.string().optional(),
 });
 
@@ -139,7 +141,8 @@ export function EditClassDialog({
   const { data: sessionData } = useSession() as AugmentedSessionData;
   const session = sessionData;
   const user = session?.user;
-  const isStaff = user?.role === 'STAFF';
+  const isStaff = user?.role === UserRole.STAFF;
+  const isFaculty = user?.role === UserRole.FACULTY;
   const [facultyUsers, setFacultyUsers] = useState<FacultyUser[]>([]);
   const [isFetchingFaculty, setIsFetchingFaculty] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -162,30 +165,35 @@ export function EditClassDialog({
 
   useEffect(() => {
     if (classData) {
+      let currentFicId = classData.ficId || undefined;
+      // If the current user is faculty and is the FIC of this class, ensure their ID is set.
+      if (isFaculty && user?.id === classData.ficId) {
+        currentFicId = user.id;
+      }
+
       form.reset({
         courseCode: classData.courseCode,
         section: classData.section,
         semester: classData.semester ?? 'FIRST',
         academicYear: classData.academicYear,
-        ficId: classData.ficId || undefined,
+        ficId: currentFicId,
         isActive: classData.isActive,
         schedule: classData.schedule || '',
         venue: classData.venue || '',
       });
     } else {
-      // Optionally reset to defaults if classData becomes null
       form.reset({
         courseCode: '',
         section: '',
         semester: 'FIRST',
         academicYear: '',
-        ficId: '',
+        ficId: undefined, // Reset to undefined
         isActive: true,
         schedule: '',
         venue: '',
       });
     }
-  }, [classData, form]);
+  }, [classData, form, isFaculty, user?.id]); // Added isFaculty and user.id
 
   useEffect(() => {
     async function fetchFaculty() {
@@ -224,58 +232,43 @@ export function EditClassDialog({
       return;
     }
 
-    // Determine changed values
+    const submissionValues = { ...values };
+
+    if (isStaff) {
+      if (!submissionValues.ficId) {
+        form.setError("ficId", { message: "Faculty-in-Charge is required for Staff.", type: "manual" });
+        toast.error("Faculty-in-Charge must be selected by Staff.");
+        return;
+      }
+    } else if (isFaculty && user?.id) {
+      // If faculty, FIC should be their own ID if the class is assigned to them, or if it's becoming assigned to them.
+      // They cannot change FIC to another faculty or unassign if they are the current FIC.
+      if (classData.ficId && classData.ficId !== user.id) {
+        // Trying to edit a class where they are not the FIC
+        toast.error("Faculty can only modify classes where they are the Faculty-in-Charge.");
+        submissionValues.ficId = classData.ficId;
+      } else {
+        submissionValues.ficId = user.id;
+      }
+       // Faculty cannot change isActive status directly
+      if (values.isActive !== classData.isActive) {
+        toast.info("Faculty cannot change the active status. This change will be ignored.");
+        submissionValues.isActive = classData.isActive; // Revert to original
+      }
+    }
+
+    // Determine changed values by comparing submissionValues with classData
     const changedValues: UpdatedClassData = {};
-    if (values.courseCode !== classData.courseCode) {
-      changedValues.courseCode = values.courseCode;
-    }
-    if (values.section !== classData.section) {
-      changedValues.section = values.section;
-    }
-    if (values.semester !== classData.semester) {
-      changedValues.semester = values.semester;
-    }
-    if (values.academicYear !== classData.academicYear) {
-      changedValues.academicYear = values.academicYear;
-    }
-    if (values.ficId !== classData.ficId) {
-      changedValues.ficId = values.ficId || null;
-    }
-    if (values.isActive !== classData.isActive) {
-      changedValues.isActive = values.isActive;
-    }
-    if (values.schedule !== classData.schedule) {
-      changedValues.schedule = values.schedule;
-    }
-    if (values.venue !== classData.venue) {
-      changedValues.venue = values.venue;
-    }
+    if (submissionValues.courseCode !== classData.courseCode) changedValues.courseCode = submissionValues.courseCode;
+    if (submissionValues.section !== classData.section) changedValues.section = submissionValues.section;
+    if (submissionValues.semester !== classData.semester) changedValues.semester = submissionValues.semester;
+    if (submissionValues.academicYear !== classData.academicYear) changedValues.academicYear = submissionValues.academicYear;
+    if (submissionValues.ficId !== classData.ficId) changedValues.ficId = submissionValues.ficId || null; // Allow unsetting to null
+    if (submissionValues.isActive !== classData.isActive && isStaff) changedValues.isActive = submissionValues.isActive; // Only staff can change
+    if (submissionValues.schedule !== classData.schedule) changedValues.schedule = submissionValues.schedule;
+    if (submissionValues.venue !== classData.venue) changedValues.venue = submissionValues.venue;
 
-    // Prevent non-staff from changing FIC unless it's assigning to themselves
-    if (!isStaff) {
-      const currentFicId = classData.ficId ?? undefined;
-      // Allow unassigning themselves or keeping it assigned to themselves
-      const allowedFicChange =
-        values.ficId === undefined || // Unassigning
-        values.ficId === user?.id; // Assigning/Keeping to self
-
-      if (values.ficId !== currentFicId && !allowedFicChange) {
-        toast.error(
-          'Permission Denied: Faculty can only assign/unassign themselves as Faculty-in-Charge.'
-        );
-        return; // Stop submission
-      }
-      // Faculty cannot change isActive status directly
-      if (changedValues.hasOwnProperty('isActive')) {
-        delete changedValues.isActive; // Remove isActive from changed values if user is faculty
-        toast.error(
-          'Permission Denied: Faculty cannot change the active status of a class.'
-        );
-        if (Object.keys(changedValues).length === 0) return; // Nothing else to update
-      }
-    }
-
-    if (Object.keys(changedValues).length === 0 && values.ficId === classData.ficId) {
+    if (Object.keys(changedValues).length === 0) {
       toast.info('No changes were made.');
       return;
     }
@@ -289,7 +282,7 @@ export function EditClassDialog({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(changedValues),
+        body: JSON.stringify(submissionValues),
       });
 
       const result = await response.json();
@@ -398,104 +391,85 @@ export function EditClassDialog({
               )}
             />
 
-            {isStaff && (
+            {/* FIC Field - Conditional rendering/disabling */}
+            {(isStaff || (isFaculty && user?.id === classData.ficId) || (isFaculty && !classData.ficId)) && (
               <FormField
                 control={form.control}
                 name="ficId"
                 render={({ field }) => (
                   <FormItem className="flex flex-col">
-                    <FormLabel>Faculty-in-Charge</FormLabel>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <FormControl>
-                          <Button
-                            variant="outline"
-                            role="combobox"
-                            className={cn(
-                              'w-full justify-between',
-                              !field.value && 'text-muted-foreground'
-                            )}
-                            disabled={isFetchingFaculty}
-                          >
-                            {field.value // Display name using the 'name' field
-                              ? facultyUsers.find(
-                                  (faculty) => faculty.id === field.value
-                                )?.name ?? 'Faculty not found' // Use name field
-                              : 'Select Faculty'}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </FormControl>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                        <Command>
-                          <CommandInput placeholder="Search faculty..." />
-                          <CommandEmpty>No faculty found.</CommandEmpty>
-                          <CommandGroup>
-                            <CommandItem
-                              value="NONE" // Use a distinct value for 'None'
-                              onSelect={() => {
-                                form.setValue('ficId', undefined, { // Set to undefined
-                                  shouldValidate: true,
-                                  shouldDirty: true,
-                                });
-                              }}
+                    <FormLabel>Faculty-in-Charge *</FormLabel>
+                    {(isStaff) ? (
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              className={cn(
+                                'w-full justify-between',
+                                !field.value && 'text-muted-foreground'
+                              )}
+                              disabled={isFetchingFaculty || isSubmitting}
                             >
-                              <Check
-                                className={cn(
-                                  'mr-2 h-4 w-4',
-                                  !field.value ? 'opacity-100' : 'opacity-0' // Check if value is falsy
-                                )}
-                              />
-                              None
-                            </CommandItem>
-                            {facultyUsers.map((faculty) => (
+                              {field.value
+                                ? facultyUsers.find((faculty) => faculty.id === field.value)?.name ?? 'Select Faculty'
+                                : 'Select Faculty'}
+                              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
+                          <Command>
+                            <CommandInput placeholder="Search faculty..." />
+                            <CommandEmpty>No faculty found.</CommandEmpty>
+                            <CommandGroup>
                               <CommandItem
-                                // Use a combination or just name for the searchable value
-                                value={faculty.name || faculty.id} 
-                                key={faculty.id}
+                                value="NONE" // For unassigning by Staff
                                 onSelect={() => {
-                                  form.setValue('ficId', faculty.id, {
-                                    shouldValidate: true,
-                                    shouldDirty: true,
-                                  });
+                                  form.setValue('ficId', undefined, { shouldValidate: true, shouldDirty: true });
                                 }}
                               >
-                                <Check
-                                  className={cn(
-                                    'mr-2 h-4 w-4',
-                                    faculty.id === field.value
-                                      ? 'opacity-100'
-                                      : 'opacity-0'
-                                  )}
-                                />
-                                {faculty.name} {faculty.email ? `(${faculty.email})` : ''} {/* Display name and email */}
+                                <Check className={cn('mr-2 h-4 w-4',!field.value ? 'opacity-100' : 'opacity-0' )}/>
+                                None
                               </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </Command>
-                      </PopoverContent>
-                    </Popover>
+                              {facultyUsers.map((faculty) => (
+                                <CommandItem
+                                  value={faculty.name || faculty.id}
+                                  key={faculty.id}
+                                  onSelect={() => {
+                                    form.setValue('ficId', faculty.id, {shouldValidate: true, shouldDirty: true });
+                                  }}
+                                >
+                                  <Check className={cn('mr-2 h-4 w-4',faculty.id === field.value? 'opacity-100': 'opacity-0' )}/>
+                                  {faculty.name} {faculty.email ? `(${faculty.email})` : ''}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                    ) : (isFaculty && user?.id) ? (
+                       // Faculty sees their name, disabled, if they are the FIC or it's being assigned to them
+                        <Input
+                            value={user.name || user.email || ''} // Ensure fallback to empty string if both are null/undefined
+                            disabled
+                        />
+                    ) : null } 
                     <FormMessage />
                   </FormItem>
                 )}
               />
             )}
-
-            {/* Display for non-staff users - use name field */}
-            {!isStaff && classData.facultyInCharge && (
-              <FormItem>
-                <FormLabel>Faculty-in-Charge</FormLabel>
-                <Input
-                  value={`${classData.facultyInCharge.name ?? 'N/A'}`}
-                  disabled
-                />
-              </FormItem>
-            )}
-            {!isStaff && !classData.facultyInCharge && (
-              <FormItem>
-                <FormLabel>Faculty-in-Charge</FormLabel>
-                <Input value="Not Assigned" disabled />
-              </FormItem>
+            {/* Display for Faculty if they are NOT the FIC (and not staff) */}
+            {(isFaculty && classData.ficId && user?.id !== classData.ficId) && (
+                 <FormItem>
+                    <FormLabel>Faculty-in-Charge *</FormLabel>
+                    <Input
+                        value={classData.facultyInCharge?.name || 'Assigned'}
+                        disabled
+                    />
+                </FormItem>
             )}
 
             <FormField
@@ -503,7 +477,7 @@ export function EditClassDialog({
               name="schedule"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Class Schedule (Optional)</FormLabel>
+                  <FormLabel>Class Schedule *</FormLabel>
                   <FormControl>
                     <Input placeholder="e.g., MWF 10:00-11:30" {...field} />
                   </FormControl>

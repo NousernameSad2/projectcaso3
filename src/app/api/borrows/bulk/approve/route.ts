@@ -56,6 +56,11 @@ export async function POST(request: Request) {
     ? { approvedByFicId: user.id }
     : { approvedByStaffId: user.id };
 
+  const acceptanceData = {
+    acceptedById: user.id,
+    acceptedAt: new Date(),
+  };
+
   // 4. Perform the update (single or bulk)
   try {
     let result;
@@ -79,6 +84,7 @@ export async function POST(request: Request) {
           data: {
              borrowStatus: BorrowStatus.APPROVED,
              ...approverData,
+             ...acceptanceData,
           },
        });
        result = { count: 1 }; // Simulate count for consistency
@@ -93,6 +99,7 @@ export async function POST(request: Request) {
          data: {
            borrowStatus: BorrowStatus.APPROVED,
            ...approverData,
+           ...acceptanceData,
          },
        });
        // Handle bulk count 0 scenario (moved inside)

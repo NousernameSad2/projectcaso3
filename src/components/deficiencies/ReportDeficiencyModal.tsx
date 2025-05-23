@@ -24,10 +24,13 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Borrow, Equipment, DeficiencyType } from '@prisma/client';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 
 // Define the shape of the borrow data expected (simplified for modal)
 type BorrowItemForModal = Pick<Borrow, 'id' | 'borrowGroupId'> & {
-  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId'>;
+  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' | 'isDataGenerating'>;
 };
 
 // Zod schema for the deficiency form
@@ -42,7 +45,12 @@ interface ReportDeficiencyModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   itemsToReport: BorrowItemForModal[]; // Can be single or multiple items
-  onReturnRequestInitiated: (identifier: string, isGroup: boolean) => Promise<void>; // Callback to trigger return PATCH
+  onReturnRequestInitiated: (
+    identifier: string, 
+    isGroup: boolean,
+    requestData?: boolean,
+    dataRequestDetails?: { remarks?: string; equipmentIds?: string[] }
+  ) => Promise<void>;
 }
 
 export default function ReportDeficiencyModal({
@@ -53,6 +61,9 @@ export default function ReportDeficiencyModal({
 }: ReportDeficiencyModalProps) {
   const [isSubmittingDeficiency, setIsSubmittingDeficiency] = useState(false);
   const [selectedItem, setSelectedItem] = useState<BorrowItemForModal | null>(null);
+  const [requestData, setRequestData] = useState<'no' | 'yes'>('no');
+  const [dataRequestRemarks, setDataRequestRemarks] = useState('');
+  const [selectedDataRequestEquipmentIds, setSelectedDataRequestEquipmentIds] = useState<string[]>([]);
 
   const form = useForm<DeficiencyReportInput>({
     resolver: zodResolver(DeficiencyReportSchema),
@@ -71,6 +82,9 @@ export default function ReportDeficiencyModal({
       description: "",
     });
     setSelectedItem(itemsToReport.length === 1 ? itemsToReport[0] : null);
+    setRequestData('no');
+    setDataRequestRemarks('');
+    setSelectedDataRequestEquipmentIds([]);
   }, [isOpen, itemsToReport, form]);
 
   // Update selectedItem when dropdown changes
@@ -145,7 +159,12 @@ export default function ReportDeficiencyModal({
 
      setIsSubmittingDeficiency(true);
      try {
-         await onReturnRequestInitiated(identifier, isGroup); // Pass correct identifier and flag
+         await onReturnRequestInitiated(
+           identifier, 
+           isGroup,
+           requestData === 'yes',
+           requestData === 'yes' ? { remarks: dataRequestRemarks, equipmentIds: selectedDataRequestEquipmentIds } : undefined
+         ); 
          onOpenChange(false); // Close modal on success
      } catch (error) {
          // Error logging/toast handled in parent or trigger function
@@ -241,6 +260,70 @@ export default function ReportDeficiencyModal({
                     )}
                     />
               </>
+            )}
+
+            {/* Data Request Section - Copied from ReturnRequestDialog and adapted */}
+            <div className="space-y-2 pt-4 border-t mt-4">
+                <FormLabel>Request Data from this Borrow Transaction?</FormLabel>
+                <RadioGroup
+                    value={requestData}
+                    onValueChange={(value: 'yes' | 'no') => setRequestData(value)}
+                    className="flex space-x-4 pt-1"
+                >
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="no" id={`def-modal-data-req-no`} />
+                        <FormLabel htmlFor={`def-modal-data-req-no`} className="font-normal">No</FormLabel>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="yes" id={`def-modal-data-req-yes`} />
+                        <FormLabel htmlFor={`def-modal-data-req-yes`} className="font-normal">Yes</FormLabel>
+                    </div>
+                </RadioGroup>
+            </div>
+
+            {requestData === 'yes' && (
+                <div className="space-y-2">
+                    {/* New: Item selection for data request */}
+                    <div className="space-y-2 py-2">
+                        <FormLabel>Select Equipment for Data Request:</FormLabel>
+                        <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border p-2">
+                            {itemsToReport.filter(item => item.equipment.isDataGenerating).length > 0 ? (
+                                itemsToReport
+                                    .filter(item => item.equipment.isDataGenerating)
+                                    .map(item => (
+                                        <div key={item.equipment.id} className="flex items-center space-x-2">
+                                            <Checkbox
+                                                id={`data-req-equip-${item.equipment.id}`}
+                                                checked={selectedDataRequestEquipmentIds.includes(item.equipment.id)}
+                                                onCheckedChange={(checked) => {
+                                                    setSelectedDataRequestEquipmentIds(prev => 
+                                                        checked 
+                                                            ? [...prev, item.equipment.id] 
+                                                            : prev.filter(id => id !== item.equipment.id)
+                                                    );
+                                                }}
+                                            />
+                                            <Label htmlFor={`data-req-equip-${item.equipment.id}`} className="font-normal text-sm">
+                                                {item.equipment.name} {item.equipment.equipmentId ? `(${item.equipment.equipmentId})` : ''}
+                                            </Label>
+                                        </div>
+                                    ))
+                            ) : (
+                                <p className="text-sm text-muted-foreground px-1">No data-generating equipment in this selection.</p>
+                            )}
+                        </div>
+                    </div>
+
+                    <FormLabel htmlFor={`def-modal-data-req-remarks`}>Data Request Remarks (Optional)</FormLabel>
+                    <Textarea 
+                        id={`def-modal-data-req-remarks`}
+                        value={dataRequestRemarks}
+                        onChange={(e) => setDataRequestRemarks(e.target.value)}
+                        placeholder="e.g., Please extract specific logs from the drone."
+                        rows={3}
+                        className='w-full'
+                    />
+                </div>
             )}
 
             <DialogFooter className="gap-2 mt-4">

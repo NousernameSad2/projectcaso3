@@ -58,11 +58,17 @@ const FormSchemaForModal = z.object({
   requestedStartTime: z.coerce.date({ 
       required_error: "Start date and time are required.",
       invalid_type_error: "Invalid start date/time format."
-  }),
+  }).refine(date => {
+    const hours = date.getHours();
+    return hours >= 6 && hours < 20;
+  }, { message: "Reservation must be between 6:00 AM and 8:00 PM." }),
   requestedEndTime: z.coerce.date({ 
       required_error: "End date and time are required.",
       invalid_type_error: "Invalid end date/time format."
-  }),
+  }).refine(date => {
+    const hours = date.getHours();
+    return hours >= 6 && hours < 20;
+  }, { message: "Reservation must be between 6:00 AM and 8:00 PM." }),
   classId: z.string().min(1, { message: "Class selection is required."}), 
 }).refine(
   (data) => { // data should now be correctly typed based on the z.object above

@@ -9,6 +9,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from 'sonner';
 import { Loader2, AlertTriangle } from 'lucide-react';
 
@@ -33,11 +34,15 @@ export default function ReturnRequestDialog({
     const [isLoading, setIsLoading] = useState(false);
     const [actionType, setActionType] = useState<'returnOnly' | 'logAndReturn' | null>(null);
     const [errors, setErrors] = useState<Record<string, string[] | undefined>>({});
+    const [requestData, setRequestData] = useState<'no' | 'yes'>('no');
+    const [dataRequestRemarks, setDataRequestRemarks] = useState('');
 
     const resetForm = () => {
         setType('');
         setDescription('');
         setErrors({});
+        setRequestData('no');
+        setDataRequestRemarks('');
     };
     
     const handleOpenChange = (open: boolean) => {
@@ -55,6 +60,11 @@ export default function ReturnRequestDialog({
         try {
             const response = await fetch(`/api/borrows/${borrowId}/request-return`, {
                 method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    requestData: requestData === 'yes',
+                    dataRequestRemarks: requestData === 'yes' ? dataRequestRemarks : undefined,
+                }),
             });
             if (!response.ok) {
                 const errorData = await response.json().catch(() => ({}));
@@ -108,6 +118,11 @@ export default function ReturnRequestDialog({
 
             const retResponse = await fetch(`/api/borrows/${borrowId}/request-return`, {
                 method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    requestData: requestData === 'yes',
+                    dataRequestRemarks: requestData === 'yes' ? dataRequestRemarks : undefined,
+                }),
             });
             if (!retResponse.ok) {
                 const errorData = await retResponse.json().catch(() => ({}));
@@ -143,7 +158,10 @@ export default function ReturnRequestDialog({
                         If there are no issues, you can proceed directly.
                     </DialogDescription>
                 </DialogHeader>
-                <div className="space-y-4 py-2">
+                <div 
+                    className="space-y-4 py-2" 
+                    style={{ maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' }}
+                >
                     <div>
                         <Label htmlFor={`ret-def-type-${borrowId}`}>Issue/Deficiency Type (Optional)</Label>
                         <Select 
@@ -175,6 +193,39 @@ export default function ReturnRequestDialog({
                         />
                          {errors.description && <p className="text-xs text-destructive mt-1">{errors.description.join(', ')}</p>}
                     </div>
+
+                    {/* Data Request Section */}
+                    <div className="space-y-2 pt-2">
+                        <Label>Request Data from this Borrow Transaction?</Label>
+                        <RadioGroup
+                            value={requestData}
+                            onValueChange={(value: 'yes' | 'no') => setRequestData(value)}
+                            className="flex space-x-4"
+                        >
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="no" id={`data-req-no-${borrowId}`} />
+                                <Label htmlFor={`data-req-no-${borrowId}`}>No</Label>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                                <RadioGroupItem value="yes" id={`data-req-yes-${borrowId}`} />
+                                <Label htmlFor={`data-req-yes-${borrowId}`}>Yes</Label>
+                            </div>
+                        </RadioGroup>
+                    </div>
+
+                    {requestData === 'yes' && (
+                        <div className="space-y-2">
+                            <Label htmlFor={`data-req-remarks-${borrowId}`}>Data Request Remarks (Optional)</Label>
+                            <Textarea 
+                                id={`data-req-remarks-${borrowId}`}
+                                value={dataRequestRemarks}
+                                onChange={(e) => setDataRequestRemarks(e.target.value)}
+                                placeholder="e.g., Sir Lowell, please extract specific logs"
+                                rows={3}
+                                className='w-full'
+                            />
+                        </div>
+                    )}
                 </div>
                 <DialogFooter className="gap-2 sm:justify-between pt-4">
                      <Button 

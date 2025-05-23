@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { prisma } from '@/lib/prisma';
 import { AdminUserCreateSchema } from '@/lib/schemas';
-import { UserRole } from '@prisma/client'; // Removed UserStatus
+import { UserRole, UserStatus } from '@prisma/client'; // Removed UserStatus
 import { getServerSession } from "next-auth/next";
 import { authOptions } from '@/lib/authOptions';
 import { Prisma } from '@prisma/client';
@@ -33,6 +33,7 @@ export async function GET(req: NextRequest) {
     const sortBy = searchParams.get('sortBy') || 'name';
     const sortOrderParam = searchParams.get('sortOrder') || 'asc';
     const sortOrder = sortOrderParam.toLowerCase() === 'desc' ? Prisma.SortOrder.desc : Prisma.SortOrder.asc;
+    const statusQuery = searchParams.get('status')?.toUpperCase(); // New: Get status query
 
     const allowedSortByFields: (keyof Prisma.UserOrderByWithRelationInput)[] = ['name', 'email', 'role', 'status', 'createdAt', 'updatedAt'];
     const validSortBy = allowedSortByFields.includes(sortBy as keyof Prisma.UserOrderByWithRelationInput) ? sortBy : 'name';
@@ -67,6 +68,14 @@ export async function GET(req: NextRequest) {
             { name: { contains: searchQuery, mode: 'insensitive' } },
             { email: { contains: searchQuery, mode: 'insensitive' } },
         ];
+    }
+
+    // New: Handle status query for pending count
+    if (statusQuery === UserStatus.PENDING_APPROVAL && (requestingUser.role === UserRole.STAFF || requestingUser.role === UserRole.FACULTY)) {
+      const pendingCount = await prisma.user.count({
+        where: { status: UserStatus.PENDING_APPROVAL },
+      });
+      return NextResponse.json({ count: pendingCount });
     }
 
     // Define orderBy clause as an array

@@ -54,6 +54,10 @@ const borrowGroupItemSelect = Prisma.validator<Prisma.BorrowSelect>()({
     approvedByStaff: {
         select: { name: true, email: true }
     },
+    acceptedBy: {
+        select: { name: true, email: true }
+    },
+    acceptedAt: true,
     class: { 
         select: {
             courseCode: true,
@@ -276,6 +280,18 @@ export default function BorrowGroupDetailPage() {
                                 <span className="font-semibold text-muted-foreground">Time Approved:</span> 
                                 {format(new Date(representativeItem.approvedStartTime || representativeItem.updatedAt), 'PPp')}
                             </div>
+                            {representativeItem.acceptedBy && representativeItem.acceptedAt && (
+                                <>
+                                    <div>
+                                        <span className="font-semibold text-muted-foreground">Accepted By:</span> 
+                                        {representativeItem.acceptedBy.name || representativeItem.acceptedBy.email || 'N/A'}
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold text-muted-foreground">Accepted At:</span> 
+                                        {format(new Date(representativeItem.acceptedAt), 'PPp')}
+                                    </div>
+                                </>
+                            )}
                         </>
                     )}
                     <div>

@@ -333,7 +333,7 @@ export default function ProfilePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-1">
             {detailItem('Name', profile.name)}
             {detailItem('Email', profile.email)}
-            {detailItem('Student Number', profile.studentNumber)}
+            {detailItem('ID Number', profile.studentNumber)}
             {detailItem('Contact Number', profile.contactNumber)}
             {detailItem('Sex', profile.sex)}
             {detailItem('Role', <Badge variant="outline" className="capitalize">{profile.role.toLowerCase()}</Badge>)}
@@ -406,11 +406,15 @@ export default function ProfilePage() {
                                           approvedStartTime: item.approvedStartTime 
                                         }, null, 2));
                                         // ---- END Logging ----
+                                        const equipmentName = item.equipment ? item.equipment.name : 'Equipment N/A';
+                                        const equipmentId = item.equipment ? item.equipment.equipmentId : null;
+                                        const imageUrl = item.equipment ? transformGoogleDriveUrl(item.equipment.images?.[0]) : null;
+
                                         return (
                                         <li key={item.id} className="flex items-center gap-2">
                                             <Image 
-                                                src={transformGoogleDriveUrl(item.equipment.images?.[0]) || '/images/placeholder-default.png'}
-                                                alt={item.equipment.name}
+                                                src={imageUrl || '/images/placeholder-default.png'}
+                                                alt={equipmentName || 'Equipment image'}
                                                 width={32}
                                                 height={32}
                                                 className="rounded object-cover aspect-square"
@@ -422,8 +426,8 @@ export default function ProfilePage() {
                                                 }}
                                             />
                                             <div className='flex-grow'>
-                                                <span className='font-medium'>{item.equipment.name}</span>
-                                                {item.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({item.equipment.equipmentId})</span>}
+                                                <span className='font-medium'>{equipmentName}</span>
+                                                {equipmentId && <span className="text-xs text-muted-foreground ml-1">({equipmentId})</span>}
                                                 <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                                                     <Clock className='h-3 w-3'/> 
                                                     Duration: {calculateDuration(item.checkoutTime, item.actualReturnTime, item.approvedStartTime)}
@@ -452,7 +456,10 @@ export default function ProfilePage() {
                   approvedStartTime: borrow.approvedStartTime 
                 }, null, 2));
                 // ---- END Logging ----
-                const imageUrl = transformGoogleDriveUrl(borrow.equipment.images?.[0]) || '/images/placeholder-default.png';
+                const equipmentName = borrow.equipment ? borrow.equipment.name : 'Equipment N/A';
+                const equipmentId = borrow.equipment ? borrow.equipment.equipmentId : null;
+                const imageUrl = borrow.equipment ? transformGoogleDriveUrl(borrow.equipment.images?.[0]) : null;
+
                 return (
                      <Card key={borrow.id} className="overflow-hidden bg-card/60 border">
                         <CardHeader>
@@ -462,8 +469,8 @@ export default function ProfilePage() {
                         </CardHeader>
                         <CardContent className="p-4 pt-0 flex items-center gap-3">
                              <Image 
-                                src={imageUrl}
-                                alt={borrow.equipment.name}
+                                src={imageUrl || '/images/placeholder-default.png'}
+                                alt={equipmentName || 'Equipment image'}
                                 width={40}
                                 height={40}
                                 className="rounded object-cover aspect-square"
@@ -475,8 +482,8 @@ export default function ProfilePage() {
                                 }}
                             />
                             <div className='flex-grow'>
-                                <span className='font-medium text-base'>{borrow.equipment.name}</span>
-                                {borrow.equipment.equipmentId && <span className="text-xs text-muted-foreground ml-1">({borrow.equipment.equipmentId})</span>}
+                                <span className='font-medium text-base'>{equipmentName}</span>
+                                {equipmentId && <span className="text-xs text-muted-foreground ml-1">({equipmentId})</span>}
                                 <span className="block text-xs text-muted-foreground flex items-center gap-1 mt-1">
                                     <Clock className='h-3 w-3'/> 
                                     Duration: {calculateDuration(borrow.checkoutTime, borrow.actualReturnTime, borrow.approvedStartTime)}

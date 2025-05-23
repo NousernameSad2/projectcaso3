@@ -73,15 +73,15 @@ export async function GET(req: NextRequest, context: { params: Promise<{ id: str
   }
 }
 
-// Schema for validating class updates (all fields optional)
+// Schema for validating class updates (all fields optional, but with min length if provided)
 const ClassUpdateSchema = z.object({
   courseCode: z.string().min(3, { message: "Course code must be at least 3 characters." }).optional(),
   section: z.string().min(1, { message: "Section is required." }).optional(),
   semester: z.string().min(5, { message: "Semester format incorrect (e.g., 'AY23-24 1st')." }).optional(),
-  ficId: z.string().optional(),
+  ficId: z.string().optional(), // Remains optional in schema; logic below enforces for Staff if provided
   isActive: z.boolean().optional(),
   academicYear: z.string().optional(),
-  schedule: z.string().optional(),
+  schedule: z.string().min(1, { message: "Class schedule cannot be empty if provided." }).optional(),
   venue: z.string().optional(),
 });
 
@@ -89,7 +89,6 @@ const ClassUpdateSchema = z.object({
 export async function PATCH(req: NextRequest, context: { params: Promise<{ id: string }> }) {
   const params = await context.params;
   const classId = params.id;
-  // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can update classes.' }, { status: 403 });
@@ -103,9 +102,31 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
   try {
     const body = await req.json();
     const validatedData = ClassUpdateSchema.parse(body);
+    
+    const updatePayload: Prisma.ClassUpdateInput = {};
 
-    // *** NEW: Authorization Check for FACULTY ***
-    if (role === UserRole.FACULTY) {
+    // Role-specific validation and payload construction
+    if (role === UserRole.STAFF) {
+      // If schedule is explicitly provided by staff and is empty, it's an error.
+      if (body.hasOwnProperty('schedule') && !validatedData.schedule) {
+        return NextResponse.json({ message: 'Class schedule cannot be empty when provided.', errors: { schedule: ['Schedule is required if you intend to set/change it.'] } }, { status: 400 });
+      }
+      
+      const { ficId, ...restOfValidatedData } = validatedData;
+      Object.assign(updatePayload, restOfValidatedData);
+
+      if (ficId) { // If ficId is provided by staff, try to connect to it
+        const facultyUser = await prisma.user.findUnique({
+            where: { id: ficId },
+            select: { id: true, role: true },
+        });
+        if (!facultyUser || facultyUser.role !== UserRole.FACULTY) {
+            return NextResponse.json({ message: `Invalid new Faculty ID: User not found or is not Faculty.` }, { status: 400 });
+        }
+        updatePayload.fic = { connect: { id: ficId } };
+      } // If ficId is not in validatedData (undefined), FIC relation is not changed by staff.
+
+    } else if (role === UserRole.FACULTY) {
       const currentClass = await prisma.class.findUnique({
         where: { id: classId },
         select: { ficId: true },
@@ -117,48 +138,42 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         console.warn(`Faculty ${userId} attempted to update class ${classId} not assigned to them (FIC: ${currentClass.ficId})`);
         return NextResponse.json({ message: 'Forbidden: You can only update classes you are assigned to.' }, { status: 403 });
       }
-    }
-    // *** END NEW: Authorization Check ***
 
-    // Ensure at least one field is being updated
-    if (Object.keys(validatedData).length === 0) {
-      return NextResponse.json({ message: 'No update data provided' }, { status: 400 });
-    }
-    
-    // If ficId is being updated, validate the new FIC
-    if (validatedData.ficId) {
-        const facultyUser = await prisma.user.findUnique({
-            where: { id: validatedData.ficId },
-            select: { id: true, role: true },
-        });
-        if (!facultyUser || facultyUser.role !== UserRole.FACULTY) {
-            return NextResponse.json({ message: `Invalid new Faculty ID: User not found or is not Faculty.` }, { status: 400 });
-        }
+      // facultyAllowedUpdates will get all validatedData. isActive changes will be ignored as updatePayload.isActive is not set.
+      // updatePayload.fic will be explicitly set to connect to userId, overriding any ficId from validatedData.
+      const { ...facultyAllowedUpdates } = validatedData;
+      Object.assign(updatePayload, facultyAllowedUpdates);
+      // FIC for faculty is always their own ID, ensures it's connected.
+      updatePayload.fic = { connect: { id: userId } }; 
+
+      if (body.hasOwnProperty('schedule') && !validatedData.schedule) {
+        return NextResponse.json({ message: 'Class schedule cannot be empty when provided.', errors: { schedule: ['Schedule is required if you intend to set/change it.'] } }, { status: 400 });
+      }
     }
 
-    // Check for duplicate class ONLY if courseCode, section, or semester is changed
-    if (validatedData.courseCode || validatedData.section || validatedData.semester) {
-        // Get current class details to check against
-        const currentClass = await prisma.class.findUnique({ where: { id: classId } });
-        if (!currentClass) {
-             return NextResponse.json({ message: 'Class not found' }, { status: 404 }); // Should not happen if initial check passed
-        }
-        const checkCode = validatedData.courseCode ?? currentClass.courseCode;
-        const checkSection = validatedData.section ?? currentClass.section;
-        const checkSemester = validatedData.semester ?? currentClass.semester;
-        // academicYear is optional, handle null case gracefully
-        const checkAcademicYear = validatedData.academicYear ?? currentClass.academicYear ?? ''; // Use empty string if null
+    if (Object.keys(updatePayload).length === 0) {
+      return NextResponse.json({ message: 'No valid update data provided or no changes made' }, { status: 400 });
+    }
+
+    // Duplicate check logic
+    if (validatedData.courseCode || validatedData.section || validatedData.semester || validatedData.academicYear) {
+        const currentClassDetails = await prisma.class.findUnique({ where: { id: classId } });
+        if (!currentClassDetails) return NextResponse.json({ message: 'Class not found' }, { status: 404 });
+
+        const checkCode = validatedData.courseCode ?? currentClassDetails.courseCode;
+        const checkSection = validatedData.section ?? currentClassDetails.section;
+        const checkSemester = validatedData.semester ?? currentClassDetails.semester;
+        const checkAcademicYear = validatedData.academicYear ?? currentClassDetails.academicYear ?? '';
         
-        // Check against the correct composite unique constraint including academicYear
         const existingClass = await prisma.class.findUnique({
             where: {
-                courseCode_section_semester_academicYear: { // Use the default prisma index name
-                    courseCode: checkCode, 
-                    section: checkSection, 
-                    semester: checkSemester, 
-                    academicYear: checkAcademicYear 
+                courseCode_section_semester_academicYear: {
+                    courseCode: checkCode,
+                    section: checkSection,
+                    semester: checkSemester,
+                    academicYear: checkAcademicYear
                 },
-                NOT: { id: classId } // Exclude the current class itself
+                NOT: { id: classId }
             }
         });
         if (existingClass) {
@@ -166,21 +181,12 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{ id: s
         }
     }
 
-    // --- Update Class --- 
-    // Prepare data, removing schedule if it's not in the model - NO LONGER NEEDED
-    // const { schedule, ...updateData } = validatedData; // Exclude schedule for now - REMOVED
-
     const updatedClass = await prisma.class.update({
       where: { id: classId },
-      // data: updateData, // Use validatedData directly now - REMOVED
-      data: validatedData,
-      include: { // Include details needed for UI update
-        fic: { 
-          select: { id: true, name: true, email: true },
-        },
-        _count: {
-          select: { enrollments: true },
-        },
+      data: updatePayload,
+      include: { 
+        fic: { select: { id: true, name: true, email: true } },
+        _count: { select: { enrollments: true } },
       },
     });
 

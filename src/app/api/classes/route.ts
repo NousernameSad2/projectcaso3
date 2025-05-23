@@ -12,8 +12,8 @@ const ClassCreateSchema = z.object({
   section: z.string().min(1, { message: "Section is required." }),
   semester: z.string().min(5, { message: "Semester format incorrect (e.g., 'AY23-24 1st')." }), // Basic check
   academicYear: z.string().regex(/^\d{4}-\d{4}$/, { message: "Academic Year must be in YYYY-YYYY format." }), // Added academic year
-  ficId: z.string().min(1, { message: "Faculty ID (ficId) is required."}), // <<< Made required
-  schedule: z.string().optional(), // <<< Add schedule
+  ficId: z.string().optional(), // Stays optional here; logic below handles requirement for Staff
+  schedule: z.string().min(1, { message: "Class schedule is required." }), // Made schedule required
   venue: z.string().optional(),    // <<< Add venue
 });
 
@@ -134,7 +134,6 @@ export async function GET(req: NextRequest) {
 
 // POST: Create a new class (Admin/Faculty only)
 export async function POST(req: NextRequest) {
-  // Verify user is STAFF or FACULTY
   const payload = await verifyAuthAndGetPayload(req);
   if (!payload || (payload.role !== UserRole.STAFF && payload.role !== UserRole.FACULTY)) {
     return NextResponse.json({ message: 'Forbidden: Only Staff or Faculty can create classes.' }, { status: 403 });
@@ -142,18 +141,41 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
+    // Use a temporary schema for initial parsing if ficId handling is complex
+    // For now, let the main schema parse and we add logic below.
     const validatedData = ClassCreateSchema.parse(body);
+
+    let finalFicId = validatedData.ficId;
+
+    if (payload.role === UserRole.FACULTY) {
+      // If faculty, always set their own ID as FIC, overriding any (unlikely) input
+      finalFicId = payload.userId;
+    } else if (payload.role === UserRole.STAFF) {
+      // If staff, FIC is required from input
+      if (!validatedData.ficId) {
+        return NextResponse.json({ message: 'ficId is required for Staff creating a class.', errors: { ficId: ['Faculty ID (ficId) is required.'] } }, { status: 400 });
+      }
+      // finalFicId is already validatedData.ficId from above
+    }
     
-    // Reverted: Spread validatedData directly as ficId is now required
+    // Ensure finalFicId is not undefined before creating if your DB schema requires it (even if Zod allows optional)
+    if (!finalFicId) {
+        // This case should ideally not be hit if logic above is correct for STAFF/FACULTY
+        console.error("Error: finalFicId is undefined before class creation. Role:", payload.role, "Validated ficId:", validatedData.ficId);
+        return NextResponse.json({ message: 'Internal error: FIC ID could not be determined.' }, { status: 500 });
+    }
+
     const newClass = await prisma.class.create({
-      data: { 
-        ...validatedData 
+      data: {
+        ...validatedData,
+        ficId: finalFicId, // Use the determined finalFicId
       }
     });
 
     // Log class creation
-    console.log(`Class created by ${payload.email}: ID=${newClass.id}, Course=${newClass.courseCode}`);
-    return NextResponse.json(newClass, { status: 201 });
+    console.log(`Class created by ${payload.email} (Role: ${payload.role}): ID=${newClass.id}, Course=${newClass.courseCode}, FIC=${finalFicId}`);
+    // Return the created class along with a success message
+    return NextResponse.json({ message: "Class created successfully!", class: newClass }, { status: 201 });
 
   } catch (error) {
     if (error instanceof z.ZodError) {

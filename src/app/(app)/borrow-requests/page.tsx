@@ -7,19 +7,22 @@ import { DataTable } from "@/components/ui/data-table";
 import { columns, type BorrowRequestAdminView } from "./columns";
 import ConfirmReturnModal from "@/components/borrow/ConfirmReturnModal";
 import { DeficiencyType, BorrowStatus, Borrow, Equipment, User, Class, ReservationType } from "@prisma/client";
-import { Input } from "@/components/ui/input";
+// import { Input } from "@/components/ui/input"; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { type ColumnFiltersState } from "@tanstack/react-table";
 import { useSession } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { ScrollText, Database, FileText, AlertCircle, Users } from 'lucide-react';
-import { useQuery } from '@tanstack/react-query';
+import { Database, FileText, AlertCircle, Users, X, UploadCloud, Trash2 } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { format, isValid } from 'date-fns';
 import { transformGoogleDriveUrl } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Loader2 } from "lucide-react";
 
 // --- Type Definitions ---
 type GroupBorrowWithDetails = Borrow & {
@@ -31,6 +34,18 @@ type GroupBorrowWithDetails = Borrow & {
 
 interface GroupedGroupBorrows {
     [groupId: string]: GroupBorrowWithDetails[];
+}
+
+// --- NEW: Type Definitions for Data Requests ---
+interface DataRequestAdminView {
+  id: string;
+  borrower: { id: string; name: string | null; email: string };
+  equipment: { id: string; name: string; equipmentId: string | null } | null;
+  requestSubmissionTime: string; // Or Date
+  dataRequestRemarks: string | null;
+  dataRequestStatus: string | null;
+  dataFiles: { name: string; url: string; id: string; size?: number; type?: string }[]; // Assuming files have a name and URL, and an ID for deletion
+  updatedAt: string; // Or Date, for sorting
 }
 
 // --- Helper Functions (Consider moving to utils) ---
@@ -77,6 +92,17 @@ const fetchGroupBorrows = async (): Promise<GroupBorrowWithDetails[]> => {
     return await response.json() as GroupBorrowWithDetails[];
 };
 
+// --- NEW: Fetch Function for Data Requests ---
+const fetchDataRequests = async (): Promise<DataRequestAdminView[]> => {
+  const response = await fetch('/api/borrows/data-requests'); // New API endpoint
+  if (!response.ok) {
+    if (response.status === 401 || response.status === 403) return [];
+    const errorData: { message?: string } = await response.json().catch(() => ({}));
+    throw new Error(errorData.message || `Failed to fetch data requests: ${response.statusText}`);
+  }
+  return await response.json() as DataRequestAdminView[];
+};
+
 // --- Component --- 
 export default function BorrowRequestsPage() {
   const { data: session, status } = useSession();
@@ -87,6 +113,11 @@ export default function BorrowRequestsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnTarget, setReturnTarget] = useState<{ borrowId: string; equipmentName: string } | null>(null);
+
+  // NEW STATE: To hold the file selected for upload for each request ID
+  const [filesToUpload, setFilesToUpload] = useState<{[key: string]: File | null}>({});
+
+  const queryClient = useQueryClient();
 
   // --- NEW: Fetching Group Borrow Logs --- 
   const { 
@@ -99,6 +130,151 @@ export default function BorrowRequestsPage() {
       enabled: status === 'authenticated',
       staleTime: 1000 * 60 * 2,
   });
+
+  // --- NEW: Fetching Data Requests ---
+  const {
+    data: dataRequests = [],
+    isLoading: isLoadingDataRequests,
+    error: dataRequestsError,
+    refetch: refetchDataRequests, // To refetch after updates
+  } = useQuery<DataRequestAdminView[], Error>({
+    queryKey: ['dataRequestsAdmin'],
+    queryFn: fetchDataRequests,
+    enabled: status === 'authenticated' && (session?.user?.role === UserRole.STAFF || session?.user?.role === UserRole.FACULTY), // Only for admins
+    staleTime: 1000 * 60 * 1, // Refresh every minute
+  });
+
+  // --- NEW: Mutation for Updating Data Request Status ---
+  const updateDataRequestStatusMutation = useMutation<
+    DataRequestAdminView, // Expected response type
+    Error, // Error type
+    { requestId: string; status: string } // Variables type
+  >({
+    mutationFn: async ({ requestId, status }) => {
+      const response = await fetch(`/api/borrows/data-requests/${requestId}`,
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status }),
+        }
+      );
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to update data request status');
+      }
+      return response.json();
+    },
+    onSuccess: () => {
+      toast.success("Data request status updated successfully!");
+      refetchDataRequests(); // Refetch the data requests list
+    },
+    onError: (error) => {
+      toast.error(`Error updating status: ${error.message}`);
+    },
+  });
+
+  // --- NEW: Mutation for Uploading Data File ---
+  const uploadDataFileMutation = useMutation<
+    { message: string; file: { id: string; name: string; url: string }; updatedRequest: DataRequestAdminView },
+    Error,
+    { requestId: string; formData: FormData }
+  >({
+    mutationFn: async ({ requestId, formData }) => {
+      const response = await fetch(`/api/borrows/data-requests/${requestId}/upload`, {
+        method: 'POST',
+        body: formData, // No Content-Type header needed for FormData
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to upload file');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message);
+      refetchDataRequests(); // Refresh list to show new file
+    },
+    onError: (error) => {
+      toast.error(`File upload failed: ${error.message}`);
+    },
+  });
+
+  const handleFileUpload = async (requestId: string) => {
+    const file = filesToUpload[requestId];
+    if (!file) {
+      toast.warning("No file selected to upload.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    uploadDataFileMutation.mutate({ requestId, formData }, {
+      onSuccess: (data) => {
+        toast.success(data.message || "File uploaded successfully!");
+        queryClient.invalidateQueries({ queryKey: ['dataRequestsAdmin'] });
+        queryClient.invalidateQueries({ queryKey: ['userDataRequests'] }); // Also invalidate user's view
+        // Clear the selected file for this request ID and reset the input
+        setFilesToUpload(prev => ({ ...prev, [requestId]: null }));
+        const fileInput = document.getElementById(`file-upload-input-${requestId}`) as HTMLInputElement;
+        if (fileInput) {
+          fileInput.value = ''; // Reset the file input
+        }
+      },
+      onError: (error: Error) => {
+        toast.error(error.message || "File upload failed.");
+        console.error("Upload error:", error);
+      }
+    });
+  };
+
+  // Handler for when a file is selected via the input
+  const onFileSelected = (requestId: string, selectedFile: File | null) => {
+    setFilesToUpload(prev => ({ ...prev, [requestId]: selectedFile }));
+  };
+
+  // --- NEW: Mutation for Deleting Data File ---
+  const deleteDataFileMutation = useMutation<
+    { message: string; updatedRequest: DataRequestAdminView },
+    Error,
+    { requestId: string; fileId: string }
+  >({
+    mutationFn: async ({ requestId, fileId }) => {
+      const response = await fetch(`/api/borrows/data-requests/${requestId}/delete-file`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to delete file');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message);
+      refetchDataRequests(); // Refresh list
+    },
+    onError: (error) => {
+      toast.error(`File deletion failed: ${error.message}`);
+    },
+  });
+
+  const handleDeleteDataFile = (requestId: string, fileIdOrName: string) => {
+    // In a real app, you would show a confirmation dialog first
+    if (deleteDataFileMutation.isPending) return;
+    deleteDataFileMutation.mutate({ requestId, fileId: fileIdOrName }); // Assuming fileIdOrName is the unique ID
+  };
+
+  // Handler to call the mutation
+  const handleUpdateDataRequestStatus = (requestId: string, status: string | null | undefined) => {
+    if (!status) {
+        toast.warning("Please select a status to update.");
+        return;
+    }
+    if (updateDataRequestStatusMutation.isPending) return;
+    updateDataRequestStatusMutation.mutate({ requestId, status });
+  };
 
   // --- NEW: Memoized Grouping Logic --- 
   const groupedGroupLogs = useMemo((): GroupedGroupBorrows => {
@@ -291,7 +467,8 @@ export default function BorrowRequestsPage() {
   };
 
   const openConfirmReturnModal = (borrowRequest: BorrowRequestAdminView | null | undefined) => {
-    if (!borrowRequest?.id) {
+    if (!borrowRequest || !borrowRequest.id || !borrowRequest.equipment?.name) {
+      console.error("Cannot open modal: Missing borrowId or equipment name.", borrowRequest);
       toast.error("Cannot confirm return: Missing Borrow Request info.");
       return;
     }
@@ -366,7 +543,7 @@ export default function BorrowRequestsPage() {
 
   const handleApproveItem = async (borrowId: string | null | undefined) => {
      if (!borrowId) {
-       toast.error("Missing Borrow ID.");
+       toast.error("Cannot approve: Missing Borrow ID.");
        return;
      }
      if (isSubmittingAction) return;
@@ -392,7 +569,7 @@ export default function BorrowRequestsPage() {
   
   const handleRejectItem = async (borrowId: string | null | undefined) => {
      if (!borrowId) {
-        toast.error("Missing Borrow ID.");
+        toast.error("Cannot reject: Missing Borrow ID.");
         return;
      }
      if (isSubmittingAction) return;
@@ -414,6 +591,38 @@ export default function BorrowRequestsPage() {
      } finally {
         setIsSubmittingAction(false);
      }
+  };
+
+  const handleCheckoutItem = async (borrowId: string | null | undefined) => {
+    if (!borrowId) {
+      toast.error("Cannot checkout: Missing Borrow ID.");
+      return;
+    }
+    if (isSubmittingAction) return;
+
+    setIsSubmittingAction(true);
+    try {
+      const response = await fetch('/api/borrows/bulk/checkout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ borrowId }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || `Failed to checkout item (${response.status})`);
+      }
+
+      toast.success(result.message || "Item checked out successfully!");
+      fetchRequestsTableData();
+
+    } catch (e: unknown) {
+      console.error(`Failed to checkout item ${borrowId}:`, e);
+      toast.error(e instanceof Error ? e.message : "Checkout failed.");
+    } finally {
+      setIsSubmittingAction(false);
+    }
   };
 
   if (status === 'loading') {
@@ -514,114 +723,267 @@ export default function BorrowRequestsPage() {
       );
   };
 
+  // --- NEW: Render Function for Data Requests Section ---
+  const renderDataRequestsSection = (): React.ReactNode => {
+    if (isLoadingDataRequests) {
+      return <div className="p-4 text-center"><LoadingSpinner /> Loading data requests...</div>;
+    }
+    if (dataRequestsError) {
+      return <div className="p-4 text-destructive text-center">Error loading data requests: {dataRequestsError.message}</div>;
+    }
+    if (dataRequests.length === 0) {
+      return <p className="text-muted-foreground italic p-4 text-center">No pending data requests.</p>;
+    }
+
+    // Sort by updatedAt descending (newest first)
+    const sortedDataRequests = [...dataRequests].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    return (
+      <div className="space-y-4">
+        {sortedDataRequests.map((req) => (
+          <Card key={req.id} className="bg-card/70 border-border/40">
+            <CardHeader>
+              <div className="flex justify-between items-start">
+                <div>
+                  <CardTitle className="text-lg">
+                    Data Request for: {req.equipment?.name || 'N/A'} ({req.equipment?.equipmentId || 'N/A'})
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    Requested by: {req.borrower.name || req.borrower.email} on {formatDateSafe(req.requestSubmissionTime, 'PPp')}
+                  </CardDescription>
+                </div>
+                <Badge variant={req.dataRequestStatus === 'Fulfilled' ? 'success' : (req.dataRequestStatus === 'Pending' ? 'warning' : 'secondary')}>
+                  {req.dataRequestStatus || 'Unknown'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {req.dataRequestRemarks && (
+                <p className="text-sm p-3 bg-muted/50 rounded-md border border-dashed">
+                  <span className="font-semibold">Remarks:</span> {req.dataRequestRemarks}
+                </p>
+              )}
+              
+              {/* File Management UI */}
+              <div className="space-y-2">
+                <h4 className="text-sm font-medium">Attached Files:</h4>
+                {req.dataFiles && req.dataFiles.length > 0 ? (
+                  <ul className="list-disc list-inside pl-4 text-sm space-y-1">
+                    {req.dataFiles.map(file => (
+                      <li key={file.id || file.name} className="flex justify-between items-center">
+                        {/* For now, assume file.url is a direct link or display name if no URL yet */}
+                        <span className="text-primary truncate max-w-xs flex items-center gap-1">
+                          {file.name}
+                          {file.size && <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>}
+                          {file.type && <Badge variant="outline" className="text-xs scale-90 font-normal">{file.type}</Badge>}
+                        </span>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                          onClick={() => handleDeleteDataFile(req.id, file.id || file.name)} // Pass file identifier
+                          disabled={updateDataRequestStatusMutation.isPending} // Or a dedicated loading state for file operations
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-xs text-muted-foreground italic">No files uploaded yet.</p>
+                )}
+                {/* File Upload Area - Modernized */}
+                <div className="space-y-2 pt-1">
+                  <Label htmlFor={`file-upload-input-${req.id}`} className="text-sm font-medium">
+                    Upload Data File:
+                  </Label>
+                  <div 
+                    className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md cursor-pointer hover:border-primary/70 transition-colors bg-background/50"
+                    onClick={() => document.getElementById(`file-upload-input-${req.id}`)?.click()}
+                  >
+                    <div className="space-y-1 text-center">
+                      <UploadCloud className="mx-auto h-10 w-10 text-muted-foreground" />
+                      <div className="flex text-sm text-muted-foreground">
+                        <span className="relative rounded-md font-medium text-primary focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary hover:text-primary/80">
+                          Click to upload
+                        </span>
+                        <p className="pl-1">or drag and drop (drag-n-drop not implemented yet)</p>
+                      </div>
+                      <p className="text-xs text-muted-foreground/80">Supports CSV, TXT, ZIP, PDF, etc. up to X MB (Update size limit)</p>
+                    </div>
+                  </div>
+                  <input 
+                    type="file" 
+                    id={`file-upload-input-${req.id}`} 
+                    className="sr-only" // Hidden, triggered by the div
+                    onChange={(e) => onFileSelected(req.id, e.target.files ? e.target.files[0] : null)}
+                    disabled={uploadDataFileMutation.isPending || updateDataRequestStatusMutation.isPending}
+                  />
+                  
+                  {filesToUpload[req.id] && (
+                    <div className="mt-2 flex items-center justify-between p-2 border rounded-md bg-muted/30">
+                      <div className="text-sm text-foreground truncate">
+                        Selected: {filesToUpload[req.id]?.name} 
+                        {filesToUpload[req.id]?.size && 
+                          <span className="text-xs text-muted-foreground pl-1">({(filesToUpload[req.id]!.size / 1024).toFixed(1)} KB)</span>
+                        }
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                        onClick={() => {
+                          onFileSelected(req.id, null); // Clear from state
+                          const fileInput = document.getElementById(`file-upload-input-${req.id}`) as HTMLInputElement;
+                          if (fileInput) fileInput.value = ''; // Reset input field
+                        }}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+
+                  <Button 
+                    size="sm" 
+                    className="h-9 text-xs mt-2 w-full bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-70" // Improved styling for visibility
+                    onClick={() => handleFileUpload(req.id)} // Simplified, uses file from state
+                    disabled={!filesToUpload[req.id] || uploadDataFileMutation.isPending || updateDataRequestStatusMutation.isPending} 
+                  >
+                    {uploadDataFileMutation.isPending && uploadDataFileMutation.variables?.requestId === req.id 
+                      ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                      : <UploadCloud className="mr-2 h-4 w-4" /> } 
+                    Confirm & Upload File
+                  </Button>
+                </div>
+              </div>
+
+              {/* Status Update UI */}
+              <div className="flex items-center gap-2 pt-2 border-t border-border/20 mt-3">
+                <Select
+                  defaultValue={req.dataRequestStatus || undefined}
+                  onValueChange={(newStatus) => handleUpdateDataRequestStatus(req.id, newStatus)} // Directly call handler on change
+                  disabled={updateDataRequestStatusMutation.isPending}
+                >
+                  <SelectTrigger className="w-[180px] h-9 text-xs">
+                    <SelectValue placeholder="Update status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Processing">Processing</SelectItem>
+                    <SelectItem value="Fulfilled">Fulfilled</SelectItem>
+                    <SelectItem value="Rejected">Rejected</SelectItem>
+                  </SelectContent>
+                </Select>
+                {/* Button can be removed if Select onValueChange directly triggers update */}
+                {/* <Button 
+                  size="sm" 
+                  onClick={() => handleUpdateDataRequestStatus(req.id, (document.getElementById(`status-select-${req.id}`) as HTMLSelectElement)?.value)} 
+                  disabled={updateDataRequestStatusMutation.isPending}
+                >
+                  {updateDataRequestStatusMutation.isPending && updateDataRequestStatusMutation.variables?.requestId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Status"}
+                </Button> */}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  };
+
   return (
-    <div className="container mx-auto py-10 space-y-8">
-      <h1 className="text-3xl font-bold text-white">Borrow Requests & Logs</h1>
-      <Card className="bg-card/80 border-border/50">
+    <div className="container mx-auto py-6 space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+           <h1 className="text-3xl font-bold tracking-tight text-foreground">Borrow Management</h1>
+           <p className="text-muted-foreground">
+             View and manage all individual and group borrow requests, active checkouts, and pending returns.
+           </p>
+        </div>
+      </div>
+      
+      {/* Main Actions Table */}
+      <Card className="border-border/40">
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <Database className="mr-2 h-5 w-5" /> Data Requests
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Database className="h-6 w-6 text-primary" />
+            All Borrow Actions
           </CardTitle>
-          <CardDescription>Requests for data exports or reports. (Functionality coming soon)</CardDescription>
+          <CardDescription>
+            This table shows all individual borrow transactions. Use filters to narrow down results.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <p className="text-muted-foreground italic">Data request functionality is under development.</p>
+          {isLoadingRequests && <div className="h-60 flex items-center justify-center"><LoadingSpinner /></div>}
+          {requestsError && <div className="text-destructive p-4 text-center">{requestsError}</div>}
+          {!isLoadingRequests && !requestsError && (
+            <DataTable 
+              columns={columns}
+              data={requests} 
+              meta={{
+                onApprove: handleApproveItem, 
+                onReject: handleRejectItem,
+                onCheckout: handleCheckoutItem,
+                onConfirmReturn: openConfirmReturnModal, 
+                isSubmittingAction: isSubmittingAction,
+                approveGroupHandler: handleApproveGroup, 
+                rejectGroupHandler: handleRejectGroup,
+                confirmCheckoutGroupHandler: handleConfirmCheckoutGroup,
+                confirmReturnGroupHandler: handleConfirmReturnGroup,
+              }}
+              columnFilters={columnFilters}
+              onColumnFiltersChange={setColumnFilters}
+            />
+          )}
         </CardContent>
       </Card>
-      <Card className="bg-card/80 border-border/50">
+
+      {/* Section for Grouped Borrow Logs */}
+      <Card className="border-border/40">
+          <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-xl">
+                  <Users className="h-6 w-6 text-primary" />
+                  Group Transaction Logs
+              </CardTitle>
+              <CardDescription>
+                  Overview of all group transactions, including pending, active, and completed ones.
+              </CardDescription>
+          </CardHeader>
+          <CardContent>
+              {isLoadingGroupBorrows && <div className="h-60 flex items-center justify-center"><LoadingSpinner /></div>}
+              {groupBorrowsError && <div className="text-destructive p-4 text-center">Error: {groupBorrowsError.message}</div>}
+              {!isLoadingGroupBorrows && !groupBorrowsError && Object.keys(groupedGroupLogs).length === 0 && (
+                  <p className="text-muted-foreground italic text-center p-4">No group transactions found.</p>
+              )}
+              {!isLoadingGroupBorrows && !groupBorrowsError && Object.keys(groupedGroupLogs).length > 0 && renderGroupBorrowLogs()}
+          </CardContent>
+      </Card>
+
+      {/* --- NEW: Section for Data Requests --- */}
+      <Card className="border-border/40">
         <CardHeader>
-          <CardTitle className="flex items-center">
-            <FileText className="mr-2 h-5 w-5" /> Inventory Logs
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <FileText className="h-6 w-6 text-primary" />
+            Data Requests
           </CardTitle>
-          <CardDescription>Track all inventory movement.</CardDescription>
+          <CardDescription>
+            Manage data requests submitted by borrowers during the return process.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-6">
-            <div className="flex items-center justify-between py-4">
-               <div className="flex items-center gap-2">
-                   <Input
-                     placeholder="Filter by borrower..."
-                     onChange={(event) => {
-                       const currentFilters = columnFilters.filter((f: { id: string; value: unknown }) => f.id !== 'borrower.name');
-                       setColumnFilters([...currentFilters, { id: 'borrower.name', value: event.target.value }]);
-                     }}
-                     className="max-w-sm h-9"
-                   />
-                   <Select
-                     value={columnFilters.find((f: { id: string; value: unknown }) => f.id === 'borrowStatus')?.value as string | undefined}
-                     onValueChange={(value) => {
-                       const currentFilters = columnFilters.filter((f: { id: string; value: unknown }) => f.id !== 'borrowStatus');
-                       const newValue = value === '' ? undefined : value;
-                       console.log('[BorrowRequestsPage] Setting status filter:', newValue);
-                       setColumnFilters([...currentFilters, { id: 'borrowStatus', value: newValue }]);
-                     }}
-                   >
-                     <SelectTrigger className="w-[180px] h-9">
-                       <SelectValue placeholder="Filter by Status" />
-                     </SelectTrigger>
-                     <SelectContent>
-                       {Object.values(BorrowStatus).map((status) => {
-                           if (typeof status !== 'string' || !status) return null;
-                           return (
-                             <SelectItem key={status} value={status}>
-                               {status.charAt(0) + status.slice(1).toLowerCase().replace(/_/g, ' ')}
-                             </SelectItem>
-                           );
-                       })}
-                     </SelectContent>
-                   </Select>
-               </div>
-            </div>
-            {isLoadingRequests && (
-              <div className="flex justify-center items-center py-10">
-                <LoadingSpinner size="lg" />
-              </div>
-            )}
-            {requestsError && (
-              <div className="text-center text-destructive py-10">
-                <p>{requestsError}</p>
-              </div>
-            )}
-            {!isLoadingRequests && !requestsError && (
-               <DataTable 
-                  columns={columns} 
-                  data={requests} 
-                  meta={{
-                     approveGroupHandler: handleApproveGroup,
-                     rejectGroupHandler: handleRejectGroup,
-                     confirmCheckoutGroupHandler: handleConfirmCheckoutGroup,
-                     confirmReturnGroupHandler: handleConfirmReturnGroup,
-                     approveItemHandler: handleApproveItem,
-                     rejectItemHandler: handleRejectItem,
-                     openConfirmReturnModalHandler: openConfirmReturnModal, 
-                     isSubmittingAction: isSubmittingAction,
-                  }}
-                  columnFilters={columnFilters}
-                  onColumnFiltersChange={setColumnFilters}
-               />
-            )}
-          </div>
+          {renderDataRequestsSection()}
         </CardContent>
       </Card>
-      <Card className="bg-card/80 border-border/50">
-        <CardHeader>
-          <CardTitle className="flex items-center">
-            <ScrollText className="mr-2 h-5 w-5" /> Group Borrow Logs
-          </CardTitle>
-          <CardDescription>Overview of all group borrow requests, including reservation type.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {renderGroupBorrowLogs()}
-        </CardContent>
-      </Card>
-      <ConfirmReturnModal
-          isOpen={isReturnModalOpen}
-          onOpenChange={setIsReturnModalOpen}
-          onSubmit={submitReturnConfirmation}
-          isSubmitting={isSubmittingAction}
-          borrowId={returnTarget?.borrowId ?? null}
-          equipmentName={returnTarget?.equipmentName}
-      />
+
+      {returnTarget && (
+        <ConfirmReturnModal
+            isOpen={isReturnModalOpen}
+            onOpenChange={setIsReturnModalOpen}
+            onSubmit={submitReturnConfirmation}
+            isSubmitting={isSubmittingAction}
+            borrowId={returnTarget.borrowId}
+            equipmentName={returnTarget.equipmentName}
+        />
+      )}
     </div>
   );
 } 

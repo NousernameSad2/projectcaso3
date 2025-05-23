@@ -101,6 +101,7 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{borrow
                   // Clear any existing approver/rejecter relations first, then set the new one if applicable.
                   updateData.approvedByFic = { disconnect: true };
                   updateData.approvedByStaff = { disconnect: true };
+                  updateData.acceptedBy = { disconnect: true }; // Also clear acceptedBy
 
                   if (newStatus === BorrowStatus.APPROVED) {
                       if (actorRole === UserRole.FACULTY) {
@@ -108,6 +109,9 @@ export async function PATCH(req: NextRequest, context: { params: Promise<{borrow
                       } else if (actorRole === UserRole.STAFF) {
                           updateData.approvedByStaff = { connect: { id: actorId } };
                       }
+                      // Set acceptance details
+                      updateData.acceptedBy = { connect: { id: actorId } };
+                      updateData.acceptedAt = new Date();
                   } else if (newStatus === BorrowStatus.REJECTED_STAFF) {
                       updateData.approvedByStaff = { connect: { id: actorId } };
                       // approvedByFic is already disconnected
