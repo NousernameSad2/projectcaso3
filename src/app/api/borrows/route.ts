@@ -117,8 +117,8 @@ export async function POST(req: NextRequest) {
     const { equipmentIds, requestedStartTime, requestedEndTime, classId, groupMateIds } = parsedData.data;
 
     // --- START: Validate Reservation Time Window ---    
-    const startHour = new Date(requestedStartTime).getHours();
-    const endHour = new Date(requestedEndTime).getHours();
+    const startHour = requestedStartTime.getHours();
+    const endHour = requestedEndTime.getHours();
 
     if (startHour < 6 || startHour >= 20 || endHour < 6 || endHour >= 20) {
       return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM.' }, { status: 400 });
