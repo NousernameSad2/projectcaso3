@@ -9,7 +9,6 @@ interface EquipmentDetailForDataRequest {
   id: string;
   name: string | null;
   equipmentId: string | null;
-  isDataGenerating: boolean;
   images?: string[] | null;
 }
 
@@ -29,7 +28,7 @@ export async function GET(_request: NextRequest) {
             include: {
                 borrower: { select: { name: true, email: true, id: true } },
                 // Include the primary equipment for context, though we'll build a detailed list
-                equipment: { select: { id: true, name: true, equipmentId: true, isDataGenerating: true, images: true } }, 
+                equipment: { select: { id: true, name: true, equipmentId: true, images: true } }, 
                 // Crucially, we need requestedEquipmentIds from the Borrow model itself
             },
             orderBy: { updatedAt: 'desc' },
@@ -44,13 +43,12 @@ export async function GET(_request: NextRequest) {
                         where: {
                             id: { in: req.requestedEquipmentIds }
                         },
-                        select: { id: true, name: true, equipmentId: true, isDataGenerating: true, images: true }
+                        select: { id: true, name: true, equipmentId: true, images: true }
                     });
                     detailedEquipmentList = equipmentDetailsFromDb.map(eq => ({
                         id: eq.id,
                         name: eq.name,
                         equipmentId: eq.equipmentId,
-                        isDataGenerating: eq.isDataGenerating ?? false, 
                         images: eq.images,
                     }));
                 } else if (req.equipment) { 
@@ -61,7 +59,6 @@ export async function GET(_request: NextRequest) {
                         id: req.equipment.id,
                         name: req.equipment.name,
                         equipmentId: req.equipment.equipmentId,
-                        isDataGenerating: req.equipment.isDataGenerating ?? false,
                         images: req.equipment.images
                     }];
                 }

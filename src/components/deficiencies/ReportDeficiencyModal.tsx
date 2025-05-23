@@ -30,7 +30,7 @@ import { Label } from "@/components/ui/label";
 
 // Define the shape of the borrow data expected (simplified for modal)
 type BorrowItemForModal = Pick<Borrow, 'id' | 'borrowGroupId'> & {
-  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' | 'isDataGenerating'>;
+  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' /* | 'isDataGenerating' */>;
 };
 
 // Zod schema for the deficiency form
@@ -287,9 +287,8 @@ export default function ReportDeficiencyModal({
                     <div className="space-y-2 py-2">
                         <FormLabel>Select Equipment for Data Request:</FormLabel>
                         <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border p-2">
-                            {itemsToReport.filter(item => item.equipment.isDataGenerating).length > 0 ? (
+                            {itemsToReport.length > 0 ? (
                                 itemsToReport
-                                    .filter(item => item.equipment.isDataGenerating)
                                     .map(item => (
                                         <div key={item.equipment.id} className="flex items-center space-x-2">
                                             <Checkbox
@@ -309,7 +308,7 @@ export default function ReportDeficiencyModal({
                                         </div>
                                     ))
                             ) : (
-                                <p className="text-sm text-muted-foreground px-1">No data-generating equipment in this selection.</p>
+                                <p className="text-sm text-muted-foreground px-1">No equipment items in this selection.</p>
                             )}
                         </div>
                     </div>

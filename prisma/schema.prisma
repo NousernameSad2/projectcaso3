@@ -130,7 +130,6 @@ model Equipment {
   borrowRecords    Borrow[]          // Relation to Borrow records
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
-  isDataGenerating Boolean         @default(false)
 }
 
 model Class {

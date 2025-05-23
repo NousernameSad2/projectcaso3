@@ -18,7 +18,7 @@ import { transformGoogleDriveUrl } from "@/lib/utils";
 // Define the shape of the data expected from the user borrows endpoint
 // Make sure this includes fields needed by the modal (id, borrowGroupId, equipment details)
 type UserBorrowView = Borrow & {
-  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' | 'images' | 'isDataGenerating'>;
+  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' | 'images' /* | 'isDataGenerating' */>;
   class: Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'>;
   expectedReturnTime: Date | null;
   borrowGroupId: string | null;

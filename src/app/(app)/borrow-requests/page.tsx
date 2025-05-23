@@ -199,6 +199,32 @@ export default function BorrowRequestsPage() {
     },
   });
 
+  // --- NEW: Mutation for Cancelling/Deleting Data Request ---
+  const cancelDataRequestMutation = useMutation<
+    { message: string }, // Expected response type
+    Error, // Error type
+    { requestId: string } // Variables type
+  >({
+    mutationFn: async ({ requestId }) => {
+      const response = await fetch(`/api/borrows/data-requests/${requestId}`, {
+        method: 'DELETE',
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to cancel data request');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || "Data request cancelled successfully!");
+      refetchDataRequests(); // Refetch the data requests list
+      queryClient.invalidateQueries({ queryKey: ['userDataRequests'] }); // Also invalidate user's view if they have one
+    },
+    onError: (error) => {
+      toast.error(`Error cancelling request: ${error.message}`);
+    },
+  });
+
   const handleFileUpload = async (requestId: string) => {
     const file = filesToUpload[requestId];
     if (!file) {
@@ -274,6 +300,13 @@ export default function BorrowRequestsPage() {
     }
     if (updateDataRequestStatusMutation.isPending) return;
     updateDataRequestStatusMutation.mutate({ requestId, status });
+  };
+
+  const handleCancelDataRequest = (requestId: string, equipmentName: string | null | undefined) => {
+    const requestNameToConfirm = equipmentName || `request ID ${requestId.substring(0, 8)}`;
+    if (confirm(`Are you sure you want to cancel the data request for ${requestNameToConfirm}? This action cannot be undone.`)) {
+      cancelDataRequestMutation.mutate({ requestId });
+    }
   };
 
   // --- NEW: Memoized Grouping Logic --- 
@@ -862,7 +895,7 @@ export default function BorrowRequestsPage() {
                 <Select
                   defaultValue={req.dataRequestStatus || undefined}
                   onValueChange={(newStatus) => handleUpdateDataRequestStatus(req.id, newStatus)} // Directly call handler on change
-                  disabled={updateDataRequestStatusMutation.isPending}
+                  disabled={updateDataRequestStatusMutation.isPending || cancelDataRequestMutation.isPending}
                 >
                   <SelectTrigger className="w-[180px] h-9 text-xs">
                     <SelectValue placeholder="Update status..." />
@@ -874,14 +907,18 @@ export default function BorrowRequestsPage() {
                     <SelectItem value="Rejected">Rejected</SelectItem>
                   </SelectContent>
                 </Select>
-                {/* Button can be removed if Select onValueChange directly triggers update */}
-                {/* <Button 
-                  size="sm" 
-                  onClick={() => handleUpdateDataRequestStatus(req.id, (document.getElementById(`status-select-${req.id}`) as HTMLSelectElement)?.value)} 
-                  disabled={updateDataRequestStatusMutation.isPending}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs text-destructive hover:border-destructive/70 hover:text-destructive"
+                  onClick={() => handleCancelDataRequest(req.id, req.equipment?.name)}
+                  disabled={updateDataRequestStatusMutation.isPending || cancelDataRequestMutation.isPending || (req.dataRequestStatus === 'Fulfilled' && req.dataFiles.length > 0)}
                 >
-                  {updateDataRequestStatusMutation.isPending && updateDataRequestStatusMutation.variables?.requestId === req.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update Status"}
-                </Button> */}
+                  {cancelDataRequestMutation.isPending && cancelDataRequestMutation.variables?.requestId === req.id 
+                    ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                    : <Trash2 className="mr-2 h-4 w-4" />}
+                  Cancel Request
+                </Button>
               </div>
             </CardContent>
           </Card>
