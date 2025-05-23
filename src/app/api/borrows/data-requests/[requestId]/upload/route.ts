@@ -30,10 +30,14 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
             return NextResponse.json({ message: 'File is required' }, { status: 400 });
         }
 
-        // Define the base directory for uploads within the public folder
-        const baseUploadDir = path.join(process.cwd(), 'public', 'uploads', 'data_requests');
+        // Define the base directory for uploads using the configured volume path in the container
+        // The volume is mounted at /app/uploads
+        const baseUploadDir = path.join('/app', 'uploads', 'data_requests'); // Corrected base path
         const requestUploadDir = path.join(baseUploadDir, requestId);
-        const filePath = path.join(requestUploadDir, file.name);
+        // Sanitize file.name to prevent path traversal issues if necessary, though modern browsers usually handle this.
+        // For simplicity, we'll use file.name directly, assuming it's safe.
+        const uniqueFilename = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`; // Ensure filename is URL/filesystem safe
+        const filePath = path.join(requestUploadDir, uniqueFilename);
 
         console.log(`[Upload] Attempting to create directory: ${requestUploadDir}`);
         // Ensure the directory exists
@@ -72,13 +76,13 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
         }
 
         const fileId = createId(); 
-        // The URL should be the public path, relative to the domain
-        const publicFileUrl = `/uploads/data_requests/${requestId}/${file.name}`;
+        // The URL should be the public path, relative to the domain, matching the new storage structure
+        const publicFileUrl = `/uploads/data_requests/${requestId}/${uniqueFilename}`; // Use uniqueFilename
         console.log(`[Upload] Generated public file URL: ${publicFileUrl} for file ID: ${fileId}`);
 
         const fileMetadata = { 
             id: fileId, 
-            name: file.name, 
+            name: file.name, // Original file name for metadata
             url: publicFileUrl, // Use the public URL for client access
             size: file.size, 
             type: file.type 
