@@ -46,7 +46,8 @@ export async function DELETE(req: NextRequest, context: { params: Promise<{ requ
 
         // Construct the file path on disk
         // The file.name comes from the metadata, which was derived from the original upload.
-        const filePathOnDisk = path.join(process.cwd(), 'public', 'uploads', 'data_requests', requestId, fileToDelete.name);
+        const diskFilename = path.basename(fileToDelete.url); // Extracts uniqueFilename from the URL
+        const filePathOnDisk = path.join(process.cwd(), 'public', 'uploads', 'data_requests', requestId, diskFilename);
 
         try {
             await fs.unlink(filePathOnDisk);
