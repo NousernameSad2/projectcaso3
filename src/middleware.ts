@@ -46,10 +46,11 @@ export const config = {
      * - login (the login page itself)
      * - register (the register page)
      * - images (static image assets)
+     * - uploads (static file uploads)
      * - Any other public pages (e.g., /public/*, /)
      * - root path '/' (if it should be public, otherwise remove if you want to protect it too)
      */
-    '/((?!api|_next/static|_next/image|favicon.ico|login|register|images|$).*)', // Adjusted to ensure root '/' is not matched by default if it's public. 
+    '/((?!api|_next/static|_next/image|favicon.ico|login|register|images|uploads|$).*)', // Adjusted to ensure root '/' is not matched by default if it's public. 
                                                                               // If you want to protect the homepage, remove the '|$' part and ensure it's not in the negative lookahead.
   ],
 }; 

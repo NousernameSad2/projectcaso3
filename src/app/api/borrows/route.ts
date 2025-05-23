@@ -116,9 +116,16 @@ export async function POST(req: NextRequest) {
     // Destructure data using correct field names from reverted schema
     const { equipmentIds, requestedStartTime, requestedEndTime, classId, groupMateIds } = parsedData.data;
 
+    // --- Add detailed logging for incoming dates ---
+    console.log("Backend Validation - Original requestedStartTime:", body.requestedStartTime, "Parsed:", requestedStartTime.toISOString(), "Server Local:", requestedStartTime.toString());
+    console.log("Backend Validation - Original requestedEndTime:", body.requestedEndTime, "Parsed:", requestedEndTime.toISOString(), "Server Local:", requestedEndTime.toString());
+    // --- End detailed logging ---
+
     // --- START: Validate Reservation Time Window ---    
     const startHour = requestedStartTime.getHours();
     const endHour = requestedEndTime.getHours();
+
+    console.log("Backend Validation - Start Hour (server local):", startHour, "End Hour (server local):", endHour);
 
     if (startHour < 6 || startHour >= 20 || endHour < 6 || endHour >= 20) {
       return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM.' }, { status: 400 });
