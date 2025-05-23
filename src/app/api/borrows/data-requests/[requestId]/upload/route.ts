@@ -32,7 +32,7 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
 
         // Define the base directory for uploads using the configured volume path in the container
         // The volume is mounted at /app/uploads
-        const baseUploadDir = path.join('/app', 'uploads', 'data_requests'); // Corrected base path
+        const baseUploadDir = path.join(process.cwd(), 'public', 'uploads', 'data_requests'); // Corrected base path
         const requestUploadDir = path.join(baseUploadDir, requestId);
         // Sanitize file.name to prevent path traversal issues if necessary, though modern browsers usually handle this.
         // For simplicity, we'll use file.name directly, assuming it's safe.

@@ -1118,7 +1118,7 @@ function AdminDataRequestsDashboardPanel() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.accessToken}` 
         },
-        body: JSON.stringify({ dataRequestStatus: status }),
+        body: JSON.stringify({ status }),
       });
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
