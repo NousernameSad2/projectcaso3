@@ -89,54 +89,73 @@ export async function PATCH(request: Request) {
              return NextResponse.json({ error: 'Forbidden: You are not authorized to request return for this group.' }, { status: 403 });
         }
 
-        // 4. Prepare data for update
-        // Define a type for the update payload
-        interface BorrowUpdatePayload {
-            borrowStatus: BorrowStatus;
-            dataRequested?: boolean;
-            dataRequestStatus?: string | null;
-            dataRequestRemarks?: string | null;
-            requestedEquipmentIds?: string[];
-        }
+        let totalUpdatedCount = 0;
 
-        const updateDataPayload: BorrowUpdatePayload = {
-            borrowStatus: BorrowStatus.PENDING_RETURN,
-        };
+        if (requestDataValue && parsedRequestedEquipmentIds && parsedRequestedEquipmentIds.length > 0) {
+            // Scenario 1: Data is requested for specific items
+            console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Processing with data request for specific equipment IDs:`, parsedRequestedEquipmentIds);
 
-        if (requestDataValue) {
-            updateDataPayload.dataRequested = true;
-            updateDataPayload.dataRequestStatus = 'Pending';
-            if (dataRequestRemarksValue) {
-                updateDataPayload.dataRequestRemarks = dataRequestRemarksValue;
-            }
-            updateDataPayload.requestedEquipmentIds = parsedRequestedEquipmentIds || []; // Use parsed IDs or default to empty array
+            // Update items for which data IS requested
+            const itemsWithDataRequestUpdate = await prisma.borrow.updateMany({
+                where: {
+                    borrowGroupId: groupId,
+                    equipmentId: { in: parsedRequestedEquipmentIds }, // Target specific equipment
+                    borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE] },
+                },
+                data: {
+                    borrowStatus: BorrowStatus.PENDING_RETURN,
+                    dataRequested: true,
+                    dataRequestStatus: 'Pending',
+                    dataRequestRemarks: dataRequestRemarksValue, // Apply remarks to these items
+                },
+            });
+            totalUpdatedCount += itemsWithDataRequestUpdate.count;
+            console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Updated ${itemsWithDataRequestUpdate.count} items WITH data request.`);
+
+            // Update items for which data IS NOT requested (but part of the same group and return operation)
+            const itemsWithoutDataRequestUpdate = await prisma.borrow.updateMany({
+                where: {
+                    borrowGroupId: groupId,
+                    equipmentId: { notIn: parsedRequestedEquipmentIds }, // Target other equipment in the group
+                    borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE] },
+                },
+                data: {
+                    borrowStatus: BorrowStatus.PENDING_RETURN,
+                    dataRequested: false,
+                    dataRequestStatus: null,
+                    dataRequestRemarks: null,
+                },
+            });
+            totalUpdatedCount += itemsWithoutDataRequestUpdate.count;
+            console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Updated ${itemsWithoutDataRequestUpdate.count} items WITHOUT data request.`);
+
         } else {
-            updateDataPayload.dataRequested = false;
-            updateDataPayload.dataRequestRemarks = null;
-            updateDataPayload.dataRequestStatus = null;
-            updateDataPayload.requestedEquipmentIds = [];
+            // Scenario 2: No data is requested, or no specific equipment IDs provided for data request
+            // Update all eligible items in the group to PENDING_RETURN and ensure data request fields are cleared/false
+            console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Processing WITHOUT specific data requests for items, or requestData was false.`);
+            const updateAllEligibleResult = await prisma.borrow.updateMany({
+                where: {
+                    borrowGroupId: groupId,
+                    borrowStatus: { in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE] },
+                },
+                data: {
+                    borrowStatus: BorrowStatus.PENDING_RETURN,
+                    dataRequested: false, // Explicitly set to false if no data requested for any
+                    dataRequestStatus: null,
+                    dataRequestRemarks: null,
+                },
+            });
+            totalUpdatedCount = updateAllEligibleResult.count;
+            console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Updated ${totalUpdatedCount} items (no specific data requests).`);
         }
         
-        console.log(`API /borrows/bulk/request-return PATCH (groupId: ${groupId}) - Prisma updateMany data:`, JSON.stringify(updateDataPayload, null, 2));
-
-        // Update eligible borrow items in the group
-        const updateResult = await prisma.borrow.updateMany({
-            where: {
-                borrowGroupId: groupId,
-                borrowStatus: {
-                    in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE]
-                }
-            },
-            data: updateDataPayload,
-        });
-
         // 5. Handle Response
-        if (updateResult.count === 0) {
+        if (totalUpdatedCount === 0) {
             // This could happen if all items were already returned or pending return
             return NextResponse.json({ message: 'No active or overdue items found in the group to request return for.', count: 0 });
         }
 
-        return NextResponse.json({ message: `Successfully requested return for ${updateResult.count} items in group ${groupId}.`, count: updateResult.count });
+        return NextResponse.json({ message: `Successfully requested return for ${totalUpdatedCount} items in group ${groupId}.`, count: totalUpdatedCount });
 
     } catch (error) {
         console.error(`Failed to request return for group ${groupId}:`, error);
