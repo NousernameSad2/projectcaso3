@@ -35,14 +35,17 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
         const requestUploadDir = path.join(baseUploadDir, requestId);
         const filePath = path.join(requestUploadDir, file.name);
 
+        console.log(`[Upload] Attempting to create directory: ${requestUploadDir}`);
         // Ensure the directory exists
         try {
             await fs.mkdir(requestUploadDir, { recursive: true });
+            console.log(`[Upload] Directory ensured: ${requestUploadDir}`);
         } catch (dirError) {
-            console.error(`API Error - Failed to create directory ${requestUploadDir}:`, dirError);
+            console.error(`[Upload API Error] Failed to create directory ${requestUploadDir}:`, dirError);
             return NextResponse.json({ message: 'Failed to create upload directory.' }, { status: 500 });
         }
 
+        console.log(`[Upload] Attempting to write file to: ${filePath}`);
         // Stream file to disk
         try {
             if (!file.stream) {
@@ -55,9 +58,9 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
                 // @ts-expect-error ReadableStream is not assignable to NodeJS.ReadableStream
                 await pipeline(file.stream(), fsSync.createWriteStream(filePath));
             }
-            console.log(`File streamed successfully to: ${filePath}`);
+            console.log(`[Upload] File streamed successfully to: ${filePath}`);
         } catch (writeError) {
-            console.error(`API Error - Failed to write file ${filePath}:`, writeError);
+            console.error(`[Upload API Error] Failed to write file ${filePath}:`, writeError);
             // Attempt to delete partial file on error
             try {
                 await fs.unlink(filePath);
@@ -71,6 +74,8 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
         const fileId = createId(); 
         // The URL should be the public path, relative to the domain
         const publicFileUrl = `/uploads/data_requests/${requestId}/${file.name}`;
+        console.log(`[Upload] Generated public file URL: ${publicFileUrl} for file ID: ${fileId}`);
+
         const fileMetadata = { 
             id: fileId, 
             name: file.name, 

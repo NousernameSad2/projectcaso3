@@ -6,6 +6,8 @@ import { UserRole } from '@prisma/client'; // Import UserRole if you have it def
 export default withAuth(
   // `withAuth` augments your `Request` with the user's token.
   function middleware(req) {
+    console.log(`[Middleware Executing] Path: ${req.nextUrl.pathname}`);
+
     // Check if the user is trying to access the reports page
     if (req.nextUrl.pathname.startsWith('/reports')) {
       // Check if the user is authenticated and their role
