@@ -6,6 +6,7 @@ import { UserRole, BorrowStatus, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from "@/lib/authOptions";
 import { createId } from '@paralleldrive/cuid2';
+import { formatInTimeZone } from 'date-fns-tz';
 
 // GET: Fetch borrow records, optionally filtering by status
 export async function GET(req: NextRequest) {
@@ -113,22 +114,23 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ message: 'Invalid input', errors: parsedData.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    // Destructure data using correct field names from reverted schema
     const { equipmentIds, requestedStartTime, requestedEndTime, classId, groupMateIds } = parsedData.data;
+    
+    const facilityTimeZone = 'Asia/Manila';
 
     // --- Add detailed logging for incoming dates ---
-    console.log("Backend Validation - Original requestedStartTime:", body.requestedStartTime, "Parsed:", requestedStartTime.toISOString(), "Server Local:", requestedStartTime.toString());
-    console.log("Backend Validation - Original requestedEndTime:", body.requestedEndTime, "Parsed:", requestedEndTime.toISOString(), "Server Local:", requestedEndTime.toString());
+    console.log("Backend Validation - Original requestedStartTime:", body.requestedStartTime, "Parsed (UTC):", requestedStartTime.toISOString());
+    console.log("Backend Validation - Original requestedEndTime:", body.requestedEndTime, "Parsed (UTC):", requestedEndTime.toISOString());
     // --- End detailed logging ---
 
-    // --- START: Validate Reservation Time Window ---    
-    const startHour = requestedStartTime.getHours();
-    const endHour = requestedEndTime.getHours();
+    // --- START: Validate Reservation Time Window (Philippine Time) ---    
+    const startHourPHT = parseInt(formatInTimeZone(requestedStartTime, facilityTimeZone, 'H'), 10);
+    const endHourPHT = parseInt(formatInTimeZone(requestedEndTime, facilityTimeZone, 'H'), 10);
 
-    console.log("Backend Validation - Start Hour (server local):", startHour, "End Hour (server local):", endHour);
+    console.log(`Backend Validation - Start Hour (${facilityTimeZone}):`, startHourPHT, `End Hour (${facilityTimeZone}):`, endHourPHT);
 
-    if (startHour < 6 || startHour >= 20 || endHour < 6 || endHour >= 20) {
-      return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM.' }, { status: 400 });
+    if (startHourPHT < 6 || startHourPHT >= 20 || endHourPHT < 6 || endHourPHT >= 20) {
+      return NextResponse.json({ message: 'Reservations must be between 6:00 AM and 8:00 PM Philippine Time.' }, { status: 400 });
     }
     // --- END: Validate Reservation Time Window --- 
 
