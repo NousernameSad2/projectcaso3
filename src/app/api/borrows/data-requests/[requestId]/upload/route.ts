@@ -5,7 +5,9 @@ import { getServerSession } from 'next-auth/next';
 import { authOptions } from "@/lib/authOptions";
 import { createId } from '@paralleldrive/cuid2';
 import fs from 'fs/promises'; // For file system operations
+import fsSync from 'fs'; // For stream operations
 import path from 'path'; // For path manipulation
+import { pipeline } from 'stream/promises'; // For stream pipeline
 
 export async function POST(req: NextRequest, context: { params: Promise<{ requestId: string }> }) {
     const session = await getServerSession(authOptions);
@@ -41,14 +43,28 @@ export async function POST(req: NextRequest, context: { params: Promise<{ reques
             return NextResponse.json({ message: 'Failed to create upload directory.' }, { status: 500 });
         }
 
-        // Convert file to buffer and write to disk
+        // Stream file to disk
         try {
-            const bytes = await file.arrayBuffer();
-            const buffer = Buffer.from(bytes);
-            await fs.writeFile(filePath, buffer);
-            console.log(`File uploaded successfully to: ${filePath}`);
+            if (!file.stream) {
+                // Fallback for environments where file.stream() might not be available (though standard in Node/Next.js)
+                console.warn("File.stream() not available, falling back to arrayBuffer. This might be inefficient for large files.");
+                const bytes = await file.arrayBuffer();
+                const buffer = Buffer.from(bytes);
+                await fs.writeFile(filePath, buffer);
+            } else {
+                // @ts-expect-error ReadableStream is not assignable to NodeJS.ReadableStream
+                await pipeline(file.stream(), fsSync.createWriteStream(filePath));
+            }
+            console.log(`File streamed successfully to: ${filePath}`);
         } catch (writeError) {
             console.error(`API Error - Failed to write file ${filePath}:`, writeError);
+            // Attempt to delete partial file on error
+            try {
+                await fs.unlink(filePath);
+                console.log(`Partially written file ${filePath} deleted.`);
+            } catch (cleanupError) {
+                console.error(`API Error - Failed to delete partially written file ${filePath}:`, cleanupError);
+            }
             return NextResponse.json({ message: 'Failed to save uploaded file.' }, { status: 500 });
         }
 
