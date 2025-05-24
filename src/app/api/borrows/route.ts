@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
                         requestedStartTime: requestedStartTime,
                         requestedEndTime: requestedEndTime,
                         borrowStatus: BorrowStatus.PENDING,
-                        classId: classId,
+                        classId: classId || null,
                         borrowGroupId: generatedBorrowGroupId, // Use the generated group ID (null if no mates)
                     },
                     select: { id: true, borrowGroupId: true } 

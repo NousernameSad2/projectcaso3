@@ -42,7 +42,7 @@ import {
     TableRow,
 } from "@/components/ui/table"; // Added Table components
 import { Badge } from "@/components/ui/badge";
-import { SearchableSelect } from '@/components/ui/searchable-select'; // NEW IMPORT
+import { MultiSearchableSelect } from '@/components/ui/multi-searchable-select'; // NEW IMPORT FOR MULTISELECT
 
 // Interface for the API response data
 interface DashboardStats {
@@ -177,10 +177,13 @@ export default function ReportsPage() {
   // --- State for Report Filters ---
   const [reportType, setReportType] = useState<ReportType | undefined>();
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
-  const [selectedCourse, setSelectedCourse] = useState<string>('all'); // Default to 'all'
-  const [selectedFic, setSelectedFic] = useState<string>('all'); // Default to 'all'
-  const [selectedEquipment, setSelectedEquipment] = useState<string>('all'); // Default to 'all'
-  const [selectedBorrower, setSelectedBorrower] = useState<string>('all'); // Default to 'all' for Borrower filter
+  const [selectedCourse, setSelectedCourse] = useState<string[]>([]); // Default to empty array for multi-select
+  const [selectedFic, setSelectedFic] = useState<string[]>([]); // Default to empty array for multi-select
+  const [selectedEquipment, setSelectedEquipment] = useState<string[]>([]); // Default to empty array for multi-select
+  const [selectedBorrower, setSelectedBorrower] = useState<string[]>([]); // Default to empty array for multi-select
+  const [selectedBorrowContext, setSelectedBorrowContext] = useState<string>('all'); // NEW STATE for borrow context filter
+  const [selectedReturnStatus, setSelectedReturnStatus] = useState<string>('all'); // NEW STATE for return status filter
+  const [selectedUtilizationClasses, setSelectedUtilizationClasses] = useState<string[]>([]); // NEW STATE for utilization classes filter
 
   // --- State for Live Report Preview ---
   const [liveReportData, setLiveReportData] = useState<Record<string, unknown>[] | null>(null);
@@ -233,19 +236,27 @@ export default function ReportsPage() {
       if (dateRange?.to) {
           params.append('endDate', formatDateFns(dateRange.to, 'yyyy-MM-dd'));
       }
-      if (selectedCourse !== 'all') {
-          params.append('courseId', selectedCourse);
+      if (selectedCourse.length > 0) {
+          selectedCourse.forEach(courseId => params.append('courseId', courseId));
       }
-      if (selectedFic !== 'all') {
-          params.append('ficId', selectedFic);
+      if (selectedFic.length > 0) {
+          selectedFic.forEach(ficId => params.append('ficId', ficId));
       }
-      if (selectedEquipment !== 'all') {
-          params.append('equipmentId', selectedEquipment);
+      if (selectedEquipment.length > 0) {
+          selectedEquipment.forEach(equipmentId => params.append('equipmentId', equipmentId));
       }
-      if (selectedBorrower !== 'all') {
-          params.append('borrowerId', selectedBorrower);
+      if (selectedBorrower.length > 0) {
+          selectedBorrower.forEach(borrowerId => params.append('borrowerId', borrowerId));
       }
-      // Add other filters to params as needed
+      if (selectedBorrowContext !== 'all') {
+          params.append('borrowContext', selectedBorrowContext);
+      }
+      if (selectedReturnStatus !== 'all') {
+          params.append('returnStatus', selectedReturnStatus);
+      }
+      if (reportType === ReportType.EQUIPMENT_UTILIZATION && selectedUtilizationClasses.length > 0) {
+        selectedUtilizationClasses.forEach(classId => params.append('classId', classId));
+      }
 
       const apiUrl = `/api/reports/generate?${params.toString()}`;
       console.log("Requesting CSV report:", apiUrl);
@@ -274,17 +285,26 @@ export default function ReportsPage() {
       if (dateRange?.to) {
           params.append('endDate', formatDateFns(dateRange.to, 'yyyy-MM-dd'));
       }
-      if (selectedCourse !== 'all') {
-          params.append('courseId', selectedCourse);
+      if (selectedCourse.length > 0) {
+          selectedCourse.forEach(courseId => params.append('courseId', courseId));
       }
-      if (selectedFic !== 'all') {
-          params.append('ficId', selectedFic);
+      if (selectedFic.length > 0) {
+          selectedFic.forEach(ficId => params.append('ficId', ficId));
       }
-      if (selectedEquipment !== 'all') {
-          params.append('equipmentId', selectedEquipment);
+      if (selectedEquipment.length > 0) {
+          selectedEquipment.forEach(equipmentId => params.append('equipmentId', equipmentId));
       }
-      if (selectedBorrower !== 'all') {
-          params.append('borrowerId', selectedBorrower);
+      if (selectedBorrower.length > 0) {
+          selectedBorrower.forEach(borrowerId => params.append('borrowerId', borrowerId));
+      }
+      if (selectedBorrowContext !== 'all') {
+          params.append('borrowContext', selectedBorrowContext);
+      }
+      if (selectedReturnStatus !== 'all') {
+          params.append('returnStatus', selectedReturnStatus);
+      }
+      if (reportType === ReportType.EQUIPMENT_UTILIZATION && selectedUtilizationClasses.length > 0) {
+        selectedUtilizationClasses.forEach(classId => params.append('classId', classId));
       }
 
       const apiUrl = `/api/reports/generate?${params.toString()}`;
@@ -318,19 +338,50 @@ export default function ReportsPage() {
     // This ensures we only send relevant filters, though the API should also handle extras.
     switch (reportType) {
         case ReportType.BORROWING_ACTIVITY:
-            if (selectedCourse !== 'all') params.append('courseId', selectedCourse);
-            if (selectedFic !== 'all') params.append('ficId', selectedFic);
-            if (selectedEquipment !== 'all') params.append('equipmentId', selectedEquipment);
-            if (selectedBorrower !== 'all') params.append('borrowerId', selectedBorrower);
+            if (selectedCourse.length > 0) {
+                selectedCourse.forEach(courseId => params.append('courseId', courseId));
+            }
+            if (selectedFic.length > 0) {
+                selectedFic.forEach(ficId => params.append('ficId', ficId));
+            }
+            if (selectedEquipment.length > 0) {
+                selectedEquipment.forEach(equipmentId => params.append('equipmentId', equipmentId));
+            }
+            if (selectedBorrower.length > 0) {
+                selectedBorrower.forEach(borrowerId => params.append('borrowerId', borrowerId));
+            }
+            if (selectedBorrowContext !== 'all') {
+                params.append('borrowContext', selectedBorrowContext);
+            }
+            if (selectedReturnStatus !== 'all') {
+                params.append('returnStatus', selectedReturnStatus);
+            }
             break;
         case ReportType.EQUIPMENT_UTILIZATION:
-            if (selectedEquipment !== 'all') params.append('equipmentId', selectedEquipment);
+            if (selectedEquipment.length > 0) {
+                selectedEquipment.forEach(equipmentId => params.append('equipmentId', equipmentId));
+            }
+            if (selectedBorrowContext !== 'all') {
+                params.append('borrowContext', selectedBorrowContext);
+            }
+            // Add classId filters for Equipment Utilization report type
+            if (selectedUtilizationClasses.length > 0) {
+                selectedUtilizationClasses.forEach(classId => params.append('classId', classId));
+            }
             break;
         case ReportType.DEFICIENCY_SUMMARY:
-            if (selectedCourse !== 'all') params.append('courseId', selectedCourse);
-            if (selectedEquipment !== 'all') params.append('equipmentId', selectedEquipment);
-            if (selectedBorrower !== 'all') params.append('borrowerId', selectedBorrower);
-            if (selectedFic !== 'all') params.append('ficId', selectedFic);
+            if (selectedCourse.length > 0) {
+                selectedCourse.forEach(courseId => params.append('courseId', courseId));
+            }
+            if (selectedEquipment.length > 0) {
+                selectedEquipment.forEach(equipmentId => params.append('equipmentId', equipmentId));
+            }
+            if (selectedBorrower.length > 0) {
+                selectedBorrower.forEach(borrowerId => params.append('borrowerId', borrowerId));
+            }
+            if (selectedFic.length > 0) {
+                selectedFic.forEach(ficId => params.append('ficId', ficId));
+            }
             break;
         case ReportType.SYSTEM_USAGE:
             // System usage often doesn't use these specific item/course/fic filters
@@ -366,7 +417,7 @@ export default function ReportsPage() {
     } finally {
         setIsLiveReportLoading(false);
     }
-  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower]);
+  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower, selectedBorrowContext, selectedReturnStatus, selectedUtilizationClasses]);
 
   // --- Calculate Contact Hours Handler ---
   const handleCalculateContactHours = async () => {
@@ -447,7 +498,7 @@ export default function ReportsPage() {
     return () => {
         clearTimeout(handler);
     };
-  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower, fetchAndDisplayLiveReport]);
+  }, [reportType, dateRange, selectedCourse, selectedFic, selectedEquipment, selectedBorrower, selectedBorrowContext, selectedReturnStatus, selectedUtilizationClasses, fetchAndDisplayLiveReport]);
 
   // --- Fetch Maintenance Activity Report ---
   const fetchMaintenanceActivityReport = useCallback(async () => {
@@ -773,21 +824,16 @@ export default function ReportsPage() {
                         {(reportType === ReportType.BORROWING_ACTIVITY || reportType === ReportType.DEFICIENCY_SUMMARY) && (
                             <div className="space-y-2">
                                 <Label htmlFor="filterCourse">Course</Label>
-                                <Select 
-                                    value={selectedCourse} 
-                                    onValueChange={setSelectedCourse}
+                                <MultiSearchableSelect
+                                    value={selectedCourse}
+                                    onChange={setSelectedCourse}
+                                    options={courses?.map(course => ({ value: course.id, label: course.name })) || []}
+                                    placeholder={isLoadingCourses ? "Loading..." : "Select courses..."}
+                                    searchPlaceholder="Search courses..."
+                                    emptyStateMessage="No courses found."
                                     disabled={isLoadingCourses || !courses || courses.length === 0}
-                                >
-                                    <SelectTrigger id="filterCourse">
-                                        <SelectValue placeholder={isLoadingCourses ? "Loading..." : "All Courses"} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Courses</SelectItem>
-                                        {courses?.map((course) => (
-                                            <SelectItem key={course.id} value={course.id}>{course.name}</SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                    className="w-full"
+                                />
                             </div>
                         )}
 
@@ -795,17 +841,15 @@ export default function ReportsPage() {
                         {(reportType === ReportType.BORROWING_ACTIVITY || reportType === ReportType.DEFICIENCY_SUMMARY) && (
                             <div className="space-y-2">
                                 <Label htmlFor="filterFic">Faculty-in-Charge (Associated/To Notify)</Label>
-                                <SearchableSelect
-                                    value={selectedFic === 'all' ? undefined : selectedFic}
-                                    onChange={(value) => setSelectedFic(value || 'all')}
-                                    options={[
-                                        { value: 'all', label: 'All FICs' },
-                                        ...(fics?.map(fic => ({ value: fic.id, label: fic.name })) || [])
-                                    ]}
-                                    placeholder={isLoadingFics ? "Loading..." : "Search or select an FIC..."}
+                                <MultiSearchableSelect
+                                    value={selectedFic}
+                                    onChange={setSelectedFic}
+                                    options={fics?.map(fic => ({ value: fic.id, label: fic.name })) || []}
+                                    placeholder={isLoadingFics ? "Loading..." : "Search or select FICs..."}
                                     searchPlaceholder="Search FICs..."
                                     emptyStateMessage="No FICs found."
                                     disabled={isLoadingFics || !fics || fics.length === 0}
+                                    className="w-full"
                                 />
                             </div>
                         )}
@@ -816,17 +860,15 @@ export default function ReportsPage() {
                           reportType === ReportType.EQUIPMENT_UTILIZATION) && (
                             <div className="space-y-2">
                                 <Label htmlFor="filterEquipment">Equipment</Label>
-                                <SearchableSelect
-                                    value={selectedEquipment === 'all' ? undefined : selectedEquipment}
-                                    onChange={(value) => setSelectedEquipment(value || 'all')}
-                                    options={[
-                                        { value: 'all', label: 'All Equipment' },
-                                        ...(equipment?.map(item => ({ value: item.id, label: item.name })) || [])
-                                    ]}
+                                <MultiSearchableSelect
+                                    value={selectedEquipment}
+                                    onChange={setSelectedEquipment}
+                                    options={equipment?.map(item => ({ value: item.id, label: item.name })) || []}
                                     placeholder={isLoadingEquipment ? "Loading..." : "Search or select equipment..."}
                                     searchPlaceholder="Search equipment..."
                                     emptyStateMessage="No equipment found."
                                     disabled={isLoadingEquipment || !equipment || equipment.length === 0}
+                                    className="w-full"
                                 />
                             </div>
                         )}
@@ -835,22 +877,77 @@ export default function ReportsPage() {
                         {(reportType === ReportType.BORROWING_ACTIVITY || reportType === ReportType.DEFICIENCY_SUMMARY) && (
                             <div className="space-y-2">
                                 <Label htmlFor="filterUser">User (Borrower/Tagged By/Responsible)</Label>
-                                <SearchableSelect
-                                    value={selectedBorrower === 'all' ? undefined : selectedBorrower}
-                                    onChange={(value) => setSelectedBorrower(value || 'all')}
-                                    options={[
-                                        { value: 'all', label: 'All Users' },
-                                        ...(borrowers?.map(user => ({ value: user.id, label: user.name })) || [])
-                                    ]}
-                                    placeholder={isLoadingBorrowers ? "Loading..." : "Search or select a user..."}
+                                <MultiSearchableSelect
+                                    value={selectedBorrower}
+                                    onChange={setSelectedBorrower}
+                                    options={borrowers?.map(user => ({ value: user.id, label: user.name })) || []}
+                                    placeholder={isLoadingBorrowers ? "Loading..." : "Search or select users..."}
                                     searchPlaceholder="Search users..."
                                     emptyStateMessage="No users found."
                                     disabled={isLoadingBorrowers || !borrowers || borrowers.length === 0}
+                                    className="w-full"
                                 />
+                            </div>
+                        )}
+
+                        {/* Borrow Context Filter (Only for Borrowing Activity OR Equipment Utilization) */} 
+                        {(reportType === ReportType.BORROWING_ACTIVITY || reportType === ReportType.EQUIPMENT_UTILIZATION) && (
+                            <div className="space-y-2">
+                                <Label htmlFor="filterBorrowContext">Usage Context</Label>
+                                <Select 
+                                    value={selectedBorrowContext} 
+                                    onValueChange={setSelectedBorrowContext}
+                                >
+                                    <SelectTrigger id="filterBorrowContext">
+                                        <SelectValue placeholder="All Contexts" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Contexts</SelectItem>
+                                        <SelectItem value="IN_CLASS">In Class</SelectItem>
+                                        <SelectItem value="OUT_OF_CLASS">Out of Class</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+
+                        {/* Return Status Filter (Only for Borrowing Activity) */} 
+                        {reportType === ReportType.BORROWING_ACTIVITY && (
+                            <div className="space-y-2">
+                                <Label htmlFor="filterReturnStatus">Return Status</Label>
+                                <Select 
+                                    value={selectedReturnStatus} 
+                                    onValueChange={setSelectedReturnStatus}
+                                >
+                                    <SelectTrigger id="filterReturnStatus">
+                                        <SelectValue placeholder="All Statuses" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Statuses</SelectItem>
+                                        <SelectItem value="LATE">Late</SelectItem>
+                                        <SelectItem value="REGULAR">Regular</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         )}
                         
                         {/* Add placeholders or specific filters for System Usage if needed */}
+
+                        {/* Class Select for Equipment Utilization */} 
+                        {reportType === ReportType.EQUIPMENT_UTILIZATION && (
+                            <div className="space-y-2">
+                                <Label htmlFor="filterUtilizationClass">Class</Label>
+                                <MultiSearchableSelect
+                                    value={selectedUtilizationClasses}
+                                    onChange={setSelectedUtilizationClasses}
+                                    options={courses?.map(course => ({ value: course.id, label: course.name })) || []} // Re-use courses data
+                                    placeholder={isLoadingCourses ? "Loading..." : "Select classes..."}
+                                    searchPlaceholder="Search classes..."
+                                    emptyStateMessage="No classes found."
+                                    disabled={isLoadingCourses || !courses || courses.length === 0}
+                                    className="w-full"
+                                />
+                            </div>
+                        )}
 
                     </div>
                 )}
@@ -1380,6 +1477,13 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
                         return `${classInfo.courseCode || ''} ${classInfo.section || ''} (${classInfo.semester || ''} ${classInfo.academicYear || ''})`.replace(/\(\s*\)/g, '').trim() || 'N/A';
                     }
                 },
+                { header: 'In Class/Out of Class', accessor: 'borrowContext' },
+                { header: 'Late/Regular', accessor: 'returnStatus', render: (val: unknown) => {
+                    const status = val as string;
+                    if (status === 'Late') return <Badge variant="destructive">Late</Badge>;
+                    if (status === 'Regular') return <Badge variant="default">Regular</Badge>;
+                    return status || 'N/A';
+                } },
                 { header: 'Status', accessor: 'borrowStatus' },
                 { header: 'Requested', accessor: 'requestSubmissionTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
                 { header: 'Checkout', accessor: 'checkoutTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
@@ -1390,6 +1494,7 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
             return [
                 // { header: 'Equipment ID', accessor: 'equipmentId' }, // Often redundant if name is present
                 { header: 'Equipment Name', accessor: 'equipmentName' },
+                { header: 'In Class/Out of Class', accessor: 'utilizationContext' },
                 { header: 'Borrow Count', accessor: 'borrowCount' },
                 { header: 'Total Usage (Hours)', accessor: 'totalUsageHours' },
             ];

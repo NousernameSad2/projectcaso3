@@ -44,6 +44,7 @@ export default function AddEquipmentPage() {
       status: EquipmentStatus.AVAILABLE,
       stockCount: 1,
       purchaseCost: undefined,
+      instrumentManualUrl: "",
     },
   });
 
@@ -241,6 +242,26 @@ export default function AddEquipmentPage() {
               )}
             />
           </div>
+
+          {/* Conditionally render Instrument Manual URL field */}
+          {form.watch("category") === EquipmentCategory.INSTRUMENTS && (
+            <FormField
+              control={form.control}
+              name="instrumentManualUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Instrument Manual URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g., https://manuals.example.com/trimble-s5.pdf" {...field} disabled={isLoading} />
+                  </FormControl>
+                  <FormDescription>
+                    A link to the instrument&apos;s user manual (e.g., Google Drive link).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           {/* Condition */}
           <FormField

@@ -13,7 +13,7 @@ import { type ColumnFiltersState } from "@tanstack/react-table";
 import { useSession } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Database, FileText, AlertCircle, Users, X, UploadCloud, Trash2 } from 'lucide-react';
+import { Database, FileText, AlertCircle, Users, X, /* UploadCloud, */ Trash2, Mail } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -21,7 +21,6 @@ import { Badge } from '@/components/ui/badge';
 import { format, isValid } from 'date-fns';
 import { transformGoogleDriveUrl } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 
 // --- Type Definitions ---
@@ -46,6 +45,7 @@ interface DataRequestAdminView {
   dataRequestStatus: string | null;
   dataFiles: { name: string; url: string; id: string; size?: number; type?: string }[]; // Assuming files have a name and URL, and an ID for deletion
   updatedAt: string; // Or Date, for sorting
+  borrowGroupId?: string | null; // Added for group context
 }
 
 // --- Helper Functions (Consider moving to utils) ---
@@ -113,9 +113,10 @@ export default function BorrowRequestsPage() {
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
   const [returnTarget, setReturnTarget] = useState<{ borrowId: string; equipmentName: string } | null>(null);
+  const [isFetchingGroupMates, setIsFetchingGroupMates] = useState(false); // For loading state
 
   // NEW STATE: To hold the file selected for upload for each request ID
-  const [filesToUpload, setFilesToUpload] = useState<{[key: string]: File | null}>({});
+  // const [filesToUpload, setFilesToUpload] = useState<{[key: string]: File | null}>({});
 
   const queryClient = useQueryClient();
 
@@ -174,7 +175,7 @@ export default function BorrowRequestsPage() {
   });
 
   // --- NEW: Mutation for Uploading Data File ---
-  const uploadDataFileMutation = useMutation<
+  /* const uploadDataFileMutation = useMutation<
     { message: string; file: { id: string; name: string; url: string }; updatedRequest: DataRequestAdminView },
     Error,
     { requestId: string; formData: FormData }
@@ -197,7 +198,7 @@ export default function BorrowRequestsPage() {
     onError: (error) => {
       toast.error(`File upload failed: ${error.message}`);
     },
-  });
+  }); */
 
   // --- NEW: Mutation for Cancelling/Deleting Data Request ---
   const cancelDataRequestMutation = useMutation<
@@ -225,7 +226,7 @@ export default function BorrowRequestsPage() {
     },
   });
 
-  const handleFileUpload = async (requestId: string) => {
+  /* const handleFileUpload = async (requestId: string) => {
     const file = filesToUpload[requestId];
     if (!file) {
       toast.warning("No file selected to upload.");
@@ -252,12 +253,12 @@ export default function BorrowRequestsPage() {
         console.error("Upload error:", error);
       }
     });
-  };
+  }; */
 
   // Handler for when a file is selected via the input
-  const onFileSelected = (requestId: string, selectedFile: File | null) => {
+  /* const onFileSelected = (requestId: string, selectedFile: File | null) => {
     setFilesToUpload(prev => ({ ...prev, [requestId]: selectedFile }));
-  };
+  }; */
 
   // --- NEW: Mutation for Deleting Data File ---
   const deleteDataFileMutation = useMutation<
@@ -307,6 +308,38 @@ export default function BorrowRequestsPage() {
     if (confirm(`Are you sure you want to cancel the data request for ${requestNameToConfirm}? This action cannot be undone.`)) {
       cancelDataRequestMutation.mutate({ requestId });
     }
+  };
+
+  const fetchGroupmateEmails = async (groupId: string): Promise<string[]> => {
+    try {
+      const response = await fetch(`/api/borrow-groups/${groupId}/member-emails`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to fetch groupmate emails');
+      }
+      return await response.json() as string[];
+    } catch (error) {
+      console.error("Error fetching groupmate emails:", error);
+      toast.error(error instanceof Error ? error.message : "Could not fetch groupmate emails.");
+      return [];
+    }
+  };
+
+  const handleEmailBorrowerAndGroupmates = async (request: DataRequestAdminView) => {
+    let mailtoLink = `mailto:${request.borrower.email}`;
+    if (request.borrowGroupId) {
+      setIsFetchingGroupMates(true);
+      try {
+        const groupEmails = await fetchGroupmateEmails(request.borrowGroupId);
+        const ccEmails = groupEmails.filter(email => email && email !== request.borrower.email).join(',');
+        if (ccEmails) {
+          mailtoLink += `?cc=${ccEmails}`;
+        }
+      } finally {
+        setIsFetchingGroupMates(false);
+      }
+    }
+    window.location.href = mailtoLink;
   };
 
   // --- NEW: Memoized Grouping Logic --- 
@@ -826,7 +859,7 @@ export default function BorrowRequestsPage() {
                   <p className="text-xs text-muted-foreground italic">No files uploaded yet.</p>
                 )}
                 {/* File Upload Area - Modernized */}
-                <div className="space-y-2 pt-1">
+                {/* <div className="space-y-2 pt-1">
                   <Label htmlFor={`file-upload-input-${req.id}`} className="text-sm font-medium">
                     Upload Data File:
                   </Label>
@@ -887,7 +920,7 @@ export default function BorrowRequestsPage() {
                       : <UploadCloud className="mr-2 h-4 w-4" /> } 
                     Confirm & Upload File
                   </Button>
-                </div>
+                </div> */}
               </div>
 
               {/* Status Update UI */}
@@ -907,6 +940,16 @@ export default function BorrowRequestsPage() {
                     <SelectItem value="Rejected">Rejected</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs"
+                  onClick={() => handleEmailBorrowerAndGroupmates(req)}
+                  disabled={updateDataRequestStatusMutation.isPending || cancelDataRequestMutation.isPending || isFetchingGroupMates}
+                >
+                  {isFetchingGroupMates && (cancelDataRequestMutation.variables?.requestId === req.id || updateDataRequestStatusMutation.variables?.requestId === req.id) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                  Email Borrower
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"

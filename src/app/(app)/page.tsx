@@ -24,8 +24,8 @@ import {
   FileText,
   Download,
   Database,
-  UploadCloud, // <<< ADDED for new panel
-  Trash2, // <<< ADDED for new panel
+  Mail, // <<< ADDED for email button
+  Trash2, // Added for cancel button
 } from 'lucide-react'; // Keep icons for layout
 import LoadingSpinner from '@/components/ui/LoadingSpinner'; // Import a loading spinner
 import { 
@@ -59,6 +59,7 @@ import EditReservationModal from '@/components/dashboard/EditReservationModal'; 
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'; // <<< MODIFIED: Import useQuery, useMutation as well
 import { useRouter } from 'next/navigation'; // <<< ADDED: Import useRouter (for potential navigation)
 import { ChevronUp, ChevronDown } from 'lucide-react'; // <<< ADDED for new component
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"; // Added for status update
 
 // --- TYPE DEFINITIONS ---
 
@@ -1072,19 +1073,19 @@ function StaffActionPanel() {
 function AdminDataRequestsDashboardPanel() {
   const { data: session } = useSession();
   const queryClient = useQueryClient();
-  const [filesToUpload, setFilesToUpload] = useState<{ [requestId: string]: File | null }>({});
   const [expandedRequests, setExpandedRequests] = useState<Set<string>>(new Set());
+  const [isFetchingGroupMatesAdmin, setIsFetchingGroupMatesAdmin] = useState(false);
 
-  const { 
-    data: adminDataRequests, 
-    isLoading: isLoadingDataRequests, 
-    error: dataRequestsError
-    // refetch: refetchDataRequests // Removed as it's not explicitly used; invalidateQueries is used instead
+  const {
+    data: adminDataRequests,
+    isLoading: isLoadingDataRequests,
+    error: dataRequestsError,
+    refetch: refetchAdminDataRequests, // Added for refetching
   } = useQuery<AdminDataRequestItem[], Error>({
-    queryKey: ['adminDashboardDataRequests'], // Query key can remain the same or be updated, but API endpoint is new
+    queryKey: ['adminDashboardDataRequests'],
     queryFn: async () => {
       if (!session?.accessToken) throw new Error('Not authenticated');
-      const response = await fetch('/api/borrows/data-requests-detailed', { // <<< UPDATED API ENDPOINT
+      const response = await fetch('/api/borrows/data-requests-detailed', {
         headers: { Authorization: `Bearer ${session.accessToken}` },
       });
       if (!response.ok) {
@@ -1129,127 +1130,96 @@ function AdminDataRequestsDashboardPanel() {
     onSuccess: (data, variables) => {
       toast.success(`Data request ${variables.requestId} status updated to ${variables.status}`);
       queryClient.invalidateQueries({ queryKey: ['adminDashboardDataRequests'] });
-      // Also invalidate the specific query key used in /borrow-requests if it's different and shared
-      queryClient.invalidateQueries({ queryKey: ['dataRequestsAdmin'] }); 
+      queryClient.invalidateQueries({ queryKey: ['dataRequestsAdmin'] });
+      refetchAdminDataRequests(); // Refetch this panel's data
     },
     onError: (error) => {
       toast.error(`Failed to update status: ${error.message}`);
     },
   });
 
-  // Mutation for file upload
-  const uploadFileMutation = useMutation<unknown, Error, { requestId: string; file: File }>({
-    mutationFn: async ({ requestId, file }) => {
-      if (!session?.accessToken) throw new Error('Not authenticated');
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await fetch(`/api/borrows/data-requests/${requestId}/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${session.accessToken}` }, // Content-Type is set automatically for FormData
-        body: formData,
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to upload file');
-      }
-      return response.json();
-    },
-    onSuccess: (data, variables) => {
-      toast.success(`File uploaded for request ${variables.requestId}`);
-      setFilesToUpload(prev => ({ ...prev, [variables.requestId]: null })); // Clear file from state
-      const fileInput = document.getElementById(`file-input-${variables.requestId}`) as HTMLInputElement;
-      if (fileInput) fileInput.value = ''; // Reset file input
-      queryClient.invalidateQueries({ queryKey: ['adminDashboardDataRequests'] });
-      queryClient.invalidateQueries({ queryKey: ['dataRequestsAdmin'] });
-    },
-    onError: (error) => {
-      toast.error(`File upload failed: ${error.message}`);
-    },
-  });
-  
-  // Mutation for deleting a data file
-  const deleteDataFileMutation = useMutation<
-    unknown, 
-    Error, 
-    { requestId: string; fileName: string; fileUrl: string }
-  >({
-    mutationFn: async ({ requestId, fileName, fileUrl }) => {
-      if (!session?.accessToken) throw new Error('Not authenticated');
-      const response = await fetch(`/api/borrows/data-requests/${requestId}/upload`, { // Uses the same endpoint, but DELETE method
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.accessToken}`,
-        },
-        body: JSON.stringify({ fileName, fileUrl }), // Send filename and URL to identify the file
-      });
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to delete file');
-      }
-      return response.json();
-    },
-    onSuccess: (data, variables) => {
-      toast.success(`File "${variables.fileName}" deleted successfully for request ${variables.requestId}.`);
-      queryClient.invalidateQueries({ queryKey: ['adminDashboardDataRequests'] });
-      queryClient.invalidateQueries({ queryKey: ['dataRequestsAdmin'] });
-    },
-    onError: (error) => {
-      toast.error(`Failed to delete file: ${error.message}`);
-    },
-  });
-
-  const handleFileSelected = (requestId: string, event: React.ChangeEvent<HTMLInputElement>) => {
-    if (event.target.files && event.target.files[0]) {
-      setFilesToUpload(prev => ({ ...prev, [requestId]: event.target.files![0] }));
-    }
-  };
-
-  const handleFileUpload = (requestId: string) => {
-    const file = filesToUpload[requestId];
-    if (file) {
-      uploadFileMutation.mutate({ requestId, file });
-    } else {
-      toast.error('No file selected to upload.');
-    }
-  };
-
   const handleUpdateStatus = (requestId: string, status: string) => {
     updateStatusMutation.mutate({ requestId, status });
   };
-  
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const handleDeleteDataFile = (requestId: string, fileName: string, fileUrl: string) => {
-    if (confirm(`Are you sure you want to delete the file "${fileName}"? This action cannot be undone.`)) {
-        deleteDataFileMutation.mutate({ requestId, fileName, fileUrl });
+
+  // --- NEW: Mutation for Cancelling/Deleting Data Request (similar to borrow-requests page) ---
+  const cancelDataRequestAdminMutation = useMutation<
+    { message: string },
+    Error,
+    { requestId: string }
+  >({
+    mutationFn: async ({ requestId }) => {
+      if (!session?.accessToken) throw new Error('Not authenticated');
+      const response = await fetch(`/api/borrows/data-requests/${requestId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.accessToken}` },
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to cancel data request from admin panel');
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || "Data request cancelled successfully from admin panel!");
+      refetchAdminDataRequests(); // Refetch this panel's data
+      queryClient.invalidateQueries({ queryKey: ['dataRequestsAdmin'] }); // Invalidate other views
+    },
+    onError: (error) => {
+      toast.error(`Error cancelling request from admin panel: ${error.message}`);
+    },
+  });
+
+  const handleCancelDataRequestAdmin = (requestId: string, equipmentName: string | null | undefined) => {
+    const requestNameToConfirm = equipmentName || `request ID ${requestId.substring(0, 8)}`;
+    if (confirm(`Are you sure you want to cancel the data request for ${requestNameToConfirm} from the admin panel? This action cannot be undone.`)) {
+      cancelDataRequestAdminMutation.mutate({ requestId });
     }
   };
 
-  if (isLoadingDataRequests) {
-    return (
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="flex items-center"><Database className="mr-2 h-5 w-5 text-purple-500" /> Pending Data Requests</CardTitle>
-        </CardHeader>
-        <CardContent className="text-center"><LoadingSpinner /><p className="text-muted-foreground mt-2">Loading data requests...</p></CardContent>
-      </Card>
-    );
-  }
+  const fetchGroupmateEmailsAdmin = async (groupId: string): Promise<string[]> => {
+    try {
+      const response = await fetch(`/api/borrow-groups/${groupId}/member-emails`);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || 'Failed to fetch groupmate emails for admin panel');
+      }
+      return await response.json() as string[];
+    } catch (error) {
+      console.error("Error fetching groupmate emails for admin panel:", error);
+      toast.error(error instanceof Error ? error.message : "Could not fetch groupmate emails.");
+      return [];
+    }
+  };
 
-  if (dataRequestsError) {
-    return (
-      <Card className="mt-6">
-        <CardHeader>
-          <CardTitle className="flex items-center"><Database className="mr-2 h-5 w-5 text-purple-500" /> Pending Data Requests</CardTitle>
-        </CardHeader>
-        <CardContent><p className="text-destructive">Error: {dataRequestsError.message}</p></CardContent>
-      </Card>
-    );
-  }
+  const handleEmailBorrowerAndGroupmatesAdmin = async (request: AdminDataRequestItem) => {
+    let mailtoLink = `mailto:${request.borrower.email}`;
+    if (request.borrowGroupId) {
+      setIsFetchingGroupMatesAdmin(true);
+      try {
+        const groupEmails = await fetchGroupmateEmailsAdmin(request.borrowGroupId);
+        const ccEmails = groupEmails.filter(email => email && email !== request.borrower.email).join(',');
+        if (ccEmails) {
+          mailtoLink += `?cc=${ccEmails}`;
+        }
+      } finally {
+        setIsFetchingGroupMatesAdmin(false);
+      }
+    }
+    window.location.href = mailtoLink;
+  };
 
-  const pendingDataRequests = adminDataRequests?.filter(req => req.dataRequestStatus === 'Pending') || [];
-  const otherDataRequests = adminDataRequests?.filter(req => req.dataRequestStatus !== 'Pending').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) || [];
+  // const pendingDataRequests = adminDataRequests?.filter(req => req.dataRequestStatus === 'Pending') || [];
+  // const otherDataRequests = adminDataRequests?.filter(req => req.dataRequestStatus !== 'Pending').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) || [];
+  
+  // NEW Filtering Logic for Admin Dashboard
+  const nonFulfilledRequests = adminDataRequests
+    ?.filter(req => req.dataRequestStatus !== 'Fulfilled')
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) || [];
+
+  const fulfilledRequests = adminDataRequests
+    ?.filter(req => req.dataRequestStatus === 'Fulfilled')
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) || [];
 
   return (
     <Card className="mt-6 bg-card/90 border-border/40 shadow-lg">
@@ -1258,229 +1228,213 @@ function AdminDataRequestsDashboardPanel() {
             <Database className="mr-3 h-6 w-6 text-purple-400" />
             Manage Data Requests
         </CardTitle>
-        <CardDescription>Review pending data requests, upload files, and update statuses.</CardDescription>
+        <CardDescription>Review data requests, manage files, and update statuses. Sorted by last update.</CardDescription>
       </CardHeader>
       <CardContent>
-        {adminDataRequests && adminDataRequests.length > 0 ? (
-          <div className="space-y-6">
-            {/* Pending Requests Section */}
-            {pendingDataRequests.length > 0 && (
-              <div>
-                <h4 className="text-md font-semibold mb-3 text-amber-500">Needs Attention ({pendingDataRequests.length})</h4>
+        {isLoadingDataRequests && <div className="text-center py-8"><LoadingSpinner /><p className="text-muted-foreground mt-2">Loading data requests...</p></div>}
+        {dataRequestsError && <div className="text-center py-8"><p className="text-destructive">Error: {dataRequestsError.message}</p></div>}
+        
+        {!isLoadingDataRequests && !dataRequestsError && (
+          (nonFulfilledRequests.length === 0 && fulfilledRequests.length === 0) ? (
+            <div className="text-center py-8">
+              <Database className="mx-auto h-12 w-12 text-muted-foreground/50" />
+              <p className="mt-4 text-lg font-medium text-muted-foreground">No Data Requests Found</p>
+              <p className="text-sm text-muted-foreground">There are currently no pending or processed data requests from users.</p>
+            </div>
+          ) : (
+            <div className="space-y-6"> {/* Main container for both sections */}
+              {/* Section for Non-Fulfilled Requests (Displayed by default) */}
+              {nonFulfilledRequests.length > 0 && (
                 <div className="space-y-4">
-                  {pendingDataRequests.map(request => (
-                    // Card per request - content to be filled in next step
-                    <Card key={request.id} className="bg-background/80 border-border/50 shadow-md overflow-hidden">
-                        <CardHeader className="p-4 bg-muted/40">
-                            <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
-                                <div>
-                                    <CardTitle className="text-base font-semibold">
-                                        Request ID: <span className="font-mono text-sm">{request.id}</span>
-                                    </CardTitle>
-                                    <CardDescription className="text-xs">
-                                        Borrower: {request.borrower.name} ({request.borrower.email}) <br />
-                                        Requested: {formatDateSafe(request.updatedAt, 'PPp')}
-                                    </CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2 mt-2 sm:mt-0">
-                                    <select 
-                                        value={request.dataRequestStatus || ''} 
-                                        onChange={(e) => handleUpdateStatus(request.id, e.target.value)}
-                                        disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id}
-                                        className="text-xs p-1.5 border rounded-md bg-background focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
-                                    >
-                                        <option value="Pending">Pending</option>
-                                        <option value="Processing">Processing</option>
-                                        <option value="Fulfilled">Fulfilled</option>
-                                        <option value="Rejected">Rejected</option>
-                                    </select>
-                                    {(updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id) && <Loader2 className="h-4 w-4 animate-spin" />}
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-4 space-y-3">
-                            <p className="text-sm"><span className="font-medium text-muted-foreground">Requested Equipment for Data:</span></p>
-                            <ul className="list-disc list-inside pl-1 space-y-1 text-sm">
-                                {request.detailedRequestedEquipment && request.detailedRequestedEquipment.length > 0 ? (
-                                    request.detailedRequestedEquipment.map(eq => { // Iterate over detailedRequestedEquipment
-                                        return (
-                                            <li key={eq.id} className="text-foreground/90">
-                                                {eq.name ? `${eq.name} (ID: ${eq.equipmentId})` : `Equipment ID: ${eq.id}`}
-                                                {eq.isDataGenerating && <Badge variant="outline" className="ml-2 text-xs border-blue-500 text-blue-500">Data Gen</Badge>}
-                                            </li>
-                                        );
-                                    })
-                                ) : (
-                                    <li className="text-muted-foreground italic">No specific equipment listed for data request. (Or check primary item remarks)</li>
-                                )}
+                  {nonFulfilledRequests.map(request => (
+                    <Card key={request.id} className="bg-card/70 border-border/40">
+                      <CardHeader>
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">
+                              Data Request: {request.equipment?.name ? `${request.equipment.name} (${request.equipment.equipmentId || 'N/A'})` : `ID ${request.id.substring(0,8)}`}
+                            </CardTitle>
+                            <CardDescription className="text-xs">
+                              Requested by: {request.borrower.name || request.borrower.email} on {formatDateSafe(request.updatedAt, 'PPp')}
+                            </CardDescription>
+                          </div>
+                          <Badge variant={request.dataRequestStatus === 'Fulfilled' ? 'success' : (request.dataRequestStatus === 'Pending' ? 'warning' : 'secondary')}>
+                            {request.dataRequestStatus || 'Unknown'}
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-3">
+                        {request.dataRequestRemarks && (
+                          <p className="text-sm p-3 bg-muted/50 rounded-md border border-dashed">
+                            <span className="font-semibold">Remarks:</span> {request.dataRequestRemarks}
+                          </p>
+                        )}
+                        {request.detailedRequestedEquipment && request.detailedRequestedEquipment.length > 0 && (
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-medium">Specifically Requested Equipment for Data:</h4>
+                            <ul className="list-disc list-inside pl-4 text-sm space-y-1">
+                              {request.detailedRequestedEquipment.map(eq => (
+                                <li key={eq.id} className="text-foreground/90">
+                                  {eq.name ? `${eq.name} (ID: ${eq.equipmentId})` : `Equipment ID: ${eq.id}`}
+                                  {eq.isDataGenerating && <Badge variant="outline" className="ml-2 text-xs border-blue-500 text-blue-500">Data Gen</Badge>}
+                                </li>
+                              ))}
                             </ul>
-                            {request.dataRequestRemarks && (
-                                <div className="text-sm">
-                                    <p className="font-medium text-muted-foreground">Borrower Remarks:</p>
-                                    <p className="p-2 bg-muted/50 rounded-md text-foreground/90 whitespace-pre-wrap">{request.dataRequestRemarks}</p>
-                                </div>
-                            )}
-
-                            {/* File Upload Area */}
-                            <div className="mt-3 pt-3 border-t border-border/30">
-                                <label htmlFor={`file-input-${request.id}`} className="block text-sm font-medium text-muted-foreground mb-1.5">Upload Data File(s):</label>
-                                <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-3">
-                                    <label 
-                                        htmlFor={`file-input-${request.id}`} 
-                                        className="flex-grow w-full sm:w-auto flex flex-col items-center justify-center p-3 border-2 border-dashed border-border/50 rounded-md cursor-pointer hover:bg-muted/50 transition-colors duration-150"
-                                    >
-                                        <UploadCloud className="h-7 w-7 text-muted-foreground/70" />
-                                        <span className="mt-1.5 text-xs text-muted-foreground text-center">
-                                            {filesToUpload[request.id] ? filesToUpload[request.id]!.name : 'Click to upload or drag & drop'}
-                                        </span>
-                                    </label>
-                                    <input 
-                                        type="file" 
-                                        id={`file-input-${request.id}`} 
-                                        className="hidden" 
-                                        onChange={(e) => handleFileSelected(request.id, e)}
-                                        // multiple // Add if you want to allow multiple file selection at once for a single input
-                                    />
-                                    {filesToUpload[request.id] && (
-                                        <div className="flex flex-col items-start text-xs w-full sm:w-auto mt-2 sm:mt-0">
-                                            <div className="flex items-center gap-2 bg-muted/60 p-1.5 rounded-md border border-border/30 w-full justify-between">
-                                                <div>
-                                                    <p className="font-medium text-foreground truncate max-w-[150px] sm:max-w-[200px]">{filesToUpload[request.id]?.name}</p>
-                                                    <p className="text-muted-foreground">{(filesToUpload[request.id]!.size / 1024).toFixed(1)} KB</p>
-                                                </div>
-                                                <Button variant="ghost" size="icon" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => {
-                                                     setFilesToUpload(prev => ({ ...prev, [request.id]: null }));
-                                                     const fileInput = document.getElementById(`file-input-${request.id}`) as HTMLInputElement;
-                                                     if (fileInput) fileInput.value = '';
-                                                }}>
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <Button 
-                                        onClick={() => handleFileUpload(request.id)} 
-                                        disabled={!filesToUpload[request.id] || uploadFileMutation.isPending && uploadFileMutation.variables?.requestId === request.id}
-                                        size="sm"
-                                        className="w-full sm:w-auto mt-2 sm:mt-0 bg-primary hover:bg-primary/90 text-primary-foreground px-3 py-1.5 text-xs whitespace-nowrap self-end sm:self-center"
-                                    >
-                                        {uploadFileMutation.isPending && uploadFileMutation.variables?.requestId === request.id ? 
-                                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : 
-                                            <UploadCloud className="mr-1.5 h-3.5 w-3.5" />
-                                        }
-                                        Confirm & Upload
-                                    </Button>
-                                </div>
-                            </div>
-
-                            {/* Display Uploaded Files */}
-                            {request.dataFiles && request.dataFiles.length > 0 && (
-                                <div className="mt-3 pt-3 border-t border-border/30">
-                                    <p className="text-sm font-medium text-muted-foreground mb-1.5">Uploaded Files:</p>
-                                    <ul className="space-y-1.5">
-                                        {request.dataFiles.map((file, index) => (
-                                            <li key={index} className="flex items-center justify-between p-1.5 bg-muted/50 rounded text-xs border border-border/20">
-                                                <div className="flex items-center gap-1.5">
-                                                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-                                                    <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name} className="hover:underline text-primary hover:text-primary/80">
-                                                        {file.name || `File ${index + 1}`}
-                                                    </a>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            )}
-                        </CardContent>
+                          </div>
+                        )}
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium">Attached Files:</h4>
+                          {request.dataFiles && request.dataFiles.length > 0 ? (
+                            <ul className="list-disc list-inside pl-4 text-sm space-y-1">
+                              {request.dataFiles.map((file, index) => (
+                                <li key={file.name || index} className="flex justify-between items-center">
+                                  <span className="text-primary truncate max-w-xs flex items-center gap-1">
+                                    <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name} className="hover:underline">
+                                      {file.name || `File ${index + 1}`}
+                                    </a>
+                                    {file.size && <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>}
+                                    {file.type && <Badge variant="outline" className="text-xs scale-90 font-normal">{file.type}</Badge>}
+                                  </span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-xs text-muted-foreground italic">No files uploaded yet.</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 pt-2 border-t border-border/20 mt-3">
+                          <Select
+                            value={request.dataRequestStatus || ''}
+                            onValueChange={(newStatus) => handleUpdateStatus(request.id, newStatus)}
+                            disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id}
+                          >
+                            <SelectTrigger className="w-[180px] h-9 text-xs">
+                              <SelectValue placeholder="Update status..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Pending">Pending</SelectItem>
+                              <SelectItem value="Processing">Processing</SelectItem>
+                              <SelectItem value="Fulfilled">Fulfilled</SelectItem>
+                              <SelectItem value="Rejected">Rejected</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 text-xs"
+                            onClick={() => handleEmailBorrowerAndGroupmatesAdmin(request)}
+                            disabled={(updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id) || (cancelDataRequestAdminMutation.isPending && cancelDataRequestAdminMutation.variables?.requestId === request.id) || isFetchingGroupMatesAdmin}
+                          >
+                            {isFetchingGroupMatesAdmin ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                            Email Borrower
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-9 text-xs text-destructive hover:border-destructive/70 hover:text-destructive"
+                            onClick={() => handleCancelDataRequestAdmin(request.id, request.equipment?.name)}
+                            disabled={(updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id) || (cancelDataRequestAdminMutation.isPending && cancelDataRequestAdminMutation.variables?.requestId === request.id) || (request.dataRequestStatus === 'Fulfilled' && (request.dataFiles?.length ?? 0) > 0)}
+                          >
+                            {(cancelDataRequestAdminMutation.isPending && cancelDataRequestAdminMutation.variables?.requestId === request.id) 
+                              ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                              : <Trash2 className="mr-2 h-4 w-4" />}
+                            Cancel Request
+                          </Button>
+                        </div>
+                      </CardContent>
                     </Card>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Other (Fulfilled, Rejected, etc.) Requests Section - Collapsible */}
-            {otherDataRequests.length > 0 && (
-              <div>
-                <Button variant="link" onClick={() => toggleExpandRequest('otherRequests')} className="text-md font-semibold mb-2 px-0 text-muted-foreground hover:text-foreground">
-                  Processed & Other Requests ({otherDataRequests.length})
-                  {expandedRequests.has('otherRequests') ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
-                </Button>
-                {expandedRequests.has('otherRequests') && (
-                  <div className="space-y-4 pt-2 border-t border-border/30">
-                    {otherDataRequests.map(request => (
-                       <Card key={request.id} className="bg-background/70 border-border/40 shadow-sm overflow-hidden">
-                        <CardHeader className="p-3 bg-muted/30">
-                             <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-2">
-                                <div>
-                                    <CardTitle className="text-sm font-semibold">
-                                        Request ID: <span className="font-mono text-xs">{request.id}</span>
-                                    </CardTitle>
-                                    <CardDescription className="text-xs">
-                                        Borrower: {request.borrower.name} ({request.borrower.email}) <br />
-                                        Last Update: {formatDateSafe(request.updatedAt, 'PPp')}
-                                    </CardDescription>
-                                </div>
-                                <Badge variant={request.dataRequestStatus === 'Fulfilled' ? 'success' : request.dataRequestStatus === 'Rejected' ? 'destructive' : 'outline'} className="whitespace-nowrap text-xs mt-1 sm:mt-0">
-                                    {request.dataRequestStatus || 'Unknown'}
-                                </Badge>
+              {/* Section for Fulfilled Requests (Collapsible) */}
+              {fulfilledRequests.length > 0 && (
+                <div>
+                  <Button variant="link" onClick={() => toggleExpandRequest('fulfilledAdminRequests')} className="text-md font-semibold mb-2 px-0 text-muted-foreground hover:text-foreground">
+                    Fulfilled Data Requests ({fulfilledRequests.length})
+                    {expandedRequests.has('fulfilledAdminRequests') ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+                  </Button>
+                  {expandedRequests.has('fulfilledAdminRequests') && (
+                    <div className="space-y-4 pt-2 border-t border-border/30">
+                      {fulfilledRequests.map(request => (
+                        <Card key={request.id} className="bg-card/70 border-border/40"> {/* Consistent styling */}
+                          <CardHeader>
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <CardTitle className="text-lg">
+                                  Data Request: {request.equipment?.name ? `${request.equipment.name} (${request.equipment.equipmentId || 'N/A'})` : `ID ${request.id.substring(0,8)}`}
+                                </CardTitle>
+                                <CardDescription className="text-xs">
+                                  Requested by: {request.borrower.name || request.borrower.email} on {formatDateSafe(request.updatedAt, 'PPp')}
+                                </CardDescription>
+                              </div>
+                              <Badge variant={'success'}> {/* Always success for this section */}
+                                {request.dataRequestStatus || 'Fulfilled'}
+                              </Badge>
                             </div>
-                        </CardHeader>
-                        <CardContent className="p-3 text-xs space-y-2">
-                            <p><span className="font-medium text-muted-foreground">Equipment:</span></p>
-                            <ul className="list-disc list-inside pl-1 space-y-0.5">
-                                {request.detailedRequestedEquipment && request.detailedRequestedEquipment.length > 0 ? (
-                                    request.detailedRequestedEquipment.map(eq => { // Iterate over detailedRequestedEquipment
-                                        return (
-                                            <li key={eq.id} className="text-foreground/80">
-                                                {eq.name ? `${eq.name} (ID: ${eq.equipmentId})` : `Equipment ID: ${eq.id}`}
-                                                {eq.isDataGenerating && <Badge variant="outline" className="ml-2 text-xs border-blue-500 text-blue-500">Data Gen</Badge>}
-                                            </li>
-                                        );
-                                    })
-                                ) : (
-                                    <li className="text-muted-foreground italic">N/A</li>
-                                )}
-                            </ul>
-                             {request.dataRequestRemarks && (
-                                <details className="text-xs">
-                                    <summary className="cursor-pointer text-muted-foreground hover:text-foreground">Borrower Remarks</summary>
-                                    <p className="mt-1 p-1.5 bg-muted/40 rounded text-foreground/80 whitespace-pre-wrap">{request.dataRequestRemarks}</p>
-                                </details>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {request.dataRequestRemarks && (
+                              <p className="text-sm p-3 bg-muted/50 rounded-md border border-dashed">
+                                <span className="font-semibold">Remarks:</span> {request.dataRequestRemarks}
+                              </p>
                             )}
-                            {request.dataFiles && request.dataFiles.length > 0 && (
-                                <div className="mt-1 pt-1 border-t border-border/20">
-                                    <p className="font-medium text-muted-foreground mb-1">Uploaded Files:</p>
-                                    <ul className="space-y-1">
-                                        {request.dataFiles.map((file, index) => (
-                                            <li key={index} className="flex items-center justify-between p-1 bg-muted/40 rounded text-xs">
-                                                <div className="flex items-center gap-1">
-                                                    <FileText className="h-3 w-3 text-muted-foreground" />
-                                                    <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name} className="hover:underline text-primary hover:text-primary/80">
-                                                        {file.name || `File ${index + 1}`}
-                                                    </a>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </div>
+                            {request.detailedRequestedEquipment && request.detailedRequestedEquipment.length > 0 && (
+                              <div className="space-y-1">
+                                <h4 className="text-sm font-medium">Specifically Requested Equipment for Data:</h4>
+                                <ul className="list-disc list-inside pl-4 text-sm space-y-1">
+                                  {request.detailedRequestedEquipment.map(eq => (
+                                    <li key={eq.id} className="text-foreground/90">
+                                      {eq.name ? `${eq.name} (ID: ${eq.equipmentId})` : `Equipment ID: ${eq.id}`}
+                                      {eq.isDataGenerating && <Badge variant="outline" className="ml-2 text-xs border-blue-500 text-blue-500">Data Gen</Badge>}
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
                             )}
-                            {(!request.dataFiles || request.dataFiles.length === 0) && request.dataRequestStatus === 'Fulfilled' && (
-                                <p className="text-muted-foreground italic text-xs">No files were uploaded for this fulfilled request.</p>
-                            )}
-                        </CardContent>
-                       </Card>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="text-center py-8">
-            <Database className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <p className="mt-4 text-lg font-medium text-muted-foreground">No Data Requests Found</p>
-            <p className="text-sm text-muted-foreground">There are currently no pending or processed data requests from users.</p>
-          </div>
+                            <div className="space-y-2">
+                              <h4 className="text-sm font-medium">Attached Files:</h4>
+                              {request.dataFiles && request.dataFiles.length > 0 ? (
+                                <ul className="list-disc list-inside pl-4 text-sm space-y-1">
+                                  {request.dataFiles.map((file, index) => (
+                                    <li key={file.name || index} className="flex justify-between items-center">
+                                      <span className="text-primary truncate max-w-xs flex items-center gap-1">
+                                        <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name} className="hover:underline">
+                                          {file.name || `File ${index + 1}`}
+                                        </a>
+                                        {file.size && <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>}
+                                        {file.type && <Badge variant="outline" className="text-xs scale-90 font-normal">{file.type}</Badge>}
+                                      </span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-xs text-muted-foreground italic">No files were uploaded for this fulfilled request.</p>
+                              )}
+                            </div>
+                            {/* Action buttons are less relevant for already fulfilled items, could be omitted or simplified */}
+                             <div className="flex items-center gap-2 pt-2 border-t border-border/20 mt-3">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-9 text-xs"
+                                  onClick={() => handleEmailBorrowerAndGroupmatesAdmin(request)}
+                                  disabled={isFetchingGroupMatesAdmin} /* Only disable if fetching emails */
+                                >
+                                  {isFetchingGroupMatesAdmin && (cancelDataRequestAdminMutation.variables?.requestId === request.id || updateStatusMutation.variables?.requestId === request.id) ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                                  Email Borrower
+                                </Button>
+                                {/* Optionally, a 'Re-open' or 'Archive' button could go here if needed in future */}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )
         )}
       </CardContent>
     </Card>

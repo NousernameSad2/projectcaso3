@@ -49,6 +49,7 @@ export const EquipmentSchema = z.object({
     }, { message: "Must be a valid URL (https://...) or a root-relative path (/...)" })
     .optional()
     .or(z.literal('')),
+  instrumentManualUrl: z.string().url({ message: "Invalid URL for instrument manual." }).optional().or(z.literal('')),
 });
 
 export type EquipmentInput = z.infer<typeof EquipmentSchema>;
@@ -66,7 +67,7 @@ export const ReservationBaseSchema = z.object({
       required_error: "End date and time are required.",
       invalid_type_error: "Invalid end date/time format."
   }),
-  classId: z.string().min(1, { message: "Class selection is required."}), 
+  classId: z.string().nullable().optional(),
   groupMateIds: z.array(z.string()).optional(),
 });
 

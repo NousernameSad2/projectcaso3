@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import Image from 'next/image';
 import { format, isValid } from 'date-fns';
-import { Users, Loader2 } from 'lucide-react';
+import { Users, Loader2, ArrowRightCircle } from 'lucide-react';
 // Import types
 import { Borrow, Equipment, Class, BorrowStatus, ReservationType } from '@prisma/client';
 // Import the new modal
@@ -17,12 +17,18 @@ import { transformGoogleDriveUrl } from "@/lib/utils";
 
 // Define the shape of the data expected from the user borrows endpoint
 // Make sure this includes fields needed by the modal (id, borrowGroupId, equipment details)
+// and for checkout logic (approvedStartTime, borrowStatus)
 type UserBorrowView = Borrow & {
-  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' | 'images' /* | 'isDataGenerating' */>;
-  class: Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'>;
+  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' | 'images'>;
+  class: Pick<Class, 'id' | 'courseCode' | 'section' | 'semester'> | null;
   expectedReturnTime: Date | null;
   borrowGroupId: string | null;
   reservationType?: ReservationType | null;
+  borrower: { id: string; name: string | null; email: string | null; };
+  // Ensure approvedStartTime is part of the Borrow type from Prisma, if not, it needs to be added to the API response and this type
+  // Assuming Borrow type from Prisma includes:
+  // approvedStartTime: Date | string | null; 
+  // borrowStatus: BorrowStatus;
 };
 
 // Grouped borrows structure
@@ -67,6 +73,7 @@ export default function MyBorrowsPage() {
   const [borrows, setBorrows] = useState<UserBorrowView[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [checkingOutId, setCheckingOutId] = useState<string | null>(null); // For loading state on checkout button
   // State for modal control
   const [isDeficiencyModalOpen, setIsDeficiencyModalOpen] = useState(false);
   const [itemsToReportForModal, setItemsToReportForModal] = useState<UserBorrowView[]>([]);
@@ -172,6 +179,29 @@ export default function MyBorrowsPage() {
     }
   };
 
+  const handleCheckout = async (borrowId: string) => {
+    setCheckingOutId(borrowId);
+    try {
+      // The checkout API seems to be PATCH /api/borrows/[borrowId]/checkout
+      const response = await fetch(`/api/borrows/${borrowId}/checkout`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to checkout item.');
+      }
+      toast.success('Item checked out successfully!');
+      fetchBorrows(); // Refresh borrows list
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unknown error occurred during checkout.';
+      toast.error(message);
+      console.error("Checkout error:", err);
+    } finally {
+      setCheckingOutId(null);
+    }
+  };
+
   // --- Modified handler to OPEN the modal for group items ---
   const handleOpenDeficiencyModalForGroup = (groupId: string) => {
     const groupItems = groupedBorrows[groupId];
@@ -197,6 +227,15 @@ export default function MyBorrowsPage() {
   const renderBorrowItems = (items: UserBorrowView[]) => (
       <ul className="space-y-3 mt-3">
           {items.map(item => {
+              // Checkout button logic simplified
+              let canCheckout = false;
+              let showCheckoutButton = false;
+
+              if (item.borrowStatus === BorrowStatus.APPROVED) {
+                showCheckoutButton = true;
+                canCheckout = true; // Button is always enabled if status is APPROVED
+              }
+
               return (
                 <li key={item.id} className="flex items-start gap-3 border-b pb-3 last:border-b-0">
                     <Image 
@@ -235,8 +274,27 @@ export default function MyBorrowsPage() {
                         {/* Display Due Time / Overdue Info */}
                         {/* ... Existing due time / overdue logic ... */}
                     </div>
-                    <div className="flex items-center gap-2">
-                        {/* Add other actions like cancel if applicable */}
+                    <div className="flex flex-col items-end gap-2"> {/* Changed to flex-col and items-end for button stacking */}
+                        {/* Checkout Button - Timed Visibility */}
+                        {showCheckoutButton && (
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="bg-blue-500 hover:bg-blue-600 text-white border-blue-500 hover:border-blue-600"
+                                onClick={() => handleCheckout(item.id)}
+                                disabled={checkingOutId === item.id || !canCheckout}
+                                title={canCheckout ? "Checkout this item" : "Item not ready for checkout"}
+                            >
+                                {checkingOutId === item.id ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                    <ArrowRightCircle className="mr-2 h-4 w-4" />
+                                )}
+                                Checkout
+                            </Button>
+                        )}
+                        {/* Add other actions like cancel if applicable - this was the original content of the div */}
+                        {/* Example: Retain existing cancel button logic if it were here */}
                     </div>
                 </li>
               );
@@ -284,7 +342,9 @@ export default function MyBorrowsPage() {
                                     Group Borrow
                                 </CardTitle>
                                 <CardDescription>
-                                    Class: {firstItemInGroup.class.courseCode} - {firstItemInGroup.class.section} ({firstItemInGroup.class.semester})
+                                    {firstItemInGroup.class ? 
+                                        `Class: ${firstItemInGroup.class.courseCode} - ${firstItemInGroup.class.section} (${firstItemInGroup.class.semester})` : 
+                                        'Class: N/A'}
                                 </CardDescription>
                             </div>
                             {/* Group Action Button - Only if any item in group is ACTIVE/OVERDUE */}

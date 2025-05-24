@@ -15,7 +15,7 @@ interface SessionUser {
 // Validation schema for creating a deficiency
 const CreateDeficiencySchema = z.object({
   borrowId: z.string().min(1, "Borrow ID is required"),
-  userId: z.string().optional(), // Add userId as an optional field
+  // userId: z.string().optional(), // userId from request will be ignored for this auto-tagging logic from return form
   type: z.nativeEnum(DeficiencyType),
   description: z.string().optional(),
   ficToNotifyId: z.string().optional(), // Optional FIC to notify
@@ -52,7 +52,8 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'Invalid input', errors: parsedData.error.flatten().fieldErrors }, { status: 400 });
     }
 
-    const { borrowId, type, description, ficToNotifyId, userId } = parsedData.data;
+    // const { borrowId, type, description, ficToNotifyId, userId } = parsedData.data; // userId from request is not used here
+    const { borrowId, type, description, ficToNotifyId } = parsedData.data;
 
     // --- Add Validation for borrowId format ---
     const objectIdRegex = /^[0-9a-fA-F]{24}$/;
@@ -63,30 +64,69 @@ export async function POST(req: NextRequest) {
 
     try {
         // 3. Get required info from the related Borrow record
-        const borrowInfo = await prisma.borrow.findUnique({
+        const borrowRecord = await prisma.borrow.findUnique({
             where: { id: borrowId },
-            select: { borrowerId: true, ficId: true } // Need borrowerId and optional ficId
+            select: { 
+                borrowerId: true, 
+                ficId: true, 
+                borrowGroupId: true, 
+                classId: true, // For potentially getting FIC from class if not directly on borrow
+                class: { select: { ficId: true } } // To get FIC from the class
+            }
         });
 
-        if (!borrowInfo) {
+        if (!borrowRecord) {
             return NextResponse.json({ message: `Borrow record not found: ${borrowId}` }, { status: 404 });
         }
 
-        // 4. Create the Deficiency Record
-        const newDeficiency = await prisma.deficiency.create({
-            data: {
-                borrowId: borrowId,
-                userId: userId || borrowInfo.borrowerId,    // Use provided userId or fallback to borrowerId
-                taggedById: loggedInUserId,       // The user who submitted this POST request
-                ficToNotifyId: ficToNotifyId || undefined,  // Use ficToNotifyId from form, or undefined if not provided
-                type: type,
-                status: DeficiencyStatus.UNRESOLVED,
-                description: description || undefined,
-            },
-        });
+        const userIdsToTag = new Set<string>();
+        if (borrowRecord.borrowerId) {
+            userIdsToTag.add(borrowRecord.borrowerId);
+        }
+
+        if (borrowRecord.borrowGroupId) {
+            const groupMates = await prisma.borrowGroupMate.findMany({
+                where: { borrowGroupId: borrowRecord.borrowGroupId },
+                select: { userId: true },
+            });
+            groupMates.forEach(mate => userIdsToTag.add(mate.userId));
+        }
+
+        if (userIdsToTag.size === 0) {
+            // This case should ideally not happen if borrowRecord exists and has a borrowerId
+            console.error(`No users identified to tag for deficiency on borrowId: ${borrowId}`);
+            return NextResponse.json({ message: 'No users identified for this borrow record to create deficiency against.' }, { status: 400 });
+        }
+
+        // Determine the FIC to notify
+        // Priority: ficToNotifyId from request > borrowRecord.ficId > borrowRecord.class.ficId
+        const finalFicToNotifyId = ficToNotifyId || borrowRecord.ficId || borrowRecord.class?.ficId || undefined;
+
+        // 4. Create Deficiency Records for all identified users in a transaction
+        const deficiencyCreatePromises = Array.from(userIdsToTag).map(userIdInSet => 
+            prisma.deficiency.create({
+                data: {
+                    borrowId: borrowId,
+                    userId: userIdInSet, 
+                    taggedById: loggedInUserId, // The user who submitted this POST request
+                    ficToNotifyId: finalFicToNotifyId,
+                    type: type,
+                    status: DeficiencyStatus.UNRESOLVED,
+                    description: description || undefined,
+                },
+            })
+        );
+
+        const createdDeficiencies = await prisma.$transaction(deficiencyCreatePromises);
 
         // 5. Return Success Response
-        return NextResponse.json(newDeficiency, { status: 201 });
+        return NextResponse.json(
+            { 
+                message: `Successfully created ${createdDeficiencies.length} deficiency record(s).`, 
+                deficiencies: createdDeficiencies 
+            }, 
+            { status: 201 }
+        );
 
     } catch (error) {
         console.error("API Error - POST /api/deficiencies:", error);

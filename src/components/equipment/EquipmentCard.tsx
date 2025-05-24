@@ -3,14 +3,14 @@
 import React, { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { Equipment, EquipmentStatus as PrismaEquipmentStatus } from '@prisma/client'; // Removed EquipmentCategory
+import { Equipment, EquipmentStatus as PrismaEquipmentStatus, EquipmentCategory } from '@prisma/client'; // Removed EquipmentCategory
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
 import { cn, transformGoogleDriveUrl } from '@/lib/utils';
-import { Eye } from 'lucide-react'; // Removed ArrowRight, CalendarDays, CheckCircle, Info, Package, Slash, Wrench, XCircle
+import { Eye, BookOpen } from 'lucide-react'; // Removed ArrowRight, CalendarDays, CheckCircle, Info, Package, Slash, Wrench, XCircle
 // import { useSession } from 'next-auth/react'; // Commented out useSession
 // import { UserRole } from '@prisma/client'; // Removed UserRole
 // import { 
@@ -49,6 +49,7 @@ export interface EquipmentWithAvailability extends Equipment { // `Equipment` fr
   nextUpcomingReservationStart: string | null;
   availableUnitsInFilterRange: number | null;
   activeBorrowCount: number;
+  instrumentManualUrl?: string | null; // ADDED for instrument manual
   // Explicitly list fields from `Equipment` if your base `Equipment` type is minimal
   // For example: id, name, images, stockCount, status, equipmentId, condition etc.
 }
@@ -310,7 +311,16 @@ export default function EquipmentCard({
           )}
         </div>
       </CardContent>
-      <CardFooter className="p-4 pt-2 flex justify-end items-center">
+      <CardFooter className="p-4 pt-2 flex justify-between items-center">
+        <div>
+          {equipment.category === EquipmentCategory.INSTRUMENTS && equipment.instrumentManualUrl && (
+            <Button asChild size="sm" variant="outline" className="interactive-element">
+              <a href={equipment.instrumentManualUrl as string} target="_blank" rel="noopener noreferrer" title="View Instrument Manual">
+                <BookOpen className="h-4 w-4" />
+              </a>
+            </Button>
+          )}
+        </div>
         {canManageEquipment ? (
           <Button asChild size="sm" className="interactive-element">
             <Link href={`/equipment/${equipment.id}`}>

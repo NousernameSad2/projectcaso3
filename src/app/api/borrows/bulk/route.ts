@@ -12,7 +12,7 @@ import { formatInTimeZone } from 'date-fns-tz';
 // Define validation schema for bulk borrow request
 const bulkBorrowSchema = z.object({
   equipmentIds: z.array(z.string().min(1)).min(1, "At least one equipment ID is required"),
-  classId: z.string().optional(), // Make classId optional in schema
+  classId: z.string().nullable().optional(), // MODIFIED: Allow null, undefined, or a string
   requestedStartTime: z.string().datetime({ message: "Invalid start date/time format." }),
   requestedEndTime: z.string().datetime({ message: "Invalid end date/time format." }),
   groupMateIds: z.array(z.string().min(1)).optional(),

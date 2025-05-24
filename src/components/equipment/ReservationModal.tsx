@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { /* ReservationBaseSchema, ReservationInput*/ } from "@/lib/schemas"; // Removed ReservationInput
-import { Equipment, Class, User } from '@prisma/client'; // Added Class and User
+import { Equipment, Class, User, UserRole } from '@prisma/client'; // Added UserRole
 import { toast } from "sonner"; // Import toast
 import { useSession } from 'next-auth/react'; // Import useSession
 import { format, parseISO } from 'date-fns'; // For formatting date/time and parseISO
@@ -69,7 +69,7 @@ const FormSchemaForModal = z.object({
     const hours = date.getHours();
     return hours >= 6 && hours < 20;
   }, { message: "Reservation must be between 6:00 AM and 8:00 PM." }),
-  classId: z.string().min(1, { message: "Class selection is required."}), 
+  classId: z.string().optional(), // Made classId optional at schema level
 }).refine(
   (data) => { // data should now be correctly typed based on the z.object above
     if (!data.requestedStartTime || !data.requestedEndTime) {
@@ -187,11 +187,12 @@ export default function ReservationModal({
         toast.error("You must be logged in to make a reservation.");
         return;
     }
+    const userRole = session.user.role;
 
     // Validate classId is selected if required (i.e., user is REGULAR)
-    if (session.user.role === 'REGULAR' && !values.classId) {
+    if (userRole === UserRole.REGULAR && (!values.classId || values.classId.trim() === "")) {
         form.setError("classId", { type: "manual", message: "Please select your class." });
-        toast.error("Please select your class before submitting.");
+        // toast.error("Please select your class before submitting."); // setError will show message
         return;
     }
 
@@ -199,11 +200,10 @@ export default function ReservationModal({
     // Construct payload including selected classmate IDs
     const payload = {
         equipmentIds: values.equipmentIds,
-      requestedStartTime: values.requestedStartTime,
-      requestedEndTime: values.requestedEndTime,
-        classId: values.classId,
-      // Add groupMateIds array
-      groupMateIds: Array.from(selectedClassmateIds), 
+        requestedStartTime: values.requestedStartTime,
+        requestedEndTime: values.requestedEndTime,
+        classId: (userRole === UserRole.REGULAR || (values.classId && values.classId.trim() !== "")) ? values.classId : null, // Send null if faculty/staff and no class selected
+        groupMateIds: Array.from(selectedClassmateIds), 
     };
 
     try {
@@ -335,33 +335,50 @@ export default function ReservationModal({
               name="classId"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Class (Required)</FormLabel>
+                  <FormLabel>
+                    Class 
+                    {session?.user?.role === UserRole.REGULAR && <span className="text-destructive">*</span>}
+                    {session?.user?.role !== UserRole.REGULAR && " (Optional for Faculty/Staff)"}
+                  </FormLabel>
                       <Select 
                     onValueChange={(value) => {
-                        field.onChange(value);
-                        setSelectedClassId(value); // Update state to trigger classmate fetch
+                        field.onChange(value === "NONE_OR_GENERAL_USE" ? "" : value); // Handle general use if added
+                        setSelectedClassId(value === "NONE_OR_GENERAL_USE" ? "" : value); 
                     }}
                         value={field.value}
-                    disabled={isLoadingClasses || enrolledClasses.length === 0}
+                    disabled={isLoadingClasses || (enrolledClasses.length === 0 && session?.user?.role === UserRole.REGULAR)}
                       >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={isLoadingClasses ? "Loading classes..." : "Select your class..."} />
+                        <SelectValue placeholder={isLoadingClasses ? "Loading classes..." : (session?.user?.role !== UserRole.REGULAR ? "Select class (Optional)" : "Select your class...")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {isLoadingClasses ? (
                           <SelectItem value="loading" disabled>Loading...</SelectItem>
                       ) : enrolledClasses.length > 0 ? (
-                        enrolledClasses.map((cls) => (
-                          <SelectItem key={cls.id} value={cls.id}>
-                            {`${cls.courseCode} ${cls.section} (${cls.semester})`}
-                          </SelectItem>
-                        ))
+                        <>
+                          {session?.user?.role !== UserRole.REGULAR && (
+                            <SelectItem value="NONE_OR_GENERAL_USE">
+                              General Use / No Class Associated
+                            </SelectItem>
+                          )}
+                          {enrolledClasses.map((cls) => (
+                            <SelectItem key={cls.id} value={cls.id}>
+                              {`${cls.courseCode} ${cls.section} (${cls.semester})`}
+                            </SelectItem>
+                          ))}
+                        </>
                       ) : (
-                          <SelectItem value="no-classes" disabled>
-                            {classError || "No enrolled classes found"}
-                          </SelectItem>
+                          session?.user?.role !== UserRole.REGULAR ? (
+                             <SelectItem value="NONE_OR_GENERAL_USE">
+                                General Use / No Class Associated
+                             </SelectItem>
+                          ) : (
+                            <SelectItem value="no-classes" disabled>
+                              {classError || "No enrolled classes found. Please enroll in a class first or contact support."}
+                            </SelectItem>
+                          )
                       )}
                     </SelectContent>
                   </Select>
@@ -446,7 +463,14 @@ export default function ReservationModal({
                   Cancel
                 </Button>
              </DialogClose>
-             <Button type="submit" disabled={isLoading || isLoadingClasses || (session?.user?.role === 'REGULAR' && !!classError)}>
+             <Button 
+              type="submit" 
+              disabled={
+                isLoading || 
+                isLoadingClasses || 
+                (session?.user?.role === UserRole.REGULAR && (!form.getValues("classId") || !!classError))
+              }
+             >
               {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                Submit Request
             </Button>

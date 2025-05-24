@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { Class, User, ReservationType } from '@prisma/client';
+import { Class, User, ReservationType, UserRole } from '@prisma/client';
 import { useSession } from 'next-auth/react';
 import { toast } from "sonner";
 import { format, isAfter, addHours } from 'date-fns';
@@ -164,17 +164,23 @@ export default function BulkReservationModal({
   }, [selectedClassIdState, sessionStatus, session?.user?.id]);
 
   async function onSubmit(values: BulkFormInput) {
-    if (sessionStatus !== 'authenticated') {
+    if (sessionStatus !== 'authenticated' || !session?.user?.id) {
       toast.error("Authentication required."); return;
     }
     
-    if (!values.classId) {
-       form.setError("classId", { message: "Class selection is required." });
-       toast.error("Please select the class for this reservation.");
+    const userRole = session.user.role;
+
+    if (userRole === UserRole.REGULAR && (!values.classId || values.classId.trim() === "")) {
+       form.setError("classId", { message: "Class selection is required for students." });
        return; 
     }
 
-    const finalClassId = values.classId;
+    const finalClassId = (userRole === UserRole.REGULAR || (values.classId && values.classId.trim() !== "")) ? values.classId : null;
+
+    if (!values.requestedStartTime || !values.requestedEndTime) {
+      toast.error("Start and end times are required.");
+      return;
+    }
 
     if (!isAfter(values.requestedEndTime, values.requestedStartTime)) {
         form.setError("requestedEndTime", { message: "End time must be after start time." });
@@ -355,33 +361,50 @@ export default function BulkReservationModal({
               name="classId"
               render={({ field }) => (
                 <FormItem> 
-                  <FormLabel>Class <span className="text-destructive">*</span></FormLabel>
+                  <FormLabel>
+                    Class 
+                    {session?.user?.role === UserRole.REGULAR && <span className="text-destructive">*</span>}
+                    {session?.user?.role !== UserRole.REGULAR && " (Optional for Faculty/Staff)"}
+                  </FormLabel>
                   <Select 
                     onValueChange={(value) => { 
-                      field.onChange(value); 
-                      setSelectedClassIdState(value); 
+                      field.onChange(value === "NONE_OR_GENERAL_USE" ? "" : value);
+                      setSelectedClassIdState(value === "NONE_OR_GENERAL_USE" ? "" : value); 
                     }}
                     value={field.value ?? ""}
-                    disabled={isLoadingClasses || enrolledClasses.length === 0}
+                    disabled={isLoadingClasses || (enrolledClasses.length === 0 && session?.user?.role === UserRole.REGULAR)}
                   >
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder={isLoadingClasses ? "Loading..." : "Select the class"} />
+                        <SelectValue placeholder={isLoadingClasses ? "Loading..." : (session?.user?.role !== UserRole.REGULAR ? "Select class (Optional)" : "Select the class")} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
                       {isLoadingClasses ? (
                           <SelectItem value="loading" disabled>Loading...</SelectItem>
                       ) : enrolledClasses.length > 0 ? (
-                        enrolledClasses.map((cls) => (
-                          <SelectItem key={cls.id} value={cls.id}>
-                            {`${cls.courseCode} ${cls.section} (${cls.semester})`}
-                          </SelectItem>
-                        ))
+                        <>
+                          {session?.user?.role !== UserRole.REGULAR && (
+                            <SelectItem value="NONE_OR_GENERAL_USE">
+                              General Use / No Class Associated
+                            </SelectItem>
+                          )}
+                          {enrolledClasses.map((cls) => (
+                            <SelectItem key={cls.id} value={cls.id}>
+                              {`${cls.courseCode} ${cls.section} (${cls.semester})`}
+                            </SelectItem>
+                          ))}
+                        </>
                       ) : (
-                          <SelectItem value="no-classes" disabled>
-                            {classError || "No enrolled classes found"}
-                          </SelectItem>
+                          session?.user?.role !== UserRole.REGULAR ? (
+                             <SelectItem value="NONE_OR_GENERAL_USE">
+                                General Use / No Class Associated
+                             </SelectItem>
+                          ) : (
+                            <SelectItem value="no-classes" disabled>
+                              {classError || "No enrolled classes found. Please enroll first or contact support."}
+                            </SelectItem>
+                          )
                       )}
                     </SelectContent>
                   </Select>
@@ -467,7 +490,7 @@ export default function BulkReservationModal({
           <Button 
             type="submit"
             form="bulk-reservation-form"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (session?.user?.role === UserRole.REGULAR && (!form.getValues("classId") || !!classError))}
           >
             {isSubmitting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Submit Request

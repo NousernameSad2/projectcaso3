@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { BorrowStatus, UserRole } from '@prisma/client';
+import { BorrowStatus, UserRole, Prisma } from '@prisma/client';
 import { getServerSession } from 'next-auth/next';
 import { authOptions } from '@/lib/authOptions';
 
@@ -9,141 +9,87 @@ interface SessionUser {
   role: UserRole;
 }
 
+interface RequestBody {
+    requestData?: boolean;
+    dataRequestRemarks?: string;
+    // requestedEquipmentIds might be sent by modal but less relevant for single item return context
+    // It won't directly filter here, but we acknowledge it might be in payload.
+    requestedEquipmentIds?: string[]; 
+}
+
 // PATCH: Mark an active borrow as PENDING_RETURN by the borrower
 export async function PATCH(req: NextRequest, context: { params: Promise<{ borrowId: string }> }) {
     const session = await getServerSession(authOptions);
     const params = await context.params;
     const user = session?.user as SessionUser | undefined;
 
-    // 1. Authentication: Ensure user is logged in
     if (!user?.id) {
         return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
-
     const userId = user.id;
-    
-    // Access params.borrowId *after* await
     const borrowId = params.borrowId;
 
     if (!borrowId) {
         return NextResponse.json({ message: 'Borrow ID is required' }, { status: 400 });
     }
 
+    let body: RequestBody = {};
     try {
-        // Parse request body for data request fields
-        let requestDataValue = false; // Renamed to avoid conflict with Prisma field
-        let dataRequestRemarksValue: string | undefined = undefined; // Renamed
-        let parsedBody: unknown = {}; // Changed from any to unknown
-        
-        // Define a type for the update payload for single item return
-        interface SingleBorrowUpdatePayload {
-            borrowStatus?: BorrowStatus; // Made optional as it might be set later or already correct
-            dataRequested?: boolean;
-            dataRequestStatus?: string | null;
-            dataRequestRemarks?: string | null;
-            requestedEquipmentIds?: string[];
+        if (req.body) {
+            body = await req.json();
         }
-        const updateData: SingleBorrowUpdatePayload = {}; // Initialize as const with the defined type
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    } catch (_error) {
+        // console.warn(`Could not parse request body for borrow ${borrowId}: ${_error}`);
+    }
 
-        try {
-            const body = await req.json();
-            parsedBody = body;
-            // Log the received body - ensure it's an object for stringify
-            if (typeof parsedBody === 'object' && parsedBody !== null) {
-                console.log("API /request-return PATCH received body:", JSON.stringify(parsedBody, null, 2)); 
-            } else {
-                console.log("API /request-return PATCH received non-object body:", parsedBody);
-            }
-            
-            // Type guard for accessing properties
-            if (typeof body === 'object' && body !== null) {
-                if ('requestData' in body && typeof (body as { requestData: unknown }).requestData === 'boolean') {
-                    requestDataValue = (body as { requestData: boolean }).requestData;
-                }
-                if ('dataRequestRemarks' in body && typeof (body as { dataRequestRemarks: unknown }).dataRequestRemarks === 'string') {
-                    dataRequestRemarksValue = (body as { dataRequestRemarks: string }).dataRequestRemarks;
-                }
-                // New: Parse requestedEquipmentIds
-                if ('requestedEquipmentIds' in body && Array.isArray((body as { requestedEquipmentIds: unknown }).requestedEquipmentIds)) {
-                    // Basic validation: ensure all elements are strings (ObjectIds)
-                    const ids = (body as { requestedEquipmentIds: string[] }).requestedEquipmentIds;
-                    if (ids.every(id => typeof id === 'string')) {
-                        updateData.requestedEquipmentIds = ids;
-                    } else {
-                        console.warn("API /request-return PATCH: requestedEquipmentIds contained non-string elements.");
-                        updateData.requestedEquipmentIds = []; // Default to empty if validation fails
-                    }
-                } else if (requestDataValue) { // If data is requested but no IDs are provided
-                    updateData.requestedEquipmentIds = [];
-                }
-            }
-        } catch {
-            // Ignore error if body is not present or not JSON, defaults will be used
-        }
+    const { requestData = false, dataRequestRemarks } = body;
 
-        if (requestDataValue) {
-            updateData.dataRequested = true;
-            updateData.dataRequestStatus = 'Pending';
-            if (dataRequestRemarksValue) {
-                updateData.dataRequestRemarks = dataRequestRemarksValue;
-            }
-            // Ensure requestedEquipmentIds is set if not already by parsing logic
-            if (!updateData.requestedEquipmentIds) {
-                 updateData.requestedEquipmentIds = [];
-            }
-        } else {
-            updateData.dataRequested = false;
-            updateData.dataRequestRemarks = null;
-            updateData.dataRequestStatus = null;
-            updateData.requestedEquipmentIds = []; // Clear if data is not requested
-        }
-        
-        // Ensure borrowStatus is always set before the final update
-        updateData.borrowStatus = BorrowStatus.PENDING_RETURN;
+    try {
+        // Request body parsing for data request fields is removed.
+        // console.log(`API /borrows/${borrowId}/request-return PATCH received request.`);
 
-        console.log(`API /request-return PATCH (borrowId: ${borrowId}) - Prisma update data:`, JSON.stringify(updateData, null, 2));
-
-        // 2. Find the borrow record
         const borrowRecord = await prisma.borrow.findUnique({
             where: { id: borrowId },
         });
 
-        // 3. Validation: Check if borrow exists
         if (!borrowRecord) {
             return NextResponse.json({ message: 'Borrow record not found' }, { status: 404 });
         }
 
-        // 4. Authorization: Check if the logged-in user is the borrower
         if (borrowRecord.borrowerId !== userId) {
-            console.warn(`User ${userId} attempted to request return for borrow ${borrowId} owned by ${borrowRecord.borrowerId}`);
+            // console.warn(`User ${userId} attempted to request return for borrow ${borrowId} owned by ${borrowRecord.borrowerId}`);
             return NextResponse.json({ message: 'Forbidden: You did not borrow this item' }, { status: 403 });
         }
 
-        // 5. Status Check: Ensure the borrow is currently ACTIVE or OVERDUE
         if (!(borrowRecord.borrowStatus === BorrowStatus.ACTIVE || borrowRecord.borrowStatus === BorrowStatus.OVERDUE)) {
             return NextResponse.json(
                 { error: `Cannot request return for item with status: ${borrowRecord.borrowStatus}` },
-                { status: 400 } // Bad Request
+                { status: 400 }
             );
         }
 
-        // --- Removed Deficiency Log Block --- 
+        const updateData: Prisma.BorrowUpdateInput = {
+            borrowStatus: BorrowStatus.PENDING_RETURN,
+            dataRequested: requestData,
+            dataRequestStatus: requestData ? 'Pending' : null,
+            dataRequestRemarks: requestData ? dataRequestRemarks : null,
+        };
 
-        // 6. Update the status
+        // console.log(`API /request-return PATCH (borrowId: ${borrowId}) - Prisma update data:`, JSON.stringify(updateData, null, 2));
+
         const updatedBorrow = await prisma.borrow.update({
             where: { id: borrowId },
             data: updateData,
         });
 
-        // Return the updated borrow record directly
-        return NextResponse.json(updatedBorrow); 
+        // TODO: Consider creating a notification for admin/staff
+
+        return NextResponse.json(updatedBorrow);
 
     } catch (error) {
-        console.error(`API Error - PATCH /api/borrows/${borrowId}/request-return:`, error);
-        // Consider more specific error checking if needed
-        if (error instanceof Error && error.message.includes('findUnique')) {
-             return NextResponse.json({ message: 'Borrow record not found or invalid ID format' }, { status: 404 });
-        }
-        return NextResponse.json({ message: 'Internal Server Error' }, { status: 500 });
+        console.error("Error processing data request return:", error);
+        // const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+        return NextResponse.json({ message: "Error processing your request." }, { status: 500 });
     }
 }

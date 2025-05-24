@@ -30,7 +30,8 @@ import { Label } from "@/components/ui/label";
 
 // Define the shape of the borrow data expected (simplified for modal)
 type BorrowItemForModal = Pick<Borrow, 'id' | 'borrowGroupId'> & {
-  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId' /* | 'isDataGenerating' */>;
+  equipment: Pick<Equipment, 'id' | 'name' | 'equipmentId'>;
+  borrower: { id: string; name: string | null; email: string | null; };
 };
 
 // Zod schema for the deficiency form
@@ -44,9 +45,9 @@ type DeficiencyReportInput = z.infer<typeof DeficiencyReportSchema>;
 interface ReportDeficiencyModalProps {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
-  itemsToReport: BorrowItemForModal[]; // Can be single or multiple items
+  itemsToReport: BorrowItemForModal[];
   onReturnRequestInitiated: (
-    identifier: string, 
+    identifier: string,
     isGroup: boolean,
     requestData?: boolean,
     dataRequestDetails?: { remarks?: string; equipmentIds?: string[] }
@@ -136,38 +137,34 @@ export default function ReportDeficiencyModal({
   };
 
   const proceedToReturnRequest = async () => {
-     // Determine identifier and isGroup based on initial items, not state
      let identifier: string | undefined | null = undefined;
-     let isGroup = false;
+     let isGroupLocal = false;
 
      if (itemsToReport.length === 1 && itemsToReport[0]) {
          identifier = itemsToReport[0].id;
-         isGroup = false; // Treat as individual return request API call
+         isGroupLocal = false;
      } else if (itemsToReport.length > 1 && itemsToReport[0]?.borrowGroupId) {
          identifier = itemsToReport[0].borrowGroupId;
-         isGroup = true; // Treat as group return request API call
+         isGroupLocal = true;
      }
 
      if (!identifier) {
-          console.error("Could not determine identifier for return request.", itemsToReport);
           toast.error("Could not determine item/group for return request.");
           return;
      }
 
-     // Check if submitting before proceeding
      if (isSubmittingDeficiency) return;
 
      setIsSubmittingDeficiency(true);
      try {
          await onReturnRequestInitiated(
-           identifier, 
-           isGroup,
+           identifier,
+           isGroupLocal,
            requestData === 'yes',
            requestData === 'yes' ? { remarks: dataRequestRemarks, equipmentIds: selectedDataRequestEquipmentIds } : undefined
-         ); 
-         onOpenChange(false); // Close modal on success
+         );
+         onOpenChange(false);
      } catch (error) {
-         // Error logging/toast handled in parent or trigger function
          console.error("Error during return request initiation:", error);
      } finally {
          setIsSubmittingDeficiency(false);
@@ -182,22 +179,21 @@ export default function ReportDeficiencyModal({
         <DialogHeader>
           <DialogTitle>Request Return & Report Issues</DialogTitle>
           <DialogDescription>
-            Select items with issues and report them one by one. 
+            Select items with issues and report them one by one.
+            You can also request data extraction for this borrow transaction.
             When finished, click &quot;Initiate Return Request&quot;.
-            If there are no issues, just click &quot;Initiate Return Request&quot;.
           </DialogDescription>
         </DialogHeader>
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(handleReportDeficiency)} className="space-y-4 py-2">
-             {/* Item Selector (only if multiple items) */}
              {isGroup && (
                 <FormField
                   control={form.control}
                   name="selectedBorrowId"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Select Item to Report</FormLabel>
+                      <FormLabel>Select Item to Report Issue For</FormLabel>
                       <Select onValueChange={field.onChange} defaultValue={field.value} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
@@ -218,7 +214,6 @@ export default function ReportDeficiencyModal({
                 />
              )}
 
-            {/* Only show deficiency fields if an item is selected */}
             {selectedItem && (
               <>
                  <FormField
@@ -262,84 +257,87 @@ export default function ReportDeficiencyModal({
               </>
             )}
 
-            {/* Data Request Section - Copied from ReturnRequestDialog and adapted */}
             <div className="space-y-2 pt-4 border-t mt-4">
-                <FormLabel>Request Data from this Borrow Transaction?</FormLabel>
+                <FormLabel>Request Data Extraction by Admin?</FormLabel>
                 <RadioGroup
                     value={requestData}
                     onValueChange={(value: 'yes' | 'no') => setRequestData(value)}
                     className="flex space-x-4 pt-1"
                 >
                     <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="no" id={`def-modal-data-req-no`} />
-                        <FormLabel htmlFor={`def-modal-data-req-no`} className="font-normal">No</FormLabel>
+                        <RadioGroupItem value="no" id={`modal-data-req-no-${itemsToReport[0]?.id || 'new'}`} />
+                        <FormLabel htmlFor={`modal-data-req-no-${itemsToReport[0]?.id || 'new'}`} className="font-normal">No</FormLabel>
                     </div>
                     <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="yes" id={`def-modal-data-req-yes`} />
-                        <FormLabel htmlFor={`def-modal-data-req-yes`} className="font-normal">Yes</FormLabel>
+                        <RadioGroupItem value="yes" id={`modal-data-req-yes-${itemsToReport[0]?.id || 'new'}`} />
+                        <FormLabel htmlFor={`modal-data-req-yes-${itemsToReport[0]?.id || 'new'}`} className="font-normal">Yes</FormLabel>
                     </div>
                 </RadioGroup>
             </div>
 
             {requestData === 'yes' && (
-                <div className="space-y-2">
-                    {/* New: Item selection for data request */}
-                    <div className="space-y-2 py-2">
-                        <FormLabel>Select Equipment for Data Request:</FormLabel>
+                <div className="space-y-3 p-4 border rounded-md mt-2">
+                    <div className="space-y-2">
+                        <FormLabel>Select Equipment for Data Request (Optional):</FormLabel>
+                        <p className="text-xs text-muted-foreground">If none selected, data request applies to all items in this transaction.</p>
                         <div className="max-h-32 overflow-y-auto space-y-1 rounded-md border p-2">
                             {itemsToReport.length > 0 ? (
-                                itemsToReport
-                                    .map(item => (
-                                        <div key={item.equipment.id} className="flex items-center space-x-2">
-                                            <Checkbox
-                                                id={`data-req-equip-${item.equipment.id}`}
-                                                checked={selectedDataRequestEquipmentIds.includes(item.equipment.id)}
-                                                onCheckedChange={(checked) => {
-                                                    setSelectedDataRequestEquipmentIds(prev => 
-                                                        checked 
-                                                            ? [...prev, item.equipment.id] 
-                                                            : prev.filter(id => id !== item.equipment.id)
-                                                    );
-                                                }}
-                                            />
-                                            <Label htmlFor={`data-req-equip-${item.equipment.id}`} className="font-normal text-sm">
-                                                {item.equipment.name} {item.equipment.equipmentId ? `(${item.equipment.equipmentId})` : ''}
-                                            </Label>
-                                        </div>
-                                    ))
+                                itemsToReport.map(item => (
+                                    <div key={`data-req-equip-chk-${item.equipment.id}`} className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id={`data-req-equip-${item.id}-${item.equipment.id}`}
+                                            checked={selectedDataRequestEquipmentIds.includes(item.equipment.id)}
+                                            onCheckedChange={(checked) => {
+                                                setSelectedDataRequestEquipmentIds(prev =>
+                                                    checked
+                                                        ? [...prev, item.equipment.id]
+                                                        : prev.filter(id => id !== item.equipment.id)
+                                                );
+                                            }}
+                                        />
+                                        <Label htmlFor={`data-req-equip-${item.id}-${item.equipment.id}`} className="font-normal text-sm">
+                                            {item.equipment.name} {item.equipment.equipmentId ? `(${item.equipment.equipmentId})` : ''}
+                                        </Label>
+                                    </div>
+                                ))
                             ) : (
-                                <p className="text-sm text-muted-foreground px-1">No equipment items in this selection.</p>
+                                <p className="text-sm text-muted-foreground px-1">No specific equipment items available for selection.</p>
                             )}
                         </div>
                     </div>
 
-                    <FormLabel htmlFor={`def-modal-data-req-remarks`}>Data Request Remarks (Optional)</FormLabel>
-                    <Textarea 
-                        id={`def-modal-data-req-remarks`}
-                        value={dataRequestRemarks}
-                        onChange={(e) => setDataRequestRemarks(e.target.value)}
-                        placeholder="e.g., Please extract specific logs from the drone."
-                        rows={3}
-                        className='w-full'
-                    />
+                    <FormItem>
+                        <FormLabel htmlFor={`modal-data-req-remarks-${itemsToReport[0]?.id || 'new'}`}>Data Request Remarks (Optional)</FormLabel>
+                        <Textarea
+                            id={`modal-data-req-remarks-${itemsToReport[0]?.id || 'new'}`}
+                            value={dataRequestRemarks}
+                            onChange={(e) => setDataRequestRemarks(e.target.value)}
+                            placeholder="e.g., Please extract flight logs from the drone between 2 PM and 3 PM."
+                            rows={3}
+                            className='w-full'
+                        />
+                    </FormItem>
                 </div>
             )}
 
-            <DialogFooter className="gap-2 mt-4">
-                <Button 
-                    type="button" 
+            <DialogFooter className="gap-2 mt-6 pt-4 border-t">
+                <Button
+                    type="submit"
+                    disabled={isSubmittingDeficiency || !selectedItem}
+                    variant="default"
+                >
+                    {isSubmittingDeficiency ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Report Issue for Selected
+                </Button>
+                 <Button
+                    type="button"
                     variant="secondary"
                     onClick={proceedToReturnRequest}
                     disabled={isSubmittingDeficiency}
-                >
-                    Initiate Return Request
-                </Button>
-                <Button 
-                    type="submit" 
-                    disabled={isSubmittingDeficiency || !selectedItem}
+                    className="bg-green-600 hover:bg-green-700 text-white"
                 >
                     {isSubmittingDeficiency ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Report Issue for Selected Item
+                    Initiate Return Request
                 </Button>
             </DialogFooter>
           </form>

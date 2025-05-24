@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
-import { ArrowLeft, Edit3, Trash2, XCircle, CheckCircle, CalendarDays, Wrench, PackagePlus, ArrowUpRight, ArrowDownLeft, MessageSquare, User as UserIcon, School, Loader2, AlertCircle, History } from 'lucide-react';
+import { ArrowLeft, Edit3, Trash2, XCircle, CheckCircle, CalendarDays, Wrench, PackagePlus, ArrowUpRight, ArrowDownLeft, MessageSquare, User as UserIcon, School, Loader2, AlertCircle, History, ExternalLink } from 'lucide-react';
 import { EquipmentStatus, Prisma, ReservationType, UserRole, Equipment, EquipmentCategory, Borrow, BorrowStatus, User, Class, Deficiency } from '@prisma/client';
 import { transformGoogleDriveUrl } from "@/lib/utils";
 import { useSession } from 'next-auth/react';
@@ -65,6 +65,7 @@ interface EquipmentWithDetails extends Equipment {
   maintenanceLog: Prisma.JsonValue[]; // Maintenance logs are directly on the object
   editHistory: Prisma.JsonValue[];
   customNotesLog: Prisma.JsonValue[]; // Add the new field
+  instrumentManualUrl?: string | null; // ADDED for instrument manual
 }
 
 // Interface for unified Activity Log entries
@@ -865,6 +866,16 @@ export default function EquipmentDetailPage({}: EquipmentDetailPageProps) {
                     <p className="text-sm text-foreground/90">{equipment.condition}</p>
                   </div>
                 )}
+                {equipment.category === EquipmentCategory.INSTRUMENTS && equipment.instrumentManualUrl && (
+                  <div>
+                    <h4 className="font-semibold text-sm text-muted-foreground mb-1">Instrument Manual</h4>
+                    <Button variant="link" asChild className="p-0 h-auto text-sm text-blue-500 hover:text-blue-700">
+                      <a href={equipment.instrumentManualUrl as string} target="_blank" rel="noopener noreferrer">
+                        View Manual <ExternalLink className="ml-1 h-3 w-3" />
+                      </a>
+                    </Button>
+                  </div>
+                )}
                 {equipment.purchaseCost != null && (
                   <div>
                      <h4 className="font-semibold text-sm text-muted-foreground mb-1">Purchase Cost</h4>
@@ -1077,7 +1088,7 @@ export default function EquipmentDetailPage({}: EquipmentDetailPageProps) {
                 {renderBorrowHistory()}
               </CardContent>
             </Card>
-            {/* *** END NEW *** */} 
+            {/* *** END NEW *** */}
 
           </div>
         </div>

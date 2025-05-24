@@ -12,8 +12,8 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from "@/components/ui/calendar"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { cn } from "@/lib/utils"
-import { Calendar as CalendarIcon, FilterX, PlusCircle } from "lucide-react"
-import { format } from "date-fns"
+import { Calendar as CalendarIcon, FilterX, PlusCircle, Clock } from "lucide-react"
+import { format, formatISO, setHours, setMinutes, setSeconds, setMilliseconds } from "date-fns"
 import { DateRange } from "react-day-picker"
 // import ReservationModal from '@/components/equipment/ReservationModal'; // Removed ReservationModal
 // import BulkCheckoutModal from '@/components/equipment/BulkCheckoutModal'; // Removed BulkCheckoutModal
@@ -56,13 +56,25 @@ export default function EquipmentPage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('AVAILABLE'); 
 
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [startTime, setStartTime] = useState<string>("00:00");
+  const [endTime, setEndTime] = useState<string>("23:59");
+
   const [appliedDateRange, setAppliedDateRange] = useState<DateRange | undefined>(undefined);
+  const [appliedStartTime, setAppliedStartTime] = useState<string>("00:00");
+  const [appliedEndTime, setAppliedEndTime] = useState<string>("23:59");
 
   // State for multi-selection and modals (Keep for now)
   const [selectedEquipmentIds, setSelectedEquipmentIds] = useState<string[]>([]);
 
   // Fetch equipment data from API - Wrapped in useCallback
-  const fetchEquipment = useCallback(async (search = searchTerm, category = selectedCategory, status = selectedStatus, dates = appliedDateRange) => {
+  const fetchEquipment = useCallback(async (
+    search = searchTerm, 
+    category = selectedCategory, 
+    status = selectedStatus, 
+    dates = appliedDateRange,
+    sTime = appliedStartTime,
+    eTime = appliedEndTime
+  ) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -70,8 +82,27 @@ export default function EquipmentPage() {
       if (search) params.set('search', search);
       if (category && category !== 'ALL') params.set('category', category);
       if (status && status !== 'ALL') params.set('status', status);
-      if (dates?.from) params.set('startDate', format(dates.from, 'yyyy-MM-dd'));
-      if (dates?.to) params.set('endDate', format(dates.to, 'yyyy-MM-dd'));
+      
+      if (dates?.from && dates?.to && sTime && eTime) {
+        try {
+          const [sHours, sMinutes] = sTime.split(':').map(Number);
+          const [eHours, eMinutes] = eTime.split(':').map(Number);
+
+          const startDateTime = setMilliseconds(setSeconds(setMinutes(setHours(dates.from, sHours), sMinutes),0),0);
+          const endDateTime = setMilliseconds(setSeconds(setMinutes(setHours(dates.to, eHours), eMinutes),59),999);
+          
+          params.set('startDate', formatISO(startDateTime));
+          params.set('endDate', formatISO(endDateTime));
+        } catch (e) {
+          console.error("Error parsing time for API request:", e);
+          if (dates.from) params.set('startDate', format(dates.from, 'yyyy-MM-dd'));
+          if (dates.to) params.set('endDate', format(dates.to, 'yyyy-MM-dd'));
+        }
+      } else if (dates?.from) {
+        params.set('startDate', format(dates.from, 'yyyy-MM-ddT00:00:00.000Z'));
+      } else if (dates?.to) {
+         params.set('endDate', format(dates.to, 'yyyy-MM-ddT23:59:59.999Z'));
+      }
 
       const response = await fetch(`/api/equipment?${params.toString()}`);
       if (!response.ok) {
@@ -88,12 +119,12 @@ export default function EquipmentPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [setEquipmentList, setError, setIsLoading, searchTerm, selectedCategory, selectedStatus, appliedDateRange]);
+  }, [setEquipmentList, setError, setIsLoading, searchTerm, selectedCategory, selectedStatus, appliedDateRange, appliedStartTime, appliedEndTime]);
 
   // Initial fetch and refetch on filter changes
   useEffect(() => {
-    fetchEquipment(searchTerm, selectedCategory, selectedStatus, appliedDateRange);
-  }, [searchTerm, selectedCategory, selectedStatus, appliedDateRange, fetchEquipment]);
+    fetchEquipment(searchTerm, selectedCategory, selectedStatus, appliedDateRange, appliedStartTime, appliedEndTime);
+  }, [searchTerm, selectedCategory, selectedStatus, appliedDateRange, appliedStartTime, appliedEndTime, fetchEquipment]);
 
   const handleSearchChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(event.target.value);
@@ -109,11 +140,17 @@ export default function EquipmentPage() {
 
   const handleApplyDateFilter = () => {
     setAppliedDateRange(dateRange);
+    setAppliedStartTime(startTime);
+    setAppliedEndTime(endTime);
   };
 
   const handleClearDateFilter = () => {
     setDateRange(undefined);
+    setStartTime("00:00");
+    setEndTime("23:59");
     setAppliedDateRange(undefined);
+    setAppliedStartTime("00:00");
+    setAppliedEndTime("23:59");
   };
 
   // --- Toggle selection handler ---
@@ -235,50 +272,69 @@ export default function EquipmentPage() {
         </Select>
         
         {/* Date Range Picker UI */}
-        <div className="flex flex-col gap-2">
-           <label className="text-sm font-medium text-muted-foreground">Filter by Availability Date Range</label>
-           <div className="flex gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button
-                  id="date"
-                  variant={"outline"}
-                  className={cn(
-                    "w-full justify-start text-left font-normal bg-card border-border/40 hover:bg-muted/20",
-                    !dateRange && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {dateRange?.from ? (
-                    dateRange.to ? (
-                      <>
-                        {format(dateRange.from, "LLL dd, y")} -{" "}
-                        {format(dateRange.to, "LLL dd, y")}
-                      </>
-                    ) : (
-                      format(dateRange.from, "LLL dd, y")
-                    )
-                  ) : (
-                    <span>Pick a date range</span>
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  initialFocus
-                  mode="range"
-                  defaultMonth={dateRange?.from}
-                  selected={dateRange}
-                  onSelect={setDateRange}
-                  numberOfMonths={1}
-                  disabled={(date) => date < new Date(new Date().setHours(0, 0, 0, 0))}
-                />
-              </PopoverContent>
-            </Popover>
-            <Button onClick={handleApplyDateFilter} disabled={!dateRange}>Apply</Button>
-            <Button variant="ghost" size="icon" onClick={handleClearDateFilter} disabled={!appliedDateRange} title="Clear date filter">
-               <FilterX className="h-4 w-4" />
-            </Button>
+        <div className="space-y-2 col-span-1 md:col-span-2 lg:col-span-1">
+           <label className="text-sm font-medium text-muted-foreground">Filter by Availability</label>
+           <Popover>
+             <PopoverTrigger asChild>
+               <Button
+                 id="date"
+                 variant={"outline"}
+                 className={cn(
+                   "w-full justify-start text-left font-normal bg-card border-border/40 hover:bg-muted/20",
+                   !dateRange && "text-muted-foreground"
+                 )}
+               >
+                 <CalendarIcon className="mr-2 h-4 w-4" />
+                 {dateRange?.from ? (
+                   dateRange.to ? (
+                     <>
+                       {format(dateRange.from, "LLL dd, y")} -{" "}
+                       {format(dateRange.to, "LLL dd, y")}
+                     </>
+                   ) : (
+                     format(dateRange.from, "LLL dd, y")
+                   )
+                 ) : (
+                   <span>Pick a date range</span>
+                 )}
+               </Button>
+             </PopoverTrigger>
+             <PopoverContent className="w-auto p-0 bg-card border-border" align="start">
+               <Calendar
+                 initialFocus
+                 mode="range"
+                 defaultMonth={dateRange?.from}
+                 selected={dateRange}
+                 onSelect={setDateRange}
+                 numberOfMonths={1}
+               />
+             </PopoverContent>
+           </Popover>
+           <div className="flex gap-2 items-center">
+            <Clock className="h-4 w-4 text-muted-foreground" />
+            <Input 
+                type="time" 
+                value={startTime} 
+                onChange={(e) => setStartTime(e.target.value)} 
+                className="w-full bg-card border-border/40 h-9 text-sm"
+                disabled={!dateRange?.from}
+            />
+            <span className="text-muted-foreground">-</span>
+            <Input 
+                type="time" 
+                value={endTime} 
+                onChange={(e) => setEndTime(e.target.value)} 
+                className="w-full bg-card border-border/40 h-9 text-sm"
+                disabled={!dateRange?.to}
+            />
+           </div>
+           <div className="flex gap-2 mt-1">
+            <Button onClick={handleApplyDateFilter} className="w-full" size="sm" disabled={!dateRange?.from || !dateRange?.to}>Apply Dates</Button>
+            {(appliedDateRange?.from || appliedDateRange?.to) && (
+                 <Button onClick={handleClearDateFilter} variant="outline" className="w-full" size="sm">
+                    <FilterX className="mr-1 h-3 w-3"/> Clear
+                 </Button>
+            )}
            </div>
         </div>
       </div>

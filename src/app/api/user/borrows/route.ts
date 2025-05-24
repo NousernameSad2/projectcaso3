@@ -37,8 +37,8 @@ export async function GET() {
         ],
         // Apply status filter to the combined results
         borrowStatus: {
-          // Include PENDING_RETURN status
-          in: [BorrowStatus.ACTIVE, BorrowStatus.OVERDUE, BorrowStatus.PENDING_RETURN],
+          // Include PENDING_RETURN status AND APPROVED status
+          in: [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE, BorrowStatus.PENDING_RETURN],
         },
       },
       include: {
@@ -48,11 +48,18 @@ export async function GET() {
         class: { // Include class details
           select: { id: true, courseCode: true, section: true, semester: true }, 
         },
+        borrower: { // Include borrower details
+          select: { id: true, name: true, email: true }
+        }
         // No need to include borrowGroup or members here as we filtered by ID
       },
       orderBy: {
         // Order by checkout time, most recent first
-        checkoutTime: 'desc',
+        // Consider a more complex sort if APPROVED items (null checkoutTime) need specific ordering
+        // For now, this will push null checkoutTimes (APPROVED items) typically to the end or beginning based on DB.
+        // A multi-field sort might be: [{ approvedStartTime: 'asc' }, { checkoutTime: 'desc' }]
+        // For simplicity, keeping existing sort, but noting it.
+        requestSubmissionTime: 'desc', // Changed to sort by submission time initially
       },
     });
 
