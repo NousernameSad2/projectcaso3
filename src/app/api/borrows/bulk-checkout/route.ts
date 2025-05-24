@@ -57,6 +57,29 @@ export async function POST(request: Request) {
   const borrowerUserId = performingUserId; 
   const { equipmentIds, classId } = validatedData;
 
+  // --- START: Add Class Active Check ---
+  if (classId) { // Ensure classId is provided before checking
+    const courseClass = await prisma.class.findUnique({
+      where: { id: classId },
+      select: { isActive: true, courseCode: true, section: true }, // Select fields for error message too
+    });
+
+    if (!courseClass) {
+      return NextResponse.json(
+        { error: `Class with ID ${classId} not found.` },
+        { status: 404 } // Not Found
+      );
+    }
+
+    if (!courseClass.isActive) {
+      return NextResponse.json(
+        { error: `Cannot perform checkout: The selected class (${courseClass.courseCode} ${courseClass.section}) is inactive.` },
+        { status: 400 } // Bad Request
+      );
+    }
+  }
+  // --- END: Add Class Active Check ---
+
   // 3. Fetch Equipment Statuses to check availability
   const equipmentToCheck = await prisma.equipment.findMany({
     where: {

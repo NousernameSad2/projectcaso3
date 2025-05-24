@@ -60,6 +60,29 @@ export async function POST(request: Request) {
   const requestedEndTime = new Date(requestedEndTimeStr);
   const facilityTimeZone = 'Asia/Manila';
 
+  // --- START: Add Class Active Check ---
+  if (classId) { // classId is optional, so only check if provided
+    const courseClass = await prisma.class.findUnique({
+      where: { id: classId },
+      select: { isActive: true, courseCode: true, section: true }, // Select fields for error message too
+    });
+
+    if (!courseClass) {
+      return NextResponse.json(
+        { error: `The selected class (ID: ${classId}) was not found.` },
+        { status: 404 } // Not Found
+      );
+    }
+
+    if (!courseClass.isActive) {
+      return NextResponse.json(
+        { error: `Cannot create reservation: The selected class (${courseClass.courseCode} ${courseClass.section}) is inactive.` },
+        { status: 400 } // Bad Request
+      );
+    }
+  }
+  // --- END: Add Class Active Check ---
+
   // Optional: Add detailed logging similar to the other route if needed for debugging
   console.log(`[BULK API] Original Start: ${requestedStartTimeStr}, Parsed UTC: ${requestedStartTime.toISOString()}`);
   console.log(`[BULK API] Original End: ${requestedEndTimeStr}, Parsed UTC: ${requestedEndTime.toISOString()}`);

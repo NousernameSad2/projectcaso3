@@ -19,9 +19,9 @@ export async function GET() {
       where: {
         userId: userId,
         // Optionally filter for active classes if needed
-        // class: {
-        //   isActive: true,
-        // }
+        class: {
+          isActive: true,
+        }
       },
       include: {
         class: true, // Include the full Class object
