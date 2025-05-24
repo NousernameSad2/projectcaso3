@@ -38,6 +38,14 @@ import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
+// Define a type for the equipment details we need
+interface EquipmentDetails {
+  id: string;
+  name: string;
+  stockCount: number;
+  quantity: number; // Add quantity for user to adjust
+}
+
 const BulkReservationFormSchema = z.object({
     requestedStartTime: z.date({ required_error: "Start time is required." }).refine(date => {
       const hours = date.getHours();
@@ -86,6 +94,9 @@ export default function BulkReservationModal({
   const [reservationType, setReservationType] = useState<ReservationType>('OUT_OF_CLASS');
   const [selectedClassIdState, setSelectedClassIdState] = useState<string>("");
 
+  const [selectedEquipmentDetails, setSelectedEquipmentDetails] = useState<EquipmentDetails[]>([]);
+  const [isLoadingEquipmentDetails, setIsLoadingEquipmentDetails] = useState(false);
+
   const form = useForm<BulkFormInput>({
     resolver: zodResolver(BulkReservationFormSchema),
     defaultValues: {
@@ -105,6 +116,52 @@ export default function BulkReservationModal({
   }, [watchedStartTime, form]);
   
   const { isSubmitting } = form.formState;
+
+  useEffect(() => {
+    const fetchEquipmentDetails = async () => {
+      if (!isOpen || selectedEquipmentIds.length === 0) {
+        setSelectedEquipmentDetails([]);
+        return;
+      }
+      setIsLoadingEquipmentDetails(true);
+      try {
+        const equipmentPromises = selectedEquipmentIds.map(id =>
+          fetch(`/api/equipment/${id}`).then(res => {
+            if (!res.ok) {
+              throw new Error(`Failed to fetch details for equipment ID: ${id}`);
+            }
+            return res.json();
+          })
+        );
+        const results = await Promise.all(equipmentPromises);
+        setSelectedEquipmentDetails(results.map(eq => ({ ...eq, quantity: 1 }))); // Initialize quantity to 1
+      } catch (error) {
+        console.error("Error fetching equipment details:", error);
+        toast.error(error instanceof Error ? error.message : "Failed to load equipment details.");
+        setSelectedEquipmentDetails([]);
+      } finally {
+        setIsLoadingEquipmentDetails(false);
+      }
+    };
+
+    fetchEquipmentDetails();
+  }, [isOpen, selectedEquipmentIds]);
+
+  const handleQuantityChange = (equipmentId: string, change: number) => {
+    setSelectedEquipmentDetails(prevDetails =>
+      prevDetails.map(eq => {
+        if (eq.id === equipmentId) {
+          const newQuantity = eq.quantity + change;
+          // Ensure quantity is at least 1 and not more than stockCount
+          return { 
+            ...eq, 
+            quantity: Math.max(1, Math.min(newQuantity, eq.stockCount)) 
+          };
+        }
+        return eq;
+      })
+    );
+  };
 
   const fetchClasses = async () => {
     setIsLoadingClasses(true);
@@ -190,7 +247,10 @@ export default function BulkReservationModal({
 
     try {
       const payload = {
-          equipmentIds: selectedEquipmentIds,
+          equipmentRequests: selectedEquipmentDetails.map(eq => ({
+            equipmentId: eq.id,
+            quantity: eq.quantity,
+          })),
           classId: finalClassId,
           requestedStartTime: values.requestedStartTime.toISOString(),
           requestedEndTime: values.requestedEndTime.toISOString(),
@@ -233,6 +293,7 @@ export default function BulkReservationModal({
       setClassmates([]);
       setClassError(null);
       setReservationType('OUT_OF_CLASS');
+      setSelectedEquipmentDetails([]); // Clear equipment details on close
       if (onClose) {
         onClose();
       }
@@ -272,7 +333,7 @@ export default function BulkReservationModal({
           </Button>
         </DialogTrigger>
       )}
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-5xl">
         <DialogHeader>
           <DialogTitle>Bulk Reservation Request</DialogTitle>
           <DialogDescription>
@@ -280,210 +341,258 @@ export default function BulkReservationModal({
           </DialogDescription>
         </DialogHeader>
         
-        {/* Reservation Type Radio Group */}
-         <div className="space-y-2">
-            <Label className="text-sm font-medium">Reservation Purpose</Label>
-            <RadioGroup 
-                defaultValue="OUT_OF_CLASS" 
-                className="grid grid-cols-2 gap-4"
-                value={reservationType}
-                onValueChange={(value: string) => setReservationType(value as ReservationType)}
-            >
-                <div>
-                    <RadioGroupItem value="IN_CLASS" id="inClass" className="peer sr-only" />
-                    <Label htmlFor="inClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
-                        In Class
-                    </Label>
-                </div>
-                <div>
-                    <RadioGroupItem value="OUT_OF_CLASS" id="outClass" className="peer sr-only" />
-                    <Label htmlFor="outClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
-                        Out of Class
-                    </Label>
-                </div>
-            </RadioGroup>
-        </div>
+        <div className="md:grid md:grid-cols-2 md:gap-6">
+          <div className="md:col-span-1 space-y-3 my-4 max-h-96 overflow-y-auto pr-2">
+            <h4 className="font-medium text-sm sticky top-0 bg-background py-1">Selected Equipment:</h4>
+            {isLoadingEquipmentDetails && <Loader2 className="mx-auto my-4 h-6 w-6 animate-spin" />}
+            {!isLoadingEquipmentDetails && selectedEquipmentDetails.length > 0 && (
+              <>
+                {selectedEquipmentDetails.map((equipment) => (
+                  <div key={equipment.id} className="flex items-center justify-between p-2 border rounded-md">
+                    <div>
+                      <p className="text-sm font-medium">{equipment.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Available: {equipment.stockCount}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-7 w-7"
+                        onClick={() => handleQuantityChange(equipment.id, -1)}
+                        disabled={equipment.quantity <= 1}
+                      >
+                        -
+                      </Button>
+                      <span>{equipment.quantity}</span>
+                      <Button 
+                        variant="outline" 
+                        size="icon" 
+                        className="h-7 w-7"
+                        onClick={() => handleQuantityChange(equipment.id, 1)}
+                        disabled={equipment.quantity >= equipment.stockCount}
+                      >
+                        +
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+            {!isLoadingEquipmentDetails && selectedEquipmentIds.length > 0 && selectedEquipmentDetails.length === 0 && (
+                <p className="text-sm text-muted-foreground my-4">Could not load details for selected equipment.</p>
+            )}
+            {!isLoadingEquipmentDetails && selectedEquipmentDetails.length === 0 && selectedEquipmentIds.length > 0 && (
+                 <p className="text-sm text-muted-foreground my-4">No equipment selected or details unavailable.</p>
+            )}
+          </div>
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} id="bulk-reservation-form" className="space-y-4 py-4">
-             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="md:col-span-1">
+            <div className="space-y-2 mb-4">
+                <Label className="text-sm font-medium">Reservation Purpose</Label>
+                <RadioGroup 
+                    defaultValue="OUT_OF_CLASS" 
+                    className="grid grid-cols-2 gap-4"
+                    value={reservationType}
+                    onValueChange={(value: string) => setReservationType(value as ReservationType)}
+                >
+                    <div>
+                        <RadioGroupItem value="IN_CLASS" id="inClass" className="peer sr-only" />
+                        <Label htmlFor="inClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
+                            In Class
+                        </Label>
+                    </div>
+                    <div>
+                        <RadioGroupItem value="OUT_OF_CLASS" id="outClass" className="peer sr-only" />
+                        <Label htmlFor="outClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
+                            Out of Class
+                        </Label>
+                    </div>
+                </RadioGroup>
+            </div>
+
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onSubmit)} id="bulk-reservation-form" className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="requestedStartTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Start Date & Time</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="datetime-local"
+                            name={field.name}
+                            onBlur={field.onBlur}
+                            ref={field.ref}
+                            value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ''}
+                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            min={nowDateTimeLocal}
+                            disabled={isSubmitting}
+                            className="block w-full"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="requestedEndTime"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>End Date & Time</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="datetime-local"
+                            name={field.name}
+                            onBlur={field.onBlur}
+                            ref={field.ref}
+                            value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ''}
+                            onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
+                            min={minEndTime}
+                            disabled={isSubmitting || !startTimeValue}
+                            className="block w-full"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="requestedStartTime"
+                  name="classId"
                   render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Start Date & Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="datetime-local"
-                          name={field.name}
-                          onBlur={field.onBlur}
-                          ref={field.ref}
-                          value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ''}
-                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                          min={nowDateTimeLocal}
-                          disabled={isSubmitting}
-                          className="block w-full"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="requestedEndTime"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>End Date & Time</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="datetime-local"
-                          name={field.name}
-                          onBlur={field.onBlur}
-                          ref={field.ref}
-                          value={field.value ? format(new Date(field.value), "yyyy-MM-dd'T'HH:mm") : ''}
-                          onChange={(e) => field.onChange(e.target.value ? new Date(e.target.value) : null)}
-                          min={minEndTime}
-                          disabled={isSubmitting || !startTimeValue}
-                          className="block w-full"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-             </div>
-
-            {/* Class Selection Dropdown (Always Visible & Required) */}
-            <FormField
-              control={form.control}
-              name="classId"
-              render={({ field }) => (
-                <FormItem> 
-                  <FormLabel>
-                    Class 
-                    {session?.user?.role === UserRole.REGULAR && <span className="text-destructive">*</span>}
-                    {session?.user?.role !== UserRole.REGULAR && " (Optional for Faculty/Staff)"}
-                  </FormLabel>
-                  <Select 
-                    onValueChange={(value) => { 
-                      field.onChange(value === "NONE_OR_GENERAL_USE" ? "" : value);
-                      setSelectedClassIdState(value === "NONE_OR_GENERAL_USE" ? "" : value); 
-                    }}
-                    value={field.value ?? ""}
-                    disabled={isLoadingClasses || (enrolledClasses.length === 0 && session?.user?.role === UserRole.REGULAR)}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder={isLoadingClasses ? "Loading..." : (session?.user?.role !== UserRole.REGULAR ? "Select class (Optional)" : "Select the class")} />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      {isLoadingClasses ? (
-                          <SelectItem value="loading" disabled>Loading...</SelectItem>
-                      ) : enrolledClasses.length > 0 ? (
-                        <>
-                          {session?.user?.role !== UserRole.REGULAR && (
-                            <SelectItem value="NONE_OR_GENERAL_USE">
-                              General Use / No Class Associated
-                            </SelectItem>
-                          )}
-                          {enrolledClasses.map((cls) => (
-                            <SelectItem key={cls.id} value={cls.id}>
-                              {`${cls.courseCode} ${cls.section} (${cls.semester})`}
-                            </SelectItem>
-                          ))}
-                        </>
-                      ) : (
-                          session?.user?.role !== UserRole.REGULAR ? (
-                             <SelectItem value="NONE_OR_GENERAL_USE">
-                                General Use / No Class Associated
-                             </SelectItem>
+                    <FormItem> 
+                      <FormLabel>
+                        Class 
+                        {session?.user?.role === UserRole.REGULAR && <span className="text-destructive">*</span>}
+                        {session?.user?.role !== UserRole.REGULAR && " (Optional for Faculty/Staff)"}
+                      </FormLabel>
+                      <Select 
+                        onValueChange={(value) => { 
+                          field.onChange(value === "NONE_OR_GENERAL_USE" ? "" : value);
+                          setSelectedClassIdState(value === "NONE_OR_GENERAL_USE" ? "" : value); 
+                        }}
+                        value={field.value ?? ""}
+                        disabled={isLoadingClasses || (enrolledClasses.length === 0 && session?.user?.role === UserRole.REGULAR)}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder={isLoadingClasses ? "Loading..." : (session?.user?.role !== UserRole.REGULAR ? "Select class (Optional)" : "Select the class")} />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {isLoadingClasses ? (
+                              <SelectItem value="loading" disabled>Loading...</SelectItem>
+                          ) : enrolledClasses.length > 0 ? (
+                            <>
+                              {session?.user?.role !== UserRole.REGULAR && (
+                                <SelectItem value="NONE_OR_GENERAL_USE">
+                                  General Use / No Class Associated
+                                </SelectItem>
+                              )}
+                              {enrolledClasses.map((cls) => (
+                                <SelectItem key={cls.id} value={cls.id}>
+                                  {`${cls.courseCode} ${cls.section} (${cls.semester})`}
+                                </SelectItem>
+                              ))}
+                            </>
                           ) : (
-                            <SelectItem value="no-classes" disabled>
-                              {classError || "No enrolled classes found. Please enroll first or contact support."}
-                            </SelectItem>
-                          )
-                      )}
-                    </SelectContent>
-                  </Select>
+                              session?.user?.role !== UserRole.REGULAR ? (
+                                 <SelectItem value="NONE_OR_GENERAL_USE">
+                                    General Use / No Class Associated
+                                 </SelectItem>
+                              ) : (
+                                <SelectItem value="no-classes" disabled>
+                                  {classError || "No enrolled classes found. Please enroll first or contact support."}
+                                </SelectItem>
+                              )
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormItem> 
+                  <FormLabel>Group Mates (Optional)</FormLabel>
+                    <Popover open={isClassmatePopoverOpen} onOpenChange={setIsClassmatePopoverOpen}>
+                       <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={isClassmatePopoverOpen}
+                              className={`w-full justify-between h-auto min-h-10 ${selectedClassmateIds.size === 0 && "text-muted-foreground"}`}
+                              disabled={!selectedClassIdState || isLoadingClassmates || classmates.length === 0}
+                            >
+                                <span className="flex flex-wrap gap-1">
+                                   {selectedClassmateIds.size === 0 && (isLoadingClassmates ? "Loading..." : (classmates.length === 0 ? "No classmates in selected class" : "Select classmates..."))}
+                                   {Array.from(selectedClassmateIds).map(id => {
+                                     const mate = classmates.find(cm => cm.id === id);
+                                     return (
+                                       <Badge
+                                         variant="secondary"
+                                         key={id}
+                                         className="mr-1 mb-1"
+                                         onClick={(e) => { 
+                                             e.stopPropagation();
+                                             toggleClassmate(id);
+                                         }}
+                                       >
+                                         {mate?.name || 'Loading...'}
+                                         <X className="ml-1 h-3 w-3 cursor-pointer" />
+                                       </Badge>
+                                     );
+                                   })}
+                               </span>
+                               <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </FormControl>
+                       </PopoverTrigger>
+                       <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
+                          <Command>
+                            <CommandInput placeholder="Search classmates..." />
+                            <CommandList>
+                              <CommandEmpty>No classmates found.</CommandEmpty>
+                              <CommandGroup>
+                                {classmates.map((classmate) => (
+                                  <CommandItem
+                                     key={classmate.id}
+                                     value={classmate.name ?? classmate.id}
+                                     onSelect={() => {
+                                         toggleClassmate(classmate.id);
+                                     }}
+                                   >
+                                     <Check
+                                         className={cn(
+                                             "mr-2 h-4 w-4",
+                                             selectedClassmateIds.has(classmate.id) ? "opacity-100" : "opacity-0"
+                                         )}
+                                     />
+                                     {classmate.name}
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </CommandList>
+                          </Command>
+                       </PopoverContent>
+                   </Popover>
+                   <FormDescription>Select classmates you are borrowing with (requires selecting a class first).</FormDescription>
                   <FormMessage />
                 </FormItem>
-              )}
-            />
-
-            {/* Group Mates Multi-Select (Always Visible) */}
-             <FormItem> 
-               <FormLabel>Group Mates (Optional)</FormLabel>
-                 <Popover open={isClassmatePopoverOpen} onOpenChange={setIsClassmatePopoverOpen}>
-                    <PopoverTrigger asChild>
-                       <FormControl>
-                         <Button
-                           variant="outline"
-                           role="combobox"
-                           aria-expanded={isClassmatePopoverOpen}
-                           className={`w-full justify-between h-auto min-h-10 ${selectedClassmateIds.size === 0 && "text-muted-foreground"}`}
-                           disabled={!selectedClassIdState || isLoadingClassmates || classmates.length === 0}
-                         >
-                             <span className="flex flex-wrap gap-1">
-                                {selectedClassmateIds.size === 0 && (isLoadingClassmates ? "Loading..." : (classmates.length === 0 ? "No classmates in selected class" : "Select classmates..."))}
-                                {Array.from(selectedClassmateIds).map(id => {
-                                  const mate = classmates.find(cm => cm.id === id);
-                                  return (
-                                    <Badge
-                                      variant="secondary"
-                                      key={id}
-                                      className="mr-1 mb-1"
-                                      onClick={(e) => { 
-                                          e.stopPropagation();
-                                          toggleClassmate(id);
-                                      }}
-                                    >
-                                      {mate?.name || 'Loading...'}
-                                      <X className="ml-1 h-3 w-3 cursor-pointer" />
-                                    </Badge>
-                                  );
-                                })}
-                            </span>
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                         </Button>
-                       </FormControl>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[--radix-popover-trigger-width] max-h-[--radix-popover-content-available-height] p-0">
-                       <Command>
-                         <CommandInput placeholder="Search classmates..." />
-                         <CommandList>
-                           <CommandEmpty>No classmates found.</CommandEmpty>
-                           <CommandGroup>
-                             {classmates.map((classmate) => (
-                               <CommandItem
-                                  key={classmate.id}
-                                  value={classmate.name ?? classmate.id}
-                                  onSelect={() => {
-                                      toggleClassmate(classmate.id);
-                                  }}
-                                >
-                                  <Check
-                                      className={cn(
-                                          "mr-2 h-4 w-4",
-                                          selectedClassmateIds.has(classmate.id) ? "opacity-100" : "opacity-0"
-                                      )}
-                                  />
-                                  {classmate.name}
-                               </CommandItem>
-                             ))}
-                           </CommandGroup>
-                         </CommandList>
-                       </Command>
-                    </PopoverContent>
-                </Popover>
-                <FormDescription>Select classmates you are borrowing with (requires selecting a class first).</FormDescription>
-               <FormMessage />
-             </FormItem>
-          </form>
-        </Form>
-        <DialogFooter>
+              </form>
+            </Form>
+          </div>
+        </div>
+        
+        <DialogFooter className="mt-6">
           <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>
             Cancel
           </Button>

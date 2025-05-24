@@ -22,7 +22,6 @@ import {
   Check,
   X,
   FileText,
-  Download,
   Database,
   Mail, // <<< ADDED for email button
   Trash2, // Added for cancel button
@@ -1442,7 +1441,7 @@ function AdminDataRequestsDashboardPanel() {
 }
 // <<< END NEW >>>
 
-// <<< ADDED: UserDataRequestsPanel component >>>
+// --- START REPLACEMENT FOR UserDataRequestsPanel ---
 function UserDataRequestsPanel() {
   const { data: session } = useSession();
   const { 
@@ -1528,7 +1527,7 @@ function UserDataRequestsPanel() {
           <Database className="mr-3 h-6 w-6 text-blue-400" />
           My Data Requests
         </CardTitle>
-        <CardDescription>Track the status of your data requests and download available files.</CardDescription>
+        <CardDescription>Track the status of your data requests.</CardDescription> {/* Updated description */}
       </CardHeader>
       <CardContent>
         <div className="space-y-4">
@@ -1571,47 +1570,7 @@ function UserDataRequestsPanel() {
                     <p className="p-2 bg-muted/50 rounded-md text-foreground/90 whitespace-pre-wrap">{request.dataRequestRemarks}</p>
                   </div>
                 )}
-                <div>
-                  <p className="font-medium text-muted-foreground text-sm mb-1">Files:</p>
-                  {request.dataFiles && request.dataFiles.length > 0 ? (
-                    <ul className="space-y-2">
-                      {request.dataFiles.map((file, index) => (
-                        <li key={index} className="flex items-center justify-between p-2 bg-muted/50 rounded-md text-sm">
-                          <div className="flex items-center gap-2">
-                            <FileText className="h-4 w-4 text-muted-foreground" />
-                            <span>{file.name || `File ${index + 1}`}</span>
-                            {file.size && <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>}
-                            {file.type && <Badge variant="outline" className="text-xs ml-1">{file.type}</Badge>}
-                          </div>
-                          {request.dataRequestStatus === 'Fulfilled' && file.url ? (
-                            <Button asChild variant="outline" size="sm" className="text-xs">
-                              <a href={file.url} target="_blank" rel="noopener noreferrer" download={file.name}>
-                                <Download className="mr-1 h-3 w-3" /> Download
-                              </a>
-                            </Button>
-                          ) : (
-                             <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button variant="outline" size="sm" className="text-xs" disabled>
-                                            <Download className="mr-1 h-3 w-3" /> Download
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>File not available for download yet.</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-muted-foreground italic">
-                      {request.dataRequestStatus === 'Fulfilled' ? 'No files were uploaded for this request.' : 'No files available yet.'}
-                    </p>
-                  )}
-                </div>
+                {/* File section removed */}
                  <p className="text-xs text-muted-foreground text-right pt-1">Last updated: {formatDateSafe(request.updatedAt, 'MMM d, yyyy h:mm a')}</p>
               </CardContent>
             </Card>
@@ -1621,7 +1580,7 @@ function UserDataRequestsPanel() {
     </Card>
   );
 }
-// <<< END ADDED >>>
+// --- END REPLACEMENT FOR UserDataRequestsPanel ---
 
 export default function DashboardPage() {
   const { data: session, status: sessionStatus } = useSession();

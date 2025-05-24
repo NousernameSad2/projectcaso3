@@ -11,7 +11,10 @@ import { formatInTimeZone } from 'date-fns-tz';
 
 // Define validation schema for bulk borrow request
 const bulkBorrowSchema = z.object({
-  equipmentIds: z.array(z.string().min(1)).min(1, "At least one equipment ID is required"),
+  equipmentRequests: z.array(z.object({
+    equipmentId: z.string().min(1),
+    quantity: z.number().int().min(1, "Quantity must be at least 1"),
+  })).min(1, "At least one equipment item is required"),
   classId: z.string().nullable().optional(), // MODIFIED: Allow null, undefined, or a string
   requestedStartTime: z.string().datetime({ message: "Invalid start date/time format." }),
   requestedEndTime: z.string().datetime({ message: "Invalid end date/time format." }),
@@ -45,7 +48,7 @@ export async function POST(request: Request) {
   }
 
   const {
-    equipmentIds,
+    equipmentRequests,
     classId,
     requestedStartTime: requestedStartTimeStr, // Renaming to avoid confusion with Date object
     requestedEndTime: requestedEndTimeStr,     // Renaming to avoid confusion with Date object
@@ -77,24 +80,24 @@ export async function POST(request: Request) {
   const blockingStatuses: BorrowStatus[] = [BorrowStatus.APPROVED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE];
   const unavailableItemsInfo: { name: string; id: string }[] = [];
 
-  for (const eqId of equipmentIds) {
+  for (const eqReq of equipmentRequests) {
       const equipment = await prisma.equipment.findUnique({
-          where: { id: eqId },
+          where: { id: eqReq.equipmentId },
           select: { stockCount: true, name: true }
       });
 
       if (!equipment) {
-           return NextResponse.json({ message: `Equipment with ID ${eqId} not found.` }, { status: 404 });
+           return NextResponse.json({ message: `Equipment with ID ${eqReq.equipmentId} not found.` }, { status: 404 });
       }
       if (equipment.stockCount <= 0) {
-           unavailableItemsInfo.push({ name: equipment.name, id: eqId });
+           unavailableItemsInfo.push({ name: equipment.name, id: eqReq.equipmentId });
            continue;
       }
 
       // Use converted requestedStartTime and requestedEndTime for overlap check
       const overlappingBorrowsCount = await prisma.borrow.count({
           where: {
-              equipmentId: eqId,
+              equipmentId: eqReq.equipmentId,
               borrowStatus: { in: blockingStatuses },
               AND: [
                    { // Existing borrow starts before requested ends
@@ -113,8 +116,8 @@ export async function POST(request: Request) {
           }
       });
 
-      if (overlappingBorrowsCount >= equipment.stockCount) {
-           unavailableItemsInfo.push({ name: equipment.name, id: eqId });
+      if (overlappingBorrowsCount + eqReq.quantity > equipment.stockCount) {
+           unavailableItemsInfo.push({ name: equipment.name, id: eqReq.equipmentId });
       }
   }
 
@@ -134,16 +137,20 @@ export async function POST(request: Request) {
   const borrowGroupId = createId();
 
   // 4. Prepare data for batch creation
-  const borrowData = equipmentIds.map((equipmentId) => ({
-    borrowGroupId: borrowGroupId,
-    borrowerId: userId,
-    equipmentId: equipmentId,
-    classId: classId || null, // Use null if classId is undefined/empty
-    requestedStartTime: requestedStartTime, 
-    requestedEndTime: requestedEndTime,   
-    borrowStatus: BorrowStatus.PENDING,
-    reservationType: reservationType, // Add reservationType to the data
-  }));
+  const borrowData: Prisma.BorrowCreateManyInput[] = equipmentRequests.flatMap(eqReq => 
+    Array(eqReq.quantity).fill(null).map(() => ({
+      borrowGroupId: borrowGroupId,
+      borrowerId: userId,
+      equipmentId: eqReq.equipmentId,
+      classId: classId || null,
+      requestedStartTime: requestedStartTime, 
+      requestedEndTime: requestedEndTime,   
+      borrowStatus: BorrowStatus.PENDING,
+      reservationType: reservationType,
+    }))
+  );
+  
+  const totalRequestedItems = equipmentRequests.reduce((sum, req) => sum + req.quantity, 0);
 
   // 5. Create Borrow Records in Batch (and Group Mates if provided)
   try {
@@ -154,10 +161,10 @@ export async function POST(request: Request) {
           data: borrowData,
         });
 
-        if (borrowResult.count !== equipmentIds.length) {
-            console.warn(`Bulk borrow creation for group ${borrowGroupId}: Expected ${equipmentIds.length} records, created ${borrowResult.count}. Rolling back transaction.`);
+        if (borrowResult.count !== totalRequestedItems) {
+            console.warn(`Bulk borrow creation for group ${borrowGroupId}: Expected ${totalRequestedItems} records, created ${borrowResult.count}. Rolling back transaction.`);
             // Throw an error to automatically roll back the transaction
-            throw new Error(`Borrow creation count mismatch: Expected ${equipmentIds.length}, created ${borrowResult.count}.`);
+            throw new Error(`Borrow creation count mismatch: Expected ${totalRequestedItems}, created ${borrowResult.count}.`);
         }
 
         // 5b. *** NEW: Update Equipment Status to RESERVED ***
