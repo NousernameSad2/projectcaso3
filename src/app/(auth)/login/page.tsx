@@ -66,7 +66,15 @@ export default function LoginPage() {
 
   return (
     // Main container with white background, centered content
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-white dark:bg-gray-950">
+    <main 
+      className="flex min-h-screen flex-col items-center justify-center p-4"
+      style={{
+        backgroundImage: "url('/images/authbg.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
       <Card className="w-full max-w-md shadow-lg"> 
         <CardHeader className="items-center text-center space-y-4"> {/* Center header content */} 
           {/* Logo */}

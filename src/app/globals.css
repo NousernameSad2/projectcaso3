@@ -93,3 +93,20 @@
     font-family: var(--font-inter), theme('fontFamily.sans'); 
   }
 }
+
+/* Global subtle entrance animation */
+@keyframes subtleEntrance {
+  from {
+    opacity: 0;
+    transform: translateY(15px); /* Start slightly lower */
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+* {
+  /* Applied to all elements for a global effect */
+  animation: subtleEntrance 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}

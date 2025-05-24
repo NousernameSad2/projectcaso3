@@ -89,8 +89,16 @@ export default function RegisterPage() {
 
   return (
     // Main container with white background, centered content
-    <main className="flex min-h-screen flex-col items-center justify-center p-4 bg-white dark:bg-gray-950">
-      <Card className="w-full max-w-md shadow-lg"> 
+    <main 
+      className="flex min-h-screen flex-col items-center justify-start md:justify-center p-4"
+      style={{
+        backgroundImage: "url('/images/authbg.png')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <Card className="w-full max-w-2xl shadow-lg my-8">
         <CardHeader className="items-center text-center space-y-4"> 
           {/* Logo */}
           <Image 
@@ -106,7 +114,7 @@ export default function RegisterPage() {
         </CardHeader>
         <CardContent>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 md:grid md:grid-cols-2 md:gap-x-6">
               <FormField
                 control={form.control}
                 name="name"
@@ -208,13 +216,13 @@ export default function RegisterPage() {
               />
 
               {error && (
-                <p className="text-sm font-medium text-destructive text-center pt-1">{error}</p>
+                <p className="text-sm font-medium text-destructive text-center pt-1 md:col-span-2">{error}</p>
               )}
               {successMessage && (
-                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-500 text-center pt-1">{successMessage}</p>
+                <p className="text-sm font-medium text-emerald-600 dark:text-emerald-500 text-center pt-1 md:col-span-2">{successMessage}</p>
               )}
 
-              <Button type="submit" className="w-full h-10 mt-6" disabled={isLoading || !!successMessage}>
+              <Button type="submit" className="w-full h-10 mt-6 md:col-span-2" disabled={isLoading || !!successMessage}>
                 {isLoading ? "Registering..." : "Register"}
               </Button>
             </form>
