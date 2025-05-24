@@ -20,12 +20,13 @@ const QuerySchema = z.object({
     format: z.enum(['json', 'csv', 'pdf']).optional().default('json'),
     startDate: z.string().optional().refine(val => !val || (isValid(parseISO(val))), { message: "Invalid start date format" }),
     endDate: z.string().optional().refine(val => !val || (isValid(parseISO(val))), { message: "Invalid end date format" }),
-    courseId: z.string().optional(), // Expect 'all' or a specific ID
-    ficId: z.string().optional(), // Expect 'all' or a specific ID
-    equipmentId: z.string().optional(), // Expect 'all' or a specific ID
-    borrowerId: z.string().optional(), // Expect 'all' or a specific User ID
+    courseId: z.union([z.string(), z.array(z.string())]).optional(), // MODIFIED
+    ficId: z.union([z.string(), z.array(z.string())]).optional(), // MODIFIED
+    equipmentId: z.union([z.string(), z.array(z.string())]).optional(), // MODIFIED
+    borrowerId: z.union([z.string(), z.array(z.string())]).optional(), // MODIFIED
     returnStatus: z.enum(['all', 'LATE', 'REGULAR']).optional().default('all'),
     borrowContext: z.enum(['all', 'IN_CLASS', 'OUT_OF_CLASS']).optional().default('all'),
+    classId: z.union([z.string(), z.array(z.string())]).optional(), // ADDED for Equipment Utilization class filter
     // Add other potential filters here
 });
 
@@ -155,47 +156,43 @@ async function generateBasicPdf(reportType: string, data: Record<string, unknown
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
 
-    // Validate query parameters
-    const queryParseResult = QuerySchema.safeParse(Object.fromEntries(searchParams));
+    const rawParams: Record<string, string | string[] | undefined> = {};
+    for (const key of searchParams.keys()) {
+      const allVals = searchParams.getAll(key);
+      if (allVals.length > 0) {
+        rawParams[key] = allVals.length === 1 ? allVals[0] : allVals;
+      }
+    }
+    const queryParseResult = QuerySchema.safeParse(rawParams);
 
     if (!queryParseResult.success) {
         return NextResponse.json({ error: 'Invalid query parameters', details: queryParseResult.error.flatten() }, { status: 400 });
     }
 
-    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId, returnStatus, borrowContext } = queryParseResult.data;
+    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId, returnStatus, borrowContext, classId } = queryParseResult.data;
 
-    // --- Build Filters --- 
-    const borrowFilters: Prisma.BorrowWhereInput = {}; // Typed
-    const deficiencyFilters: Prisma.DeficiencyWhereInput = {}; // Typed
+    const borrowFilters: Prisma.BorrowWhereInput = {};
+    const deficiencyFilters: Prisma.DeficiencyWhereInput = {}; // Initialize as const
+    const deficiencyAndConditions: Prisma.DeficiencyWhereInput[] = []; // ADDED: To collect AND conditions for deficiency reports
 
-    // Date range filter (Apply to Deficiency createdAt or Borrow request time based on report)
+    // Date range filter
     if (reportType === 'borrowing_activity' || reportType === 'equipment_utilization') {
         if (startDate || endDate) {
             borrowFilters.requestSubmissionTime = {};
             if (startDate) borrowFilters.requestSubmissionTime.gte = parseISO(startDate);
             if (endDate) borrowFilters.requestSubmissionTime.lte = parseISO(endDate);
         }
-        
-        // Determine base borrow statuses to include
         let applicableBorrowStatuses: BorrowStatus[] = [BorrowStatus.COMPLETED, BorrowStatus.RETURNED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE];
-
-        // MODIFIED: returnStatus filter for borrowing_activity
         if (returnStatus && returnStatus !== 'all') {
             if (returnStatus === 'LATE') {
-                // If filtering for LATE, only include OVERDUE status
                 applicableBorrowStatuses = [BorrowStatus.OVERDUE];
             } else if (returnStatus === 'REGULAR') {
-                // If filtering for REGULAR, include COMPLETED and RETURNED, but explicitly exclude OVERDUE
                 applicableBorrowStatuses = [BorrowStatus.COMPLETED, BorrowStatus.RETURNED, BorrowStatus.ACTIVE];
             }
         }
-        borrowFilters.borrowStatus = { 
-            in: applicableBorrowStatuses
-        };
-
-        // ADDED: borrowContext filter for borrowing_activity and equipment_utilization
+        borrowFilters.borrowStatus = { in: applicableBorrowStatuses };
         if (borrowContext && borrowContext !== 'all') {
-            borrowFilters.reservationType = borrowContext as ReservationType; // Cast to ReservationType enum
+            borrowFilters.reservationType = borrowContext as ReservationType;
         }
     } else if (reportType === 'deficiency_summary') {
         if (startDate || endDate) {
@@ -206,55 +203,101 @@ export async function GET(req: NextRequest) {
     }
 
     // Equipment ID Filter
-     if (equipmentId && equipmentId !== 'all') {
-         if (reportType === 'borrowing_activity' || reportType === 'equipment_utilization') {
-             borrowFilters.equipmentId = equipmentId;
-         } else if (reportType === 'deficiency_summary') {
-             // Filter deficiencies linked to borrows involving specific equipment
-             deficiencyFilters.borrow = { equipmentId: equipmentId };
-         }
-     }
+    if (equipmentId && equipmentId !== 'all') {
+        const ids = (Array.isArray(equipmentId) ? equipmentId : [equipmentId]).filter(id => id !== 'all' && id !== '');
+        if (ids.length > 0) {
+            if (reportType === 'borrowing_activity' || reportType === 'equipment_utilization') {
+                borrowFilters.equipmentId = { in: ids };
+            } else if (reportType === 'deficiency_summary') {
+                deficiencyFilters.borrow = { // MODIFIED: direct assignment with correct type
+                    ...(deficiencyFilters.borrow || {}),
+                    equipmentId: { in: ids },
+                } as Prisma.BorrowWhereInput;
+            }
+        }
+    }
     
-    // Course ID Filter
+    // Course ID Filter (also used as Class filter for Borrowing Activity)
     if (courseId && courseId !== 'all') {
-         if (reportType === 'borrowing_activity') {
-             borrowFilters.classId = courseId;
-         } else if (reportType === 'deficiency_summary') {
-             // Filter deficiencies linked to borrows from a specific class
-             deficiencyFilters.borrow = {
-                 ...(deficiencyFilters.borrow || {}),
-                 classId: courseId
-             } as Prisma.BorrowWhereInput;
-         }
-     }
+        const ids = (Array.isArray(courseId) ? courseId : [courseId]).filter(id => id !== 'all' && id !== '');
+        if (ids.length > 0) {
+            if (reportType === 'borrowing_activity') {
+                borrowFilters.classId = { in: ids };
+            } else if (reportType === 'deficiency_summary') {
+                deficiencyFilters.borrow = { // MODIFIED: direct assignment with correct type
+                    ...(deficiencyFilters.borrow || {}),
+                    classId: { in: ids },
+                } as Prisma.BorrowWhereInput;
+            }
+        }
+    }
 
     // FIC ID Filter
     if (ficId && ficId !== 'all') {
-        if (reportType === 'borrowing_activity') {
-            // Filter by ficId through the class association for borrows
-            borrowFilters.class = {
-                ...(borrowFilters.class || {}),
-                ficId: ficId
-            } as Prisma.ClassWhereInput;
-        } else if (reportType === 'deficiency_summary') {
-            // Filter by the FIC directly intended to be notified on the deficiency
-            deficiencyFilters.ficToNotifyId = ficId;
+        const ids = (Array.isArray(ficId) ? ficId : [ficId]).filter(id => id !== 'all' && id !== '');
+        if (ids.length > 0) {
+            if (reportType === 'borrowing_activity') {
+                borrowFilters.class = {
+                    ...(borrowFilters.class || {}),
+                    ficId: { in: ids }, 
+                } as Prisma.ClassWhereInput;
+            } else if (reportType === 'deficiency_summary') {
+                // MODIFIED: Collect FIC conditions for an AND clause
+                const ficOrItems: Prisma.DeficiencyWhereInput[] = [];
+                if (ids.length === 1) {
+                    ficOrItems.push({ ficToNotifyId: ids[0] });
+                } else {
+                    ids.forEach(id => {
+                        ficOrItems.push({ ficToNotifyId: id });
+                    });
+                }
+                if (ficOrItems.length > 0) {
+                    deficiencyAndConditions.push({ OR: ficOrItems });
+                }
+            }
         }
-        // Note for other report types or future enhancements: 
-        // Deficiency linkage to an FIC via borrow.class.ficId or borrow.ficId 
-        // would require more complex nested filters if ficToNotifyId is not the primary link.
     }
     
-    // Borrower ID Filter (New)
+    // Borrower ID Filter (User)
     if (borrowerId && borrowerId !== 'all') {
-        if (reportType === 'borrowing_activity') {
-            borrowFilters.borrowerId = borrowerId;
-        } else if (reportType === 'deficiency_summary') {
-            // For deficiency summary, filter if the selected user is either responsible OR tagged the deficiency
-            deficiencyFilters.OR = [
-                { userId: borrowerId },       // User responsible for the deficiency
-                { taggedById: borrowerId }    // User who tagged the deficiency
-            ];
+        const ids = (Array.isArray(borrowerId) ? borrowerId : [borrowerId]).filter(id => id !== 'all' && id !== '');
+        if (ids.length > 0) {
+            if (reportType === 'borrowing_activity') {
+                borrowFilters.borrowerId = { in: ids };
+            } else if (reportType === 'deficiency_summary') {
+                // MODIFIED: Collect Borrower conditions for an AND clause
+                const borrowerOrItems: Prisma.DeficiencyWhereInput[] = [];
+                ids.forEach(id => {
+                    borrowerOrItems.push({ userId: id });
+                    borrowerOrItems.push({ taggedById: id });
+                });
+                if (borrowerOrItems.length > 0) {
+                    deficiencyAndConditions.push({ OR: borrowerOrItems });
+                }
+            }
+        }
+    }
+
+    // ADDED: Consolidate AND conditions for deficiency reports before the try block
+    if (reportType === 'deficiency_summary' && deficiencyAndConditions.length > 0) {
+        if (deficiencyFilters.AND) {
+            // Ensure deficiencyFilters.AND is an array before pushing
+            if (Array.isArray(deficiencyFilters.AND)) {
+                deficiencyFilters.AND.push(...deficiencyAndConditions);
+            } else {
+                // If it was a single object, convert to an array and add the new conditions
+                deficiencyFilters.AND = [deficiencyFilters.AND, ...deficiencyAndConditions];
+            }
+        } else {
+            deficiencyFilters.AND = deficiencyAndConditions;
+        }
+    }
+
+    // Class ID Filter (Specifically for Equipment Utilization report type)
+    if (reportType === 'equipment_utilization' && classId && classId !== 'all') {
+        const ids = (Array.isArray(classId) ? classId : [classId]).filter(id => id !== 'all' && id !== '');
+        if (ids.length > 0) {
+            borrowFilters.classId = { in: ids };
         }
     }
     
@@ -304,33 +347,45 @@ export async function GET(req: NextRequest) {
                         equipment: { select: { name: true } },
                         checkoutTime: true,
                         actualReturnTime: true,
+                        reservationType: true, // ADDED: Select reservationType
                     }
                 });
 
-                // Process data: Group by equipment, count borrows, sum hours
-                const utilizationMap = new Map<string, { name: string; borrowCount: number; totalHours: number }>();
+                // Process data: Group by equipment AND reservationType, count borrows, sum hours
+                const utilizationMap = new Map<string, { name: string; borrowCount: number; totalHours: number; utilizationContext: string }>();
                 for (const borrow of utilizationBorrows) {
                     if (!borrow.equipmentId || !borrow.equipment) continue; // Skip if no equipment linked
                     
-                    const current = utilizationMap.get(borrow.equipmentId) || { name: borrow.equipment.name, borrowCount: 0, totalHours: 0 };
+                    const context = borrow.reservationType || 'UNKNOWN'; // Default context if null/undefined
+                    const key = `${borrow.equipmentId}-${context}`; // Composite key
+
+                    const current = utilizationMap.get(key) || { 
+                        name: borrow.equipment.name, 
+                        borrowCount: 0, 
+                        totalHours: 0,
+                        utilizationContext: context === 'IN_CLASS' ? 'In Class' : (context === 'OUT_OF_CLASS' ? 'Out of Class' : 'N/A (Other)') 
+                    };
                     current.borrowCount++;
 
                     if (borrow.checkoutTime && borrow.actualReturnTime) {
-                        // Use differenceInHours for potentially cleaner output
                         current.totalHours += differenceInHours(borrow.actualReturnTime, borrow.checkoutTime);
                     }
-                    utilizationMap.set(borrow.equipmentId, current);
+                    utilizationMap.set(key, current);
                 }
 
                 // Convert map to array and sort (e.g., by borrow count descending)
-                data = Array.from(utilizationMap.entries()).map(([id, stats]) => ({
-                    equipmentId: id,
-                    equipmentName: stats.name,
-                    borrowCount: stats.borrowCount,
-                    totalUsageHours: stats.totalHours,
-                })).sort((a, b) => b.borrowCount - a.borrowCount); // Sort by count desc
+                data = Array.from(utilizationMap.entries()).map(([key, stats]) => {
+                    const [eqId] = key.split('-'); // Removed contextValue
+                    return {
+                        equipmentId: eqId,
+                        equipmentName: stats.name,
+                        utilizationContext: stats.utilizationContext, 
+                        borrowCount: stats.borrowCount,
+                        totalUsageHours: stats.totalHours,
+                    };
+                }).sort((a, b) => b.borrowCount - a.borrowCount); // Sort by count desc
 
-                csvHeaders = ['equipmentId', 'equipmentName', 'borrowCount', 'totalUsageHours'];
+                csvHeaders = ['equipmentId', 'equipmentName', 'utilizationContext', 'borrowCount', 'totalUsageHours'];
                 pdfHeaders = csvHeaders;
                 pdfImplemented = true; // Mark as implemented for PDF
                 break;
