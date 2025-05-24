@@ -18,7 +18,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { ScrollArea } from "./scroll-area"
 import { Badge } from "./badge"
 
 interface MultiSearchableSelectOption {
@@ -102,30 +101,28 @@ export function MultiSearchableSelect({
             value={inputValue}
             onValueChange={setInputValue}
           />
-          <CommandList>
+          <CommandList className="overflow-y-auto max-h-60">
             <CommandEmpty>{emptyStateMessage}</CommandEmpty>
-            <ScrollArea className="h-auto max-h-60">
-              <CommandGroup>
-                {options.map((option) => (
-                  <CommandItem
-                    key={option.value}
-                    value={option.label} // CommandItem value is used for filtering
-                    onSelect={() => {
-                      handleSelect(option.value);
-                      // Do not close popover on select to allow multiple selections
-                    }}
-                  >
-                    <Check
-                      className={cn(
-                        "mr-2 h-4 w-4",
-                        value.includes(option.value) ? "opacity-100" : "opacity-0"
-                      )}
-                    />
-                    {option.label}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </ScrollArea>
+            <CommandGroup>
+              {options.map((option) => (
+                <CommandItem
+                  key={option.value}
+                  value={option.label} // CommandItem value is used for filtering
+                  onSelect={() => {
+                    handleSelect(option.value);
+                    // Do not close popover on select to allow multiple selections
+                  }}
+                >
+                  <Check
+                    className={cn(
+                      "mr-2 h-4 w-4",
+                      value.includes(option.value) ? "opacity-100" : "opacity-0"
+                    )}
+                  />
+                  {option.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
           </CommandList>
         </Command>
       </PopoverContent>

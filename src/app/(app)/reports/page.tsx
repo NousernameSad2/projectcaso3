@@ -1477,14 +1477,18 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
                         return `${classInfo.courseCode || ''} ${classInfo.section || ''} (${classInfo.semester || ''} ${classInfo.academicYear || ''})`.replace(/\(\s*\)/g, '').trim() || 'N/A';
                     }
                 },
-                { header: 'In Class/Out of Class', accessor: 'borrowContext' },
-                { header: 'Late/Regular', accessor: 'returnStatus', render: (val: unknown) => {
+                { header: 'Usage Context', accessor: 'reservationType', render: (val: unknown) => {
+                    if (val === 'IN_CLASS') return 'In Class';
+                    if (val === 'OUT_OF_CLASS') return 'Out of Class';
+                    return String(val || 'N/A');
+                } },
+                { header: 'Return Status', accessor: 'borrowStatus', render: (val: unknown) => {
                     const status = val as string;
-                    if (status === 'Late') return <Badge variant="destructive">Late</Badge>;
-                    if (status === 'Regular') return <Badge variant="default">Regular</Badge>;
+                    if (status === 'OVERDUE') return <Badge variant="destructive">Late</Badge>;
+                    if (['COMPLETED', 'RETURNED', 'ACTIVE'].includes(status)) return <Badge variant="default">Regular</Badge>;
                     return status || 'N/A';
                 } },
-                { header: 'Status', accessor: 'borrowStatus' },
+                { header: 'Borrow Status', accessor: 'borrowStatus' }, // Changed header from 'Status' to 'Borrow Status' for clarity
                 { header: 'Requested', accessor: 'requestSubmissionTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
                 { header: 'Checkout', accessor: 'checkoutTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 
                 { header: 'Returned', accessor: 'actualReturnTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, // Typed val

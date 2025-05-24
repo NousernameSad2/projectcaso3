@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
 import { parseISO, isValid, format as formatDate, differenceInHours } from 'date-fns';
 import type { Prisma } from '@prisma/client';
-import { BorrowStatus } from '@prisma/client';
+import { BorrowStatus, ReservationType } from '@prisma/client';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 // Define possible report types (must match frontend enum/values)
@@ -24,6 +24,8 @@ const QuerySchema = z.object({
     ficId: z.string().optional(), // Expect 'all' or a specific ID
     equipmentId: z.string().optional(), // Expect 'all' or a specific ID
     borrowerId: z.string().optional(), // Expect 'all' or a specific User ID
+    returnStatus: z.enum(['all', 'LATE', 'REGULAR']).optional().default('all'),
+    borrowContext: z.enum(['all', 'IN_CLASS', 'OUT_OF_CLASS']).optional().default('all'),
     // Add other potential filters here
 });
 
@@ -160,7 +162,7 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid query parameters', details: queryParseResult.error.flatten() }, { status: 400 });
     }
 
-    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId } = queryParseResult.data;
+    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId, returnStatus, borrowContext } = queryParseResult.data;
 
     // --- Build Filters --- 
     const borrowFilters: Prisma.BorrowWhereInput = {}; // Typed
@@ -173,9 +175,28 @@ export async function GET(req: NextRequest) {
             if (startDate) borrowFilters.requestSubmissionTime.gte = parseISO(startDate);
             if (endDate) borrowFilters.requestSubmissionTime.lte = parseISO(endDate);
         }
+        
+        // Determine base borrow statuses to include
+        let applicableBorrowStatuses: BorrowStatus[] = [BorrowStatus.COMPLETED, BorrowStatus.RETURNED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE];
+
+        // MODIFIED: returnStatus filter for borrowing_activity
+        if (returnStatus && returnStatus !== 'all') {
+            if (returnStatus === 'LATE') {
+                // If filtering for LATE, only include OVERDUE status
+                applicableBorrowStatuses = [BorrowStatus.OVERDUE];
+            } else if (returnStatus === 'REGULAR') {
+                // If filtering for REGULAR, include COMPLETED and RETURNED, but explicitly exclude OVERDUE
+                applicableBorrowStatuses = [BorrowStatus.COMPLETED, BorrowStatus.RETURNED, BorrowStatus.ACTIVE];
+            }
+        }
         borrowFilters.borrowStatus = { 
-            in: [BorrowStatus.COMPLETED, BorrowStatus.RETURNED, BorrowStatus.ACTIVE, BorrowStatus.OVERDUE]
+            in: applicableBorrowStatuses
         };
+
+        // ADDED: borrowContext filter for borrowing_activity and equipment_utilization
+        if (borrowContext && borrowContext !== 'all') {
+            borrowFilters.reservationType = borrowContext as ReservationType; // Cast to ReservationType enum
+        }
     } else if (reportType === 'deficiency_summary') {
         if (startDate || endDate) {
             deficiencyFilters.createdAt = {};
