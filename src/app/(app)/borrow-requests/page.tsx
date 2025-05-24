@@ -13,7 +13,7 @@ import { type ColumnFiltersState } from "@tanstack/react-table";
 import { useSession } from 'next-auth/react';
 import { UserRole } from '@prisma/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Database, FileText, AlertCircle, Users, X, /* UploadCloud, */ Trash2, Mail } from 'lucide-react';
+import { Database, FileText, AlertCircle, Users, /* UploadCloud, */ Trash2, Mail } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -261,7 +261,7 @@ export default function BorrowRequestsPage() {
   }; */
 
   // --- NEW: Mutation for Deleting Data File ---
-  const deleteDataFileMutation = useMutation<
+  /* const deleteDataFileMutation = useMutation<
     { message: string; updatedRequest: DataRequestAdminView },
     Error,
     { requestId: string; fileId: string }
@@ -285,13 +285,7 @@ export default function BorrowRequestsPage() {
     onError: (error) => {
       toast.error(`File deletion failed: ${error.message}`);
     },
-  });
-
-  const handleDeleteDataFile = (requestId: string, fileIdOrName: string) => {
-    // In a real app, you would show a confirmation dialog first
-    if (deleteDataFileMutation.isPending) return;
-    deleteDataFileMutation.mutate({ requestId, fileId: fileIdOrName }); // Assuming fileIdOrName is the unique ID
-  };
+  }); */
 
   // Handler to call the mutation
   const handleUpdateDataRequestStatus = (requestId: string, status: string | null | undefined) => {
@@ -832,13 +826,13 @@ export default function BorrowRequestsPage() {
               
               {/* File Management UI */}
               <div className="space-y-2">
-                <h4 className="text-sm font-medium">Attached Files:</h4>
+                {/* <h4 className="text-sm font-medium">Attached Files:</h4>
                 {req.dataFiles && req.dataFiles.length > 0 ? (
                   <ul className="list-disc list-inside pl-4 text-sm space-y-1">
                     {req.dataFiles.map(file => (
                       <li key={file.id || file.name} className="flex justify-between items-center">
                         {/* For now, assume file.url is a direct link or display name if no URL yet */}
-                        <span className="text-primary truncate max-w-xs flex items-center gap-1">
+                        {/* <span className="text-primary truncate max-w-xs flex items-center gap-1">
                           {file.name}
                           {file.size && <span className="text-xs text-muted-foreground">({(file.size / 1024).toFixed(1)} KB)</span>}
                           {file.type && <Badge variant="outline" className="text-xs scale-90 font-normal">{file.type}</Badge>}
@@ -857,7 +851,7 @@ export default function BorrowRequestsPage() {
                   </ul>
                 ) : (
                   <p className="text-xs text-muted-foreground italic">No files uploaded yet.</p>
-                )}
+                )} */}
                 {/* File Upload Area - Modernized */}
                 {/* <div className="space-y-2 pt-1">
                   <Label htmlFor={`file-upload-input-${req.id}`} className="text-sm font-medium">

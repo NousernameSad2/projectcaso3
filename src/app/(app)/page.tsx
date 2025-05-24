@@ -58,7 +58,6 @@ import EditReservationModal from '@/components/dashboard/EditReservationModal'; 
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query'; // <<< MODIFIED: Import useQuery, useMutation as well
 import { useRouter } from 'next/navigation'; // <<< ADDED: Import useRouter (for potential navigation)
 import { ChevronUp, ChevronDown } from 'lucide-react'; // <<< ADDED for new component
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"; // Added for status update
 
 // --- TYPE DEFINITIONS ---
 
@@ -1282,7 +1281,7 @@ function AdminDataRequestsDashboardPanel() {
                           </div>
                         )}
                         <div className="space-y-2">
-                          <h4 className="text-sm font-medium">Attached Files:</h4>
+                          {/* <h4 className="text-sm font-medium">Attached Files:</h4>
                           {request.dataFiles && request.dataFiles.length > 0 ? (
                             <ul className="list-disc list-inside pl-4 text-sm space-y-1">
                               {request.dataFiles.map((file, index) => (
@@ -1299,24 +1298,24 @@ function AdminDataRequestsDashboardPanel() {
                             </ul>
                           ) : (
                             <p className="text-xs text-muted-foreground italic">No files uploaded yet.</p>
-                          )}
+                          )} */}
                         </div>
                         <div className="flex items-center gap-2 pt-2 border-t border-border/20 mt-3">
-                          <Select
-                            value={request.dataRequestStatus || ''}
-                            onValueChange={(newStatus) => handleUpdateStatus(request.id, newStatus)}
-                            disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id}
-                          >
-                            <SelectTrigger className="w-[180px] h-9 text-xs">
-                              <SelectValue placeholder="Update status..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="Pending">Pending</SelectItem>
-                              <SelectItem value="Processing">Processing</SelectItem>
-                              <SelectItem value="Fulfilled">Fulfilled</SelectItem>
-                              <SelectItem value="Rejected">Rejected</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          {/* Remove existing Select component and replace with a Button */}
+                          {request.dataRequestStatus !== 'Fulfilled' && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-9 text-xs text-green-600 border-green-500/50 hover:bg-green-500/10 hover:text-green-700"
+                              onClick={() => handleUpdateStatus(request.id, 'Fulfilled')}
+                              disabled={updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id}
+                            >
+                              {updateStatusMutation.isPending && updateStatusMutation.variables?.requestId === request.id && updateStatusMutation.variables?.status === 'Fulfilled'
+                                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                : <CheckCircle className="mr-2 h-4 w-4" />}
+                              Mark as Fulfilled
+                            </Button>
+                          )}
                           <Button
                             variant="outline"
                             size="sm"
@@ -1392,7 +1391,7 @@ function AdminDataRequestsDashboardPanel() {
                               </div>
                             )}
                             <div className="space-y-2">
-                              <h4 className="text-sm font-medium">Attached Files:</h4>
+                              {/* <h4 className="text-sm font-medium">Attached Files:</h4>
                               {request.dataFiles && request.dataFiles.length > 0 ? (
                                 <ul className="list-disc list-inside pl-4 text-sm space-y-1">
                                   {request.dataFiles.map((file, index) => (
@@ -1409,7 +1408,7 @@ function AdminDataRequestsDashboardPanel() {
                                 </ul>
                               ) : (
                                 <p className="text-xs text-muted-foreground italic">No files were uploaded for this fulfilled request.</p>
-                              )}
+                              )} */}
                             </div>
                             {/* Action buttons are less relevant for already fulfilled items, could be omitted or simplified */}
                              <div className="flex items-center gap-2 pt-2 border-t border-border/20 mt-3">
