@@ -243,7 +243,12 @@ export default function EquipmentPage() {
 
   return (
     <div className="container mx-auto py-10">
-      <h1 className="text-3xl font-bold text-white mb-8">Equipment Catalog</h1>
+      <div className="mb-8">
+        <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold">Equipment Catalog</h1>
+        <p className="text-muted-foreground mt-1">
+          Browse, search, and manage all available equipment.
+        </p>
+      </div>
       {/* Filters Section */}
       <div className="mb-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
         <Input

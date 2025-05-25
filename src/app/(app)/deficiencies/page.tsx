@@ -551,7 +551,7 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
     // --- END NEW HANDLER ---
 
     return (
-         <Card className="bg-card/60 border-border/40 mt-6">
+         <Card className="bg-card/60 border-border/40">
             <CardHeader className="flex-row justify-between items-center">
                 <div>
                     <CardTitle>Deficiency Records</CardTitle>
@@ -629,7 +629,12 @@ export default function DeficienciesPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold text-white">Deficiencies</h1>
+      <div className="mb-6">
+        <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold">Deficiencies</h1>
+        <p className="text-muted-foreground mt-1">
+          Track and manage equipment deficiencies, damages, or losses.
+        </p>
+      </div>
       
       <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-8 space-y-6 lg:space-y-0">
           

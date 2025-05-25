@@ -603,7 +603,12 @@ export default function ProfilePage() {
 
   return (
     <div className="container mx-auto max-w-4xl py-10 space-y-8">
-      <h1 className="text-3xl font-bold mb-6 text-white">My Profile</h1>
+      <div className="mb-6">
+        <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold mb-6">My Profile</h1>
+        <p className="text-muted-foreground mt-1">
+          View and manage your personal information and borrow history.
+        </p>
+      </div>
       
       <div className="space-y-8">
         {/* Profile Info Card */}

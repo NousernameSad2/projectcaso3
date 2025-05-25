@@ -114,10 +114,16 @@ export default function Header() {
     return (
         <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-[hsl(var(--header-background))] backdrop-blur-lg">
             <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-                <Link href="/" className="flex items-center space-x-2 shrink-0 mr-6">
-                    <Building2 className="h-6 w-6 text-primary" />
-                    <span className="font-bold text-lg">E-Bridge</span>
-                </Link>
+                <div className="flex items-center">
+                    <Link href="/" className="flex items-center space-x-2 shrink-0 mr-4">
+                        <Building2 className="h-6 w-6 text-primary" />
+                        <span className="font-bold text-lg">E-Bridge</span>
+                    </Link>
+                    <Link href={aboutLink.href} className={getDesktopNavLinkClasses(pathname === aboutLink.href, true)} title={aboutLink.label}>
+                        <aboutLink.icon className="h-5 w-5" />
+                        <span className="sr-only">{aboutLink.label}</span>
+                    </Link>
+                </div>
 
                 <nav className="hidden md:flex flex-1 items-center justify-center space-x-1 lg:space-x-2">
                     {visibleMainNavLinks.map(link => (
@@ -148,10 +154,6 @@ export default function Header() {
                             <span className="sr-only">{borrowRequestsLink.label}</span>
                         </Link>
                     )}
-                    <Link href={aboutLink.href} className={getDesktopNavLinkClasses(pathname === aboutLink.href, true)} title={aboutLink.label}>
-                        <aboutLink.icon className="h-5 w-5" />
-                        <span className="sr-only">{aboutLink.label}</span>
-                    </Link>
                     {isAuthenticated ? (
                         <>
                             <Link href={profileLink.href} className={getDesktopNavLinkClasses(pathname === profileLink.href, true)} title={profileLink.label}>

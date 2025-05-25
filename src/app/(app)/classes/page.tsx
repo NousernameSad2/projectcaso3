@@ -252,7 +252,12 @@ export default function ClassesPage() {
   return (
     <div className="container mx-auto py-10">
       <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-        <h1 className="text-3xl font-bold text-foreground">Manage Classes</h1>
+        <div>
+          <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold">Manage Classes</h1>
+          <p className="text-muted-foreground mt-1">
+            Administer course sections, assign faculty, and manage class statuses.
+          </p>
+        </div>
         {canManageClasses && (
           <AddClassDialog onClassAdded={handleClassAdded} />
         )}

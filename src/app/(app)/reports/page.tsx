@@ -579,7 +579,12 @@ export default function ReportsPage() {
 
   return (
       <div className="p-4 md:p-6 space-y-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">Reports & Analytics</h1>
+          <div className="mb-6">
+            <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold">Reports & Analytics</h1>
+            <p className="text-muted-foreground mt-1">
+              View system analytics, generate reports, and gain insights into equipment usage.
+            </p>
+          </div>
           {/* Section 1: Analytics Dashboard */}
           <section>
             {/* <h2 className="text-2xl font-semibold text-white mb-4">Analytics Dashboard</h2>

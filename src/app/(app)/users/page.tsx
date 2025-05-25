@@ -361,7 +361,12 @@ export default function AdminUsersPage() {
     return (
         <div className="container mx-auto py-10">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                <h1 className="text-3xl font-bold text-white">Manage Users</h1>
+                <div>
+                  <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold">Manage Users</h1>
+                  <p className="text-muted-foreground mt-1">
+                    View, add, edit, and manage user accounts and permissions.
+                  </p>
+                </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
                      {/* --- Search Input --- */} 
                     <div className="relative w-full sm:w-64">

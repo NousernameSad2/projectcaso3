@@ -573,9 +573,14 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Update title based on fetched profile */}
-      <h1 className="text-3xl font-bold mb-6 text-white">
-        User Profile: {profile?.name || (isLoadingProfile ? 'Loading...' : 'Unknown User')}
-      </h1>
+      <div className="mb-6">
+        <h1 style={{ color: 'hsl(var(--foreground))' }} className="text-3xl font-bold">
+          User Profile: {profile?.name || (isLoadingProfile ? 'Loading...' : 'Unknown User')}
+        </h1>
+        <p className="text-muted-foreground mt-1">
+          View and manage this user's profile information and borrow history.
+        </p>
+      </div>
 
       <div className="space-y-8">
         {/* Profile Info Card - Removed buttons */}
