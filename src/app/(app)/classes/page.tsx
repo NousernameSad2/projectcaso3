@@ -252,7 +252,7 @@ export default function ClassesPage() {
   return (
     <div className="container mx-auto py-10">
       <div className="flex justify-between items-center mb-6 flex-wrap gap-4">
-        <h1 className="text-3xl font-bold text-white">Manage Classes</h1>
+        <h1 className="text-3xl font-bold text-foreground">Manage Classes</h1>
         {canManageClasses && (
           <AddClassDialog onClassAdded={handleClassAdded} />
         )}
@@ -310,8 +310,8 @@ export default function ClassesPage() {
                     <TableCell>
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                           cls.isActive 
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' 
-                            : 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                            ? 'bg-green-500 text-white dark:bg-green-600 dark:text-green-100' 
+                            : 'bg-red-500 text-white dark:bg-red-700 dark:text-red-100'
                       }`}>
                           {cls.isActive ? 'Active' : 'Inactive'}
                       </span>

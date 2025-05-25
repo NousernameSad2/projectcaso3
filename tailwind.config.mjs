@@ -2,7 +2,7 @@ import defaultTheme from "tailwindcss/defaultTheme"
 
 /** @type {import('tailwindcss').Config} */
 const config = {
-  darkMode: ["class", "class"], // Assuming dark is default via globals.css, but class allows toggle later
+  darkMode: "class", // Assuming dark is default via globals.css, but class allows toggle later
   content: [
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
@@ -10,6 +10,12 @@ const config = {
 	],
   prefix: "",
   theme: {
+    colors: {
+      success: {
+        DEFAULT: '#22c55e', /* Tailwind's green-500 hex */
+        foreground: '#ffffff', /* White */
+      },
+    },
   	container: {
   		center: true,
   		padding: '2rem',
@@ -36,13 +42,9 @@ const config = {
   				DEFAULT: 'hsl(var(--destructive))',
   				foreground: 'hsl(var(--destructive-foreground))'
   			},
-  			success: {
-  				DEFAULT: 'hsl(142.1 70.6% 45.3%)', // ~ green-600
-  				foreground: 'hsl(142.1 80% 96.1%)', // ~ green-50
-  			},
   			warning: {
-  				DEFAULT: 'hsl(47.9 95.8% 53.1%)', // ~ amber-500
-  				foreground: 'hsl(47.9 95.8% 10.0%)', // ~ amber-950
+  				DEFAULT: 'var(--warning)',
+  				foreground: 'var(--warning-foreground)'
   			},
   			muted: {
   				DEFAULT: 'hsl(var(--muted))',

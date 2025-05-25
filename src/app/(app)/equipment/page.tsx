@@ -226,13 +226,19 @@ export default function EquipmentPage() {
   const canManageEquipment = isAuthenticated && !!session?.user && session.user.role === UserRole.STAFF;
   const hasSelection = selectedEquipmentIds.length > 0;
 
+  useEffect(() => {
+    if (sessionStatus === "unauthenticated") {
+      router.push('/auth/signin');
+    }
+  }, [sessionStatus, router]);
+
   // ... Session status checks and return ...
   if (sessionStatus === "loading") {
     return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="lg" /></div>;
   }
   if (sessionStatus === "unauthenticated") {
-     router.push('/auth/signin');
-     return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="lg" /></div>;
+     // router.push('/auth/signin'); // Moved to useEffect
+     return <div className="flex justify-center items-center min-h-[60vh]"><LoadingSpinner size="lg" /></div>; // Still return loading or null while redirecting
   }
 
   return (

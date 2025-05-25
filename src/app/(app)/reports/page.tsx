@@ -760,7 +760,7 @@ export default function ReportsPage() {
                             value={reportType} 
                             onValueChange={(value) => setReportType(value as ReportType)}
                         >
-                            <SelectTrigger id="reportType">
+                            <SelectTrigger id="reportType" className="w-full">
                                 <SelectValue placeholder="Select report type..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -898,7 +898,7 @@ export default function ReportsPage() {
                                     value={selectedBorrowContext} 
                                     onValueChange={setSelectedBorrowContext}
                                 >
-                                    <SelectTrigger id="filterBorrowContext">
+                                    <SelectTrigger id="filterBorrowContext" className="w-full">
                                         <SelectValue placeholder="All Contexts" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -918,7 +918,7 @@ export default function ReportsPage() {
                                     value={selectedReturnStatus} 
                                     onValueChange={setSelectedReturnStatus}
                                 >
-                                    <SelectTrigger id="filterReturnStatus">
+                                    <SelectTrigger id="filterReturnStatus" className="w-full">
                                         <SelectValue placeholder="All Statuses" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -1039,7 +1039,7 @@ export default function ReportsPage() {
                                 onValueChange={setContactHoursEquipment}
                                 disabled={isLoadingEquipment || !equipment || equipment.length === 0} // Re-use existing equipment list and loading state
                             >
-                                <SelectTrigger id="contactHoursEquipment">
+                                <SelectTrigger id="contactHoursEquipment" className="w-full">
                                     <SelectValue placeholder={isLoadingEquipment ? "Loading..." : "Select Equipment..."} />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1239,7 +1239,7 @@ export default function ReportsPage() {
                       onValueChange={(value) => setMaintenanceActivityEquipmentId(value === 'all' ? undefined : value)}
                       disabled={isLoadingEquipment || !equipment || equipment.length === 0}
                     >
-                      <SelectTrigger id="maintenanceActivityEquipment">
+                      <SelectTrigger id="maintenanceActivityEquipment" className="w-full">
                         <SelectValue placeholder={isLoadingEquipment ? "Loading..." : "All Equipment"} />
                       </SelectTrigger>
                       <SelectContent>
@@ -1343,7 +1343,7 @@ export default function ReportsPage() {
                               <TableCell>{item.maintenanceEndDate ? formatDateFns(item.maintenanceEndDate as string | Date, 'PP p') : 'N/A'}</TableCell>
                               <TableCell className="text-right">{(item.durationHours as number)?.toFixed(1) ?? 'N/A'}</TableCell>
                               <TableCell>
-                                <Badge variant={(item.status as string) === 'Completed' ? 'default' : 'secondary'}>
+                                <Badge variant={(item.status as string) === 'Completed' ? 'success' : 'secondary'}>
                                   {String(item.status)}
                                 </Badge>
                               </TableCell>
@@ -1485,7 +1485,8 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
                 { header: 'Return Status', accessor: 'borrowStatus', render: (val: unknown) => {
                     const status = val as string;
                     if (status === 'OVERDUE') return <Badge variant="destructive">Late</Badge>;
-                    if (['COMPLETED', 'RETURNED', 'ACTIVE'].includes(status)) return <Badge variant="default">Regular</Badge>;
+                    if (['COMPLETED', 'RETURNED'].includes(status)) return <Badge variant="success">{status}</Badge>;
+                    if (['ACTIVE'].includes(status)) return <Badge variant="default">Regular</Badge>;
                     return status || 'N/A';
                 } },
                 { header: 'Borrow Status', accessor: 'borrowStatus' }, // Changed header from 'Status' to 'Borrow Status' for clarity
@@ -1568,10 +1569,10 @@ const RenderLiveReportTable: React.FC<{ data: Record<string, unknown>[]; reportT
 // import { parseISO } from 'date-fns'; // Ensure this is imported at the top with other date-fns imports
 
 // Helper function to determine badge variant based on equipment status
-const getBadgeVariantForStatus = (status: string): "default" | "destructive" | "secondary" | "outline" | "warning" => {
+const getBadgeVariantForStatus = (status: string): "default" | "destructive" | "secondary" | "outline" | "warning" | "success" => {
     switch (status) {
         case 'AVAILABLE':
-            return "default"; // Or a success-like variant if you have one
+            return "success";
         case 'BORROWED':
         case 'RESERVED':
             return "secondary";

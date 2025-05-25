@@ -28,29 +28,44 @@ import {
   Building2,
   BookUser,
   Menu,
-  ScrollText
+  ScrollText,
+  Info,
 } from 'lucide-react';
 
-// Define all possible nav items
-const allNavItems = [
-  { href: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/equipment', label: 'Equipment', icon: HardDrive },
-  { href: '/classes', label: 'Classes', icon: BookUser },
-  { href: '/my-borrows', label: 'My Borrows', icon: ClipboardList },
-  { href: '/deficiencies', label: 'Deficiencies', icon: TriangleAlert },
+// --- Navigation Item Definitions ---
+
+const mainNavLinks = [
+  { href: '/', label: 'Dashboard', icon: LayoutDashboard, adminOnly: false },
+  { href: '/equipment', label: 'Equipment', icon: HardDrive, adminOnly: false },
+  { href: '/classes', label: 'Classes', icon: BookUser, adminOnly: false },
+  { href: '/my-borrows', label: 'My Borrows', icon: ClipboardList, adminOnly: false },
+  { href: '/deficiencies', label: 'Deficiencies', icon: TriangleAlert, adminOnly: false },
   { href: '/reports', label: 'Reports', icon: AreaChart, adminOnly: true },
   { href: '/users', label: 'Manage Users', icon: Users, adminOnly: true },
 ];
 
-const profileNavItem = { href: '/profile', label: 'My Profile', icon: UserCircle };
+const aboutLink = { href: '/about', label: 'About', icon: Info };
+const profileLink = { href: '/profile', label: 'My Profile', icon: UserCircle };
+const borrowRequestsLink = { href: '/borrow-requests', label: 'Borrow Requests', icon: ScrollText, adminOnly: true };
 
-// *** NEW: Define Borrow Requests Nav Item ***
-const borrowRequestsNavItem = { 
-    href: '/borrow-requests', 
-    label: 'Borrow Requests', 
-    icon: ScrollText, 
-    adminOnly: true // Reuse adminOnly logic for STAFF/FACULTY visibility
-};
+// --- Helper Functions for Styling --- 
+
+const getDesktopNavLinkClasses = (isActive: boolean, isIconOnly: boolean = false) => cn(
+  "flex items-center justify-center transition-colors text-sm font-medium rounded-md",
+  isIconOnly ? "h-9 w-9 p-0" : "space-x-2 px-3 py-2",
+  isActive 
+    ? "bg-primary/10 text-primary"
+    : "text-muted-foreground hover:bg-accent/50 hover:text-primary/80"
+);
+
+const getMobileNavLinkClasses = (isActive: boolean) => cn(
+  "flex items-center space-x-3 rounded-md px-3 py-2.5 text-base font-medium transition-colors",
+  isActive
+    ? "bg-primary/10 text-primary"
+    : "text-muted-foreground hover:bg-accent hover:text-primary/90"
+);
+
+// --- Header Component --- 
 
 export default function Header() {
     const { data: session, status } = useSession();
@@ -58,278 +73,185 @@ export default function Header() {
     const pathname = usePathname();
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [pendingUsersCount, setPendingUsersCount] = useState(0);
-    
-    // Extract user role
+
     const userRole = session?.user?.role as UserRole | undefined;
-    
-    // Determine authentication status and privilege
     const isAuthenticated = status === 'authenticated';
-    const isPrivilegedUser = userRole === UserRole.STAFF || userRole === UserRole.FACULTY;
-    const isLoading = status === 'loading'; 
+    const isPrivilegedUser = isAuthenticated && (userRole === UserRole.STAFF || userRole === UserRole.FACULTY);
+    const isLoading = status === 'loading';
 
     useEffect(() => {
-        const fetchPendingUsersCount = async () => {
-            if (session?.accessToken && isPrivilegedUser) {
-                try {
-                    const response = await fetch('/api/users?status=PENDING_APPROVAL', {
-                        headers: {
-                            Authorization: `Bearer ${session.accessToken}`,
-                        },
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        setPendingUsersCount(data.count);
-                    } else {
-                        console.error('Failed to fetch pending users count');
-                    }
-                } catch (error) {
-                    console.error('Error fetching pending users count:', error);
-                }
-            }
-        };
-
-        fetchPendingUsersCount();
+        if (isPrivilegedUser && session?.accessToken) {
+            fetch('/api/users?status=PENDING_APPROVAL', {
+                headers: { Authorization: `Bearer ${session.accessToken}` },
+            })
+            .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to fetch count')))
+            .then(data => setPendingUsersCount(data.count))
+            .catch(error => console.error('Error fetching pending users count:', error));
+        }
     }, [session, isPrivilegedUser]);
 
-    // Use next-auth signOut for logout
     const handleLogout = async () => {
-        await signOut({ redirect: false }); 
-        router.push('/login'); 
+        closeSheet();
+        await signOut({ redirect: false });
+        router.push('/login');
     };
 
-    // Filter nav items based on role
-    const accessibleNavItems = allNavItems.filter(item => {
-        return !item.adminOnly || isPrivilegedUser;
-    });
+    const closeSheet = () => setIsSheetOpen(false);
 
-    // *** NEW: Determine if borrow requests link should be shown ***
-    const showBorrowRequestsLink = isPrivilegedUser;
+    const visibleMainNavLinks = mainNavLinks.filter(link => !link.adminOnly || isPrivilegedUser);
 
-    // Handle loading state (optional, show minimal header or loading indicator)
     if (isLoading) {
         return (
-            <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-                <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
-                    {/* Logo and Title */}
-                    <Link href="/" className="mr-6 flex items-center space-x-2">
-                        <>
-                          <Building2 className="h-6 w-6 text-primary" />
-                          <span className="font-bold sm:inline-block">
-                              E-Bridge
-                          </span>
-                        </>
-                    </Link>
-                    <div className="flex items-center space-x-4">
-                        {/* Placeholder or spinner could go here */}
-                    </div>
+            <header className="sticky top-0 z-50 w-full border-b bg-[hsl(var(--header-background))] backdrop-blur-lg">
+                <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
+                    <div className="h-6 w-24 rounded bg-muted-foreground/20 animate-pulse"></div>
+                    <div className="h-6 w-32 rounded bg-muted-foreground/20 animate-pulse"></div>
                 </div>
             </header>
         );
     }
 
-    // Helper function to close sheet
-    const closeSheet = () => setIsSheetOpen(false);
-
     return (
-        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-            <div className="container flex h-16 max-w-screen-2xl items-center justify-between">
-                {/* Logo and Title */}
-                <Link href="/" className="mr-6 flex items-center space-x-2">
-                    <>
-                        <Building2 className="h-6 w-6 text-primary" />
-                        <span className="font-bold sm:inline-block">
-                            E-Bridge
-                        </span>
-                    </>
+        <header className="sticky top-0 z-50 w-full border-b border-border/40 bg-[hsl(var(--header-background))] backdrop-blur-lg">
+            <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
+                <Link href="/" className="flex items-center space-x-2 shrink-0 mr-6">
+                    <Building2 className="h-6 w-6 text-primary" />
+                    <span className="font-bold text-lg">E-Bridge</span>
                 </Link>
 
-                {/* Centered Navigation Links (Desktop) - Already hidden on small screens */}
                 <nav className="hidden md:flex flex-1 items-center justify-center space-x-1 lg:space-x-2">
-                    {accessibleNavItems.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                        return (
-                            <Link
-                                key={`desktop-${item.href}`}
-                                href={item.href}
-                                className={cn(
-                                    "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                                )}>
-                                <>
-                                  <Icon className="h-4 w-4" />
-                                  <span>{item.label}</span>
-                                  {item.label === 'Manage Users' && pendingUsersCount > 0 && (
-                                    <span className="ml-2 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                      {pendingUsersCount}
-                                    </span>
-                                  )}
-                                </>
-                            </Link>
-                        );
-                    })}
+                    {visibleMainNavLinks.map(link => (
+                        <Link 
+                            key={`desktop-${link.href}`}
+                            href={link.href}
+                            className={getDesktopNavLinkClasses(pathname.startsWith(link.href) && (link.href === '/' ? pathname === '/' : true))}
+                        >
+                            <link.icon className="h-4 w-4" />
+                            <span>{link.label}</span>
+                            {link.label === 'Manage Users' && pendingUsersCount > 0 && (
+                                <span className="ml-1.5 inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white">
+                                    {pendingUsersCount}
+                                </span>
+                            )}
+                        </Link>
+                    ))}
                 </nav>
 
-                {/* Right side elements (Profile/Login/Logout + Mobile Menu Trigger) */}
-                <div className="flex items-center space-x-2 md:space-x-4">
-                     {/* Profile/Login/Logout Buttons (visible on desktop) */}
-                    <div className="hidden md:flex items-center space-x-4">
-                        {isAuthenticated ? (
-                            <>
-                                {/* Borrow Requests Link (Desktop) - Icon Only */}
-                                {showBorrowRequestsLink && (
-                                    <Link
-                                        href={borrowRequestsNavItem.href}
-                                        className={cn(
-                                            "flex items-center justify-center rounded-md h-9 w-9 text-sm font-medium transition-colors",
-                                            pathname === borrowRequestsNavItem.href
-                                                ? "bg-primary/10 text-primary"
-                                                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                                        )}
-                                        title={borrowRequestsNavItem.label}>
-                                        <borrowRequestsNavItem.icon className="h-5 w-5" />
-                                        <span className="sr-only">{borrowRequestsNavItem.label}</span>
-                                    </Link>
-                                )}
-                                {/* Profile Link */}
-                                <Link
-                                    href={profileNavItem.href}
-                                    className={cn(
-                                        "flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                        pathname === profileNavItem.href
-                                            ? "bg-primary/10 text-primary"
-                                            : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
-                                    )}>
-                                    <>
-                                      <profileNavItem.icon className="h-4 w-4" />
-                                      <span>{profileNavItem.label}</span>
-                                    </>
-                                </Link>
-                                {/* Logout Button */}
-                                <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    onClick={handleLogout} 
-                                    title="Logout"
-                                    className="text-muted-foreground hover:text-foreground hover:bg-accent/50"
-                                >
-                                    <LogOut className="h-5 w-5" />
-                                    <span className="sr-only">Logout</span>
-                                </Button>
-                            </>
-                        ) : (
-                            /* Login Button */
-                            (<Button asChild variant="outline" size="sm">
-                                <Link href="/login" className="flex items-center space-x-2">
-                                    <LogIn className="h-4 w-4" />
-                                    <span>Login</span>
-                                </Link>
-                            </Button>)
-                        )}
-                    </div>
+                <div className="hidden md:flex items-center space-x-1 lg:space-x-1.5 shrink-0 ml-6">
+                    {isPrivilegedUser && borrowRequestsLink && (
+                        <Link 
+                            href={borrowRequestsLink.href} 
+                            className={getDesktopNavLinkClasses(pathname === borrowRequestsLink.href, true)} 
+                            title={borrowRequestsLink.label}
+                        >
+                            <borrowRequestsLink.icon className="h-5 w-5" />
+                            <span className="sr-only">{borrowRequestsLink.label}</span>
+                        </Link>
+                    )}
+                    <Link href={aboutLink.href} className={getDesktopNavLinkClasses(pathname === aboutLink.href, true)} title={aboutLink.label}>
+                        <aboutLink.icon className="h-5 w-5" />
+                        <span className="sr-only">{aboutLink.label}</span>
+                    </Link>
+                    {isAuthenticated ? (
+                        <>
+                            <Link href={profileLink.href} className={getDesktopNavLinkClasses(pathname === profileLink.href, true)} title={profileLink.label}>
+                                <profileLink.icon className="h-5 w-5" />
+                                <span className="sr-only">{profileLink.label}</span>
+                            </Link>
+                            <Button variant="ghost" onClick={handleLogout} className={getDesktopNavLinkClasses(false, true)} title="Logout">
+                                <LogOut className="h-5 w-5" />
+                                <span className="sr-only">Logout</span>
+                            </Button>
+                        </>
+                    ) : (
+                        <Button asChild size="sm" className={cn(getDesktopNavLinkClasses(false), "px-3 py-2")} >
+                            <Link href="/login">
+                                <LogIn className="mr-2 h-4 w-4" /> Login
+                            </Link>
+                        </Button>
+                    )}
+                </div>
 
-                    {/* Mobile Menu Trigger (visible only on small screens) */}
+                <div className="md:hidden flex items-center">
                     <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                         <SheetTrigger asChild>
-                            <Button variant="ghost" size="icon" className="md:hidden">
+                            <Button variant="ghost" size="icon">
                                 <Menu className="h-6 w-6" />
                                 <span className="sr-only">Toggle Menu</span>
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-[280px]"> 
-                            <SheetHeader className="mb-6">
+                        <SheetContent side="left" className="w-[280px] sm:w-[320px] p-0">
+                            <SheetHeader className="border-b p-4">
                                 <SheetTitle className="flex items-center space-x-2">
-                                    <Building2 className="h-5 w-5 text-primary" />
-                                    <span>E-Bridge Menu</span>
+                                    <Building2 className="h-6 w-6 text-primary" />
+                                    <span className="text-lg font-semibold">E-Bridge Menu</span>
                                 </SheetTitle>
-                                {/* Optional Description */} 
-                                {/* <SheetDescription>Navigation</SheetDescription> */} 
                             </SheetHeader>
-                            <nav className="flex flex-col space-y-2">
-                                 {/* Mobile Navigation Links */}
-                                {accessibleNavItems.map((item) => {
-                                    const Icon = item.icon;
-                                    const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href));
-                                    return (
-                                        <SheetClose asChild key={`mobile-${item.href}`}>
-                                            <Link
-                                                href={item.href}
-                                                className={cn(
-                                                    "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
-                                                    isActive ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                )}
-                                                onClick={closeSheet}>
-                                                <>
-                                                  <Icon className="h-5 w-5" />
-                                                  <span>{item.label}</span>
-                                                  {item.label === 'Manage Users' && pendingUsersCount > 0 && (
-                                                    <span className="ml-auto inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-red-100 bg-red-600 rounded-full">
-                                                      {pendingUsersCount}
-                                                    </span>
-                                                  )}
-                                                </>
-                                            </Link>
-                                        </SheetClose>
-                                    );
-                                })}
-                                 {/* *** NEW: Add Borrow Requests Link (Mobile) *** */}
-                                {showBorrowRequestsLink && (
-                                    <SheetClose asChild>
-                                        <Link
-                                            href={borrowRequestsNavItem.href}
-                                            className={cn(
-                                                "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
-                                                pathname === borrowRequestsNavItem.href 
-                                                    ? "bg-primary/10 text-primary" 
-                                                    : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                            <nav className="flex flex-col space-y-1 p-3">
+                                {visibleMainNavLinks.map(link => (
+                                    <SheetClose asChild key={`mobile-${link.href}`}>
+                                        <Link href={link.href} onClick={closeSheet} className={getMobileNavLinkClasses(pathname.startsWith(link.href) && (link.href === '/' ? pathname === '/' : true))}>
+                                            <link.icon className="h-5 w-5" />
+                                            <span>{link.label}</span>
+                                            {link.label === 'Manage Users' && pendingUsersCount > 0 && (
+                                                 <span className="ml-auto inline-flex items-center justify-center rounded-full bg-red-500 px-1.5 py-0.5 text-xs font-semibold text-white">
+                                                    {pendingUsersCount}
+                                                </span>
                                             )}
-                                            onClick={closeSheet}>
-                                            <borrowRequestsNavItem.icon className="h-5 w-5" />
-                                            <span>{borrowRequestsNavItem.label}</span>
+                                        </Link>
+                                    </SheetClose>
+                                ))}
+                                
+                                <hr className="my-2 border-border/60"/>
+
+                                {isPrivilegedUser && borrowRequestsLink && (
+                                    <SheetClose asChild>
+                                        <Link href={borrowRequestsLink.href} onClick={closeSheet} className={getMobileNavLinkClasses(pathname === borrowRequestsLink.href)}>
+                                            <borrowRequestsLink.icon className="h-5 w-5" />
+                                            <span>{borrowRequestsLink.label}</span>
                                         </Link>
                                     </SheetClose>
                                 )}
-                                 {/* Mobile Profile/Logout/Login */} 
+                                <SheetClose asChild>
+                                    <Link href={aboutLink.href} onClick={closeSheet} className={getMobileNavLinkClasses(pathname === aboutLink.href)}>
+                                        <aboutLink.icon className="h-5 w-5" />
+                                        <span>{aboutLink.label}</span>
+                                    </Link>
+                                </SheetClose>
+                                
                                 {isAuthenticated ? (
                                     <>
-                                        <SheetClose asChild> 
-                                            <Link
-                                                href={profileNavItem.href}
-                                                className={cn(
-                                                     "flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors",
-                                                     pathname === profileNavItem.href ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-accent hover:text-foreground"
-                                                )}
-                                                onClick={closeSheet}>
-                                                <>
-                                                  <profileNavItem.icon className="h-5 w-5" />
-                                                  <span>{profileNavItem.label}</span>
-                                                </>
+                                        <hr className="my-2 border-border/60"/>
+                                        <SheetClose asChild>
+                                            <Link href={profileLink.href} onClick={closeSheet} className={getMobileNavLinkClasses(pathname === profileLink.href)}>
+                                                <profileLink.icon className="h-5 w-5" />
+                                                <span>{profileLink.label}</span>
                                             </Link>
                                         </SheetClose>
                                         <Button 
                                             variant="ghost" 
-                                            onClick={() => { handleLogout(); closeSheet(); }} 
-                                            className="flex justify-start items-center space-x-3 rounded-md px-3 py-2 text-base font-medium text-destructive hover:bg-destructive/10 hover:text-destructive"
+                                            onClick={handleLogout} 
+                                            className={cn(getMobileNavLinkClasses(false), "text-destructive hover:bg-destructive/10 justify-start w-full")}
                                         >
-                                            <LogOut className="h-5 w-5" />
+                                            <LogOut className="h-5 w-5 mr-3" />
                                             <span>Logout</span>
                                         </Button>
                                     </>
                                 ) : (
-                                    <SheetClose asChild> 
-                                         <Link
-                                             href="/login"
-                                             className="flex items-center space-x-3 rounded-md px-3 py-2 text-base font-medium transition-colors text-muted-foreground hover:bg-accent hover:text-foreground"
-                                             onClick={closeSheet}>
-                                             <LogIn className="h-5 w-5" />
-                                            <span>Login</span>
-                                        </Link>
-                                    </SheetClose>
+                                    <>
+                                        <hr className="my-2 border-border/60"/>
+                                        <SheetClose asChild>
+                                            <Link href="/login" onClick={closeSheet} className={getMobileNavLinkClasses(false)}>
+                                                <LogIn className="h-5 w-5 mr-3" />
+                                                <span>Login</span>
+                                            </Link>
+                                        </SheetClose>
+                                    </>
                                 )}
                             </nav>
                         </SheetContent>
                     </Sheet>
-                </div> 
+                </div>
             </div>
         </header>
     );

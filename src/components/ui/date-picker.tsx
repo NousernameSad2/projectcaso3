@@ -3,7 +3,6 @@
 import * as React from "react"
 import { format } from "date-fns"
 import { Calendar as CalendarIcon } from "lucide-react"
-import { PopoverPortal } from "@radix-ui/react-popover"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -31,7 +30,7 @@ export function DatePicker({ date, setDate, placeholder = "Pick a date", disable
         <Button
           variant={"outline"}
           className={cn(
-            "w-full justify-start text-left font-normal", // Adjusted width
+            "w-full justify-start text-left font-normal no-global-animation", // Added no-global-animation
             !date && "text-muted-foreground"
           )}
           disabled={typeof disabled === 'boolean' ? disabled : false} // Disable button if boolean disabled
@@ -40,31 +39,29 @@ export function DatePicker({ date, setDate, placeholder = "Pick a date", disable
           {date ? format(date, "PPP") : <span>{placeholder}</span>}
         </Button>
       </PopoverTrigger>
-      <PopoverPortal>
-        <PopoverContent 
-          className="w-auto p-0 z-50" 
-          onInteractOutside={(e) => {
-            console.log("DatePicker: PopoverContent onInteractOutside fired");
-            e.preventDefault();
+      <PopoverContent 
+        className="w-auto p-0 z-50" 
+        onInteractOutside={(e) => {
+          console.log("DatePicker: PopoverContent onInteractOutside fired");
+          e.preventDefault();
+        }}
+        onClick={(e) => { 
+          console.log("DatePicker: PopoverContent onClick fired");
+          e.stopPropagation(); 
+        }} 
+      >
+        <Calendar
+          mode="single"
+          selected={date}
+          onSelect={(selectedDate) => {
+            console.log("DatePicker: Calendar onSelect fired");
+            setDate(selectedDate);
+            setIsOpen(false);
           }}
-          onClick={(e) => { 
-            console.log("DatePicker: PopoverContent onClick fired");
-            e.stopPropagation(); 
-          }} 
-        >
-          <Calendar
-            mode="single"
-            selected={date}
-            onSelect={(selectedDate) => {
-              console.log("DatePicker: Calendar onSelect fired");
-              setDate(selectedDate);
-              setIsOpen(false);
-            }}
-            initialFocus
-            disabled={disabled}
-          />
-        </PopoverContent>
-      </PopoverPortal>
+          initialFocus
+          disabled={disabled}
+        />
+      </PopoverContent>
     </Popover>
   )
 } 

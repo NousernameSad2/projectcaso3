@@ -1,12 +1,17 @@
+@import "tailwindcss"; /* Use this for Tailwind v4+ */
+
+/* Remove old Tailwind v3 directives
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+*/
 
 @layer base {
   :root {
     /* Dark Theme Variables (Grayscale) */
     --background: 0 0% 100%; /* Darker Black */
     --foreground: 0 0% 3.9%; /* Almost white */
+    --header-background: 0 0% 98%; /* New: Very light gray for header */
 
     --card: 0 0% 100%; /* Dark Gray */
     --card-foreground: 0 0% 3.9%;
@@ -29,12 +34,18 @@
     --destructive: 0 84.2% 60.2%; 
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 89.8%; /* Gray border */
+    --border: 0 0% 90%; /* Gray border - Made lighter from 80% */
     --input: 0 0% 89.8%; /* Gray input background */
 
     --ring: 0 0% 3.9%; /* Blue focus ring - REMAINS BLUE */
 
     --radius: 0.5rem;
+
+    /* Semantic Colors */
+    --success: 142.1 70.6% 45.3%; /* Reverted to HSL components */
+    --success-foreground: 142.1 80% 96.1%; /* Reverted to HSL components */
+    --warning: hsl(48, 96%, 53%); 
+    --warning-foreground: hsl(48, 96%, 10%); 
 
     --chart-1: 12 76% 61%;
 
@@ -75,6 +86,13 @@
     --border: 0 0% 14.9%;
     --input: 0 0% 14.9%;
     --ring: 0 0% 83.1%;
+
+    /* Semantic Colors - Dark Theme (can be same as light if contrast is good, or adjust) */
+    --success: 142.1 70.6% 45.3%; 
+    --success-foreground: 142.1 80% 96.1%;
+    --warning: 47.9 95.8% 53.1%;
+    --warning-foreground: 47.9 95.8% 10.0%;
+
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -85,20 +103,20 @@
 
 @layer base {
   * {
-    @apply border-border;
+    border-color: hsl(var(--border));
   }
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
     /* Explicitly set the font family using the variable from layout.tsx */
     font-family: var(--font-inter), theme('fontFamily.sans'); 
   }
 }
 
-/* Global subtle entrance animation */
 @keyframes subtleEntrance {
   from {
     opacity: 0;
-    transform: translateY(15px); /* Start slightly lower */
+    transform: translateY(15px);
   }
   to {
     opacity: 1;
@@ -107,6 +125,10 @@
 }
 
 * {
-  /* Applied to all elements for a global effect */
   animation: subtleEntrance 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.no-global-animation {
+  animation: none !important;
+  transform: none !important; /* Added to counteract the global transform */
 }
