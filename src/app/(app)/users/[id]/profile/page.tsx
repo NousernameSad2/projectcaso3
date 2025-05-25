@@ -578,7 +578,7 @@ export default function AdminViewUserProfilePage({ params }: AdminViewUserProfil
           User Profile: {profile?.name || (isLoadingProfile ? 'Loading...' : 'Unknown User')}
         </h1>
         <p className="text-muted-foreground mt-1">
-          View and manage this user's profile information and borrow history.
+          View and manage this user&apos;s profile information and borrow history.
         </p>
       </div>
 
