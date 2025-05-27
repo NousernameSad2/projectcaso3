@@ -65,7 +65,7 @@ interface EquipmentWithDetails extends Equipment {
   maintenanceLog: Prisma.JsonValue[]; // Maintenance logs are directly on the object
   editHistory: Prisma.JsonValue[];
   customNotesLog: Prisma.JsonValue[]; // Add the new field
-  instrumentManualUrl?: string | null; // ADDED for instrument manual
+  instrumentManualUrl: string | null; // MODIFIED: Type changed to string | null, and made non-optional
 }
 
 // Interface for unified Activity Log entries

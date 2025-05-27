@@ -99,12 +99,13 @@
     --chart-4: 280 65% 60%;
     --chart-5: 340 75% 55%;
   }
-}
 
-@layer base {
   * {
     border-color: hsl(var(--border));
   }
+}
+
+@layer base {
   body {
     background-color: hsl(var(--background));
     color: hsl(var(--foreground));
@@ -124,8 +125,14 @@
   }
 }
 
+/*
 * {
   animation: subtleEntrance 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+*/
+
+.play-page-load-animation * {
+  animation: subtleEntrance 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) 1 forwards;
 }
 
 .no-global-animation {

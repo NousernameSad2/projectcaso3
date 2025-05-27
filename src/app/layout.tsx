@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner"; // Import Toaster
 import "react-day-picker/style.css"; // Import react-day-picker default CSS
 // Remove imports for AuthStoreSync
 // import AuthStoreSync from "@/components/providers/AuthStoreSync"; 
+import PageLoadAnimation from "@/components/providers/PageLoadAnimation"; // Import the new component
 
 // Re-configure Inter font
 const inter = Inter({
@@ -43,6 +44,7 @@ export default function RootLayout({
               disableTransitionOnChange
             >
               <Toaster />
+              <PageLoadAnimation />
           {children}
             </ThemeProvider>
           </SessionProvider>

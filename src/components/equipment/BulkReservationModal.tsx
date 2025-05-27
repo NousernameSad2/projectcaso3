@@ -399,13 +399,19 @@ export default function BulkReservationModal({
                 >
                     <div>
                         <RadioGroupItem value="IN_CLASS" id="inClass" className="peer sr-only" />
-                        <Label htmlFor="inClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
+                        <Label 
+                            htmlFor="inClass" 
+                            className="flex items-center justify-center rounded-md border-2 border-[hsl(var(--muted))] bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-[hsl(var(--primary))] peer-data-[state=unchecked]:border-[hsl(var(--muted))] cursor-pointer text-sm no-global-animation"
+                        >
                             In Class
                         </Label>
                     </div>
                     <div>
                         <RadioGroupItem value="OUT_OF_CLASS" id="outClass" className="peer sr-only" />
-                        <Label htmlFor="outClass" className="flex items-center justify-center rounded-md border-2 border-muted bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer text-sm">
+                        <Label 
+                            htmlFor="outClass" 
+                            className="flex items-center justify-center rounded-md border-2 border-[hsl(var(--muted))] bg-popover p-3 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-[hsl(var(--primary))] peer-data-[state=unchecked]:border-[hsl(var(--muted))] cursor-pointer text-sm no-global-animation"
+                        >
                             Out of Class
                         </Label>
                     </div>

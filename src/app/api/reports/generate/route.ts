@@ -169,7 +169,13 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Invalid query parameters', details: queryParseResult.error.flatten() }, { status: 400 });
     }
 
-    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId, returnStatus, borrowContext, classId } = queryParseResult.data;
+    const { reportType, format: outputFormat, startDate, endDate, courseId, ficId, equipmentId, borrowerId, returnStatus: rawReturnStatus, borrowContext, classId } = queryParseResult.data;
+
+    // Transform returnStatus to uppercase before further processing
+    let returnStatus = rawReturnStatus; // Keep returnStatus as let since it's reassigned
+    if (returnStatus && returnStatus !== 'all') {
+        returnStatus = returnStatus.toUpperCase() as 'LATE' | 'REGULAR';
+    }
 
     const borrowFilters: Prisma.BorrowWhereInput = {};
     const deficiencyFilters: Prisma.DeficiencyWhereInput = {}; // Initialize as const

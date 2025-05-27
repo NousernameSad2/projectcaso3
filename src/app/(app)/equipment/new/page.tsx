@@ -42,7 +42,7 @@ export default function AddEquipmentPage() {
       category: EquipmentCategory.INSTRUMENTS,
       condition: "",
       status: EquipmentStatus.AVAILABLE,
-      stockCount: 1,
+      stockCount: 0,
       purchaseCost: undefined,
       instrumentManualUrl: "",
     },

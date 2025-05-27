@@ -136,7 +136,7 @@ export async function PUT(
     }
 
     // Destructure validated data, including notes
-    const { name, equipmentId: bodyEquipmentId, category, condition, status, stockCount, purchaseCost, imageUrl, maintenanceNotes } = validation.data;
+    const { name, equipmentId: bodyEquipmentId, category, condition, status, stockCount, purchaseCost, imageUrl, maintenanceNotes, instrumentManualUrl } = validation.data;
 
     // Fetch existing equipment to compare status and get current log
     const existingEquipment = await prisma.equipment.findUnique({
@@ -157,6 +157,7 @@ export async function PUT(
         stockCount,
         purchaseCost: purchaseCost,
         images: imageUrl ? [imageUrl] : [],
+        instrumentManualUrl: instrumentManualUrl || undefined,
     };
     
     // Check if status is changing TO Under Maintenance

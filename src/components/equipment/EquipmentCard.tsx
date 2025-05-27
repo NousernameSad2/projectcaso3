@@ -49,7 +49,7 @@ export interface EquipmentWithAvailability extends Equipment { // `Equipment` fr
   nextUpcomingReservationStart: string | null;
   availableUnitsInFilterRange: number | null;
   activeBorrowCount: number;
-  instrumentManualUrl?: string | null; // ADDED for instrument manual
+  instrumentManualUrl: string | null; // MODIFIED: Type changed to string | null, and made non-optional
   // Explicitly list fields from `Equipment` if your base `Equipment` type is minimal
   // For example: id, name, images, stockCount, status, equipmentId, condition etc.
 }

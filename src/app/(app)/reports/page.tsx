@@ -918,7 +918,7 @@ export default function ReportsPage() {
                         {/* Return Status Filter (Only for Borrowing Activity) */} 
                         {reportType === ReportType.BORROWING_ACTIVITY && (
                             <div className="space-y-2">
-                                <Label htmlFor="filterReturnStatus">Return Status</Label>
+                                <Label htmlFor="filterReturnStatus">Request Type</Label>
                                 <Select 
                                     value={selectedReturnStatus} 
                                     onValueChange={setSelectedReturnStatus}
@@ -928,8 +928,8 @@ export default function ReportsPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Statuses</SelectItem>
-                                        <SelectItem value="LATE">Late</SelectItem>
-                                        <SelectItem value="REGULAR">Regular</SelectItem>
+                                        <SelectItem value="Late">Late</SelectItem>
+                                        <SelectItem value="Regular">Regular</SelectItem>
                                     </SelectContent>
                                 </Select>
                             </div>
@@ -1489,10 +1489,13 @@ const getColumnDefinitions = (reportType: ReportType): ColumnDefinition[] => {
                 } },
                 { header: 'Return Status', accessor: 'borrowStatus', render: (val: unknown) => {
                     const status = val as string;
-                    if (status === 'OVERDUE') return <Badge variant="destructive">Late</Badge>;
-                    if (['COMPLETED', 'RETURNED'].includes(status)) return <Badge variant="success">{status}</Badge>;
-                    if (['ACTIVE'].includes(status)) return <Badge variant="default">Regular</Badge>;
-                    return status || 'N/A';
+                    if (status === 'OVERDUE') {
+                        return <Badge variant="destructive">Late</Badge>;
+                    } else if (['ACTIVE', 'COMPLETED', 'RETURNED'].includes(status)) {
+                        return <Badge variant="success">Regular</Badge>;
+                    }
+                    // Fallback for any statuses not explicitly handled by "Late" or "Regular"
+                    return <Badge variant="outline">{status || 'N/A'}</Badge>;
                 } },
                 { header: 'Borrow Status', accessor: 'borrowStatus' }, // Changed header from 'Status' to 'Borrow Status' for clarity
                 { header: 'Requested', accessor: 'requestSubmissionTime', render: (val: unknown) => formatDateDisplay(val as string | Date) }, 

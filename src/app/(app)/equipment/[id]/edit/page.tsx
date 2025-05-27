@@ -52,9 +52,10 @@ export default function EditEquipmentPage() {
       category: EquipmentCategory.INSTRUMENTS,
       condition: "",
       status: EquipmentStatus.AVAILABLE,
-      stockCount: 1,
+      stockCount: 0,
       purchaseCost: undefined,
       imageUrl: "",
+      instrumentManualUrl: "",
     },
   });
 
@@ -99,6 +100,7 @@ export default function EditEquipmentPage() {
           stockCount: data.stockCount,
           purchaseCost: data.purchaseCost ?? undefined,
           imageUrl: data.images?.[0] || "",
+          instrumentManualUrl: data.instrumentManualUrl || "",
         });
       })
       .catch((err) => {
@@ -289,7 +291,7 @@ export default function EditEquipmentPage() {
                   <FormItem>
                     <FormLabel>Stock Count</FormLabel>
                     <FormControl>
-                      <Input type="number" min="0" {...field} onChange={event => field.onChange(+event.target.value)} disabled={isLoading} />
+                      <Input type="number" min="0" {...field} onChange={event => field.onChange(event.target.value === '' ? '' : +event.target.value)} disabled={isLoading} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -353,6 +355,31 @@ export default function EditEquipmentPage() {
                </FormItem>
              )}
            />
+
+           {/* Conditionally render Instrument Manual URL field */}
+           {form.watch("category") === EquipmentCategory.INSTRUMENTS && (
+            <FormField
+              control={form.control}
+              name="instrumentManualUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Instrument Manual URL (Optional)</FormLabel>
+                  <FormControl>
+                    <Input 
+                      placeholder="e.g., https://manuals.example.com/trimble-s5.pdf" 
+                      {...field} 
+                      value={field.value ?? ''} // Ensure value is not null for input
+                      disabled={isLoading} 
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    A link to the instrument&apos;s user manual (e.g., Google Drive link).
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
            <Button type="submit" disabled={isLoading || isFetching}>
              {isLoading ? "Saving Changes..." : "Save Changes"}

@@ -124,6 +124,7 @@ model Equipment {
   stockCount       Int               @default(1)
   purchaseCost     Float?
   images           String[]
+  instrumentManualUrl String?         // ADDED for instrument manual
   editHistory      Json[]
   maintenanceLog   Json[]
   customNotesLog   Json[]
