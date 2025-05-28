@@ -192,7 +192,7 @@ export default function ReportsPage() {
   const [activeReportTypeForDisplay, setActiveReportTypeForDisplay] = useState<ReportType | undefined>();
 
   // --- State for Contact Hours Calculator ---
-  const [contactHoursEquipment, setContactHoursEquipment] = useState<string | undefined>();
+  const [contactHoursEquipment, setContactHoursEquipment] = useState<string[]>([]);
   const [contactHoursDateRange, setContactHoursDateRange] = useState<DateRange | undefined>();
   const [calculatedContactHours, setCalculatedContactHours] = useState<number | null>(null);
   const [isCalculatingContactHours, setIsCalculatingContactHours] = useState<boolean>(false);
@@ -205,7 +205,7 @@ export default function ReportsPage() {
   const [utilizationRankingDateRange, setUtilizationRankingDateRange] = useState<DateRange | undefined>();
 
   // --- State for Maintenance Activity Report ---
-  const [maintenanceActivityEquipmentId, setMaintenanceActivityEquipmentId] = useState<string | undefined>();
+  const [maintenanceActivityEquipmentIds, setMaintenanceActivityEquipmentIds] = useState<string[]>([]);
   const [maintenanceActivityDateRange, setMaintenanceActivityDateRange] = useState<DateRange | undefined>();
   const [maintenanceActivityData, setMaintenanceActivityData] = useState<Record<string, unknown>[] | null>(null);
   const [isMaintenanceActivityLoading, setIsMaintenanceActivityLoading] = useState<boolean>(false);
@@ -421,8 +421,8 @@ export default function ReportsPage() {
 
   // --- Calculate Contact Hours Handler ---
   const handleCalculateContactHours = async () => {
-    if (!contactHoursEquipment || !contactHoursDateRange?.from || !contactHoursDateRange?.to) {
-        setContactHoursError("Please select equipment and a full date range.");
+    if (contactHoursEquipment.length === 0 || !contactHoursDateRange?.from || !contactHoursDateRange?.to) {
+        setContactHoursError("Please select at least one equipment and a full date range.");
         setCalculatedContactHours(null);
         return;
     }
@@ -431,11 +431,10 @@ export default function ReportsPage() {
     setContactHoursError(null);
     setCalculatedContactHours(null);
 
-    const params = new URLSearchParams({
-        equipmentId: contactHoursEquipment,
-        startDate: formatDateFns(contactHoursDateRange.from, 'yyyy-MM-dd'),
-        endDate: formatDateFns(contactHoursDateRange.to, 'yyyy-MM-dd'),
-    });
+    const params = new URLSearchParams();
+    contactHoursEquipment.forEach(id => params.append('equipmentId', id));
+    params.append('startDate', formatDateFns(contactHoursDateRange.from, 'yyyy-MM-dd'));
+    params.append('endDate', formatDateFns(contactHoursDateRange.to, 'yyyy-MM-dd'));
 
     try {
         const response = await axios.get<{ totalContactHours: number }>(`/api/reports/calculate-contact-hours?${params.toString()}`);
@@ -507,8 +506,8 @@ export default function ReportsPage() {
     setMaintenanceActivityData(null);
 
     const params = new URLSearchParams();
-    if (maintenanceActivityEquipmentId) {
-        params.append('equipmentId', maintenanceActivityEquipmentId);
+    if (maintenanceActivityEquipmentIds.length > 0) {
+        maintenanceActivityEquipmentIds.forEach(id => params.append('equipmentId', id));
     }
     if (maintenanceActivityDateRange?.from) {
         params.append('startDate', formatDateFns(maintenanceActivityDateRange.from, 'yyyy-MM-dd'));
@@ -540,12 +539,12 @@ export default function ReportsPage() {
     } finally {
         setIsMaintenanceActivityLoading(false);
     }
-  }, [maintenanceActivityEquipmentId, maintenanceActivityDateRange]);
+  }, [maintenanceActivityEquipmentIds, maintenanceActivityDateRange]);
 
   // useEffect for Maintenance Activity Report (triggers on filter change)
   useEffect(() => {
     fetchMaintenanceActivityReport();
-  }, [maintenanceActivityEquipmentId, maintenanceActivityDateRange, fetchMaintenanceActivityReport]);
+  }, [maintenanceActivityEquipmentIds, maintenanceActivityDateRange, fetchMaintenanceActivityReport]);
 
   // --- NEW: Fetch Availability Metrics ---
   const fetchAvailabilityMetrics = async () => {
@@ -565,11 +564,9 @@ export default function ReportsPage() {
   useEffect(() => {
     // Fetch utilization ranking on initial load or when its specific date range changes
     fetchUtilizationRanking(utilizationRankingDateRange);
-    // Fetch maintenance activity report if equipment is selected
-    if (maintenanceActivityEquipmentId) {
-        fetchMaintenanceActivityReport();
-    }
-  }, [utilizationRankingDateRange, maintenanceActivityEquipmentId, fetchMaintenanceActivityReport]);
+    // Fetch maintenance activity report (no specific condition needed here now as fetch handles empty IDs)
+    fetchMaintenanceActivityReport(); 
+  }, [utilizationRankingDateRange, maintenanceActivityEquipmentIds, fetchMaintenanceActivityReport]);
 
   // --- NEW: useEffect for fetching availability metrics on mount ---
   useEffect(() => {
@@ -1039,20 +1036,16 @@ export default function ReportsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                         <div className="space-y-2 md:col-span-1">
                             <Label htmlFor="contactHoursEquipment">Equipment</Label>
-                            <Select 
+                            <MultiSearchableSelect
                                 value={contactHoursEquipment} 
-                                onValueChange={setContactHoursEquipment}
-                                disabled={isLoadingEquipment || !equipment || equipment.length === 0} // Re-use existing equipment list and loading state
-                            >
-                                <SelectTrigger id="contactHoursEquipment" className="w-full">
-                                    <SelectValue placeholder={isLoadingEquipment ? "Loading..." : "Select Equipment..."} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {equipment?.map((item) => (
-                                        <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                onChange={setContactHoursEquipment}
+                                options={equipment?.map(item => ({ value: item.id, label: item.name })) || []}
+                                placeholder={isLoadingEquipment ? "Loading..." : "Select equipment..."}
+                                searchPlaceholder="Search equipment..."
+                                emptyStateMessage="No equipment found."
+                                disabled={isLoadingEquipment || !equipment || equipment.length === 0}
+                                className="w-full"
+                            />
                         </div>
 
                         <div className="space-y-2 md:col-span-1">
@@ -1098,7 +1091,7 @@ export default function ReportsPage() {
                         <div className="md:col-span-1">
                             <Button 
                                 onClick={handleCalculateContactHours} 
-                                disabled={isCalculatingContactHours || !contactHoursEquipment || !contactHoursDateRange?.from || !contactHoursDateRange?.to}
+                                disabled={isCalculatingContactHours || contactHoursEquipment.length === 0 || !contactHoursDateRange?.from || !contactHoursDateRange?.to}
                                 className="w-full"
                             >
                                 {isCalculatingContactHours && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Calculate
@@ -1239,21 +1232,16 @@ export default function ReportsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
                   <div className="space-y-2">
                     <Label htmlFor="maintenanceActivityEquipment">Equipment (Optional)</Label>
-                    <Select
-                      value={maintenanceActivityEquipmentId || 'all'}
-                      onValueChange={(value) => setMaintenanceActivityEquipmentId(value === 'all' ? undefined : value)}
-                      disabled={isLoadingEquipment || !equipment || equipment.length === 0}
-                    >
-                      <SelectTrigger id="maintenanceActivityEquipment" className="w-full">
-                        <SelectValue placeholder={isLoadingEquipment ? "Loading..." : "All Equipment"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Equipment</SelectItem>
-                        {equipment?.map((item) => (
-                          <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <MultiSearchableSelect
+                        value={maintenanceActivityEquipmentIds}
+                        onChange={setMaintenanceActivityEquipmentIds}
+                        options={equipment?.map(item => ({ value: item.id, label: item.name })) || []}
+                        placeholder={isLoadingEquipment ? "Loading..." : "Search or select equipment..."}
+                        searchPlaceholder="Search equipment..."
+                        emptyStateMessage="No equipment found."
+                        disabled={isLoadingEquipment || !equipment || equipment.length === 0}
+                        className="w-full"
+                    />
                   </div>
 
                   <div className="space-y-2">
@@ -1546,7 +1534,7 @@ const RenderLiveReportTable: React.FC<{ data: Record<string, unknown>[]; reportT
     const columns = getColumnDefinitions(reportType);
 
     return (
-        <div className="overflow-x-auto"> 
+        <div> 
             <Table>
                 <TableHeader>
                     <TableRow>

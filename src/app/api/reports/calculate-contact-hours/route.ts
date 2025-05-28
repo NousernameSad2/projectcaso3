@@ -5,7 +5,7 @@ import { parseISO, isValid, differenceInHours } from 'date-fns';
 import { BorrowStatus } from '@prisma/client';
 
 const ContactHoursQuerySchema = z.object({
-    equipmentId: z.string().min(1, { message: "Equipment ID is required" }),
+    equipmentId: z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]).describe("Can be a single ID or an array of IDs"),
     startDate: z.string().refine(val => isValid(parseISO(val)), { message: "Invalid start date format" }),
     endDate: z.string().refine(val => isValid(parseISO(val)), { message: "Invalid end date format" }),
 });
@@ -13,18 +13,30 @@ const ContactHoursQuerySchema = z.object({
 export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
 
-    const queryParseResult = ContactHoursQuerySchema.safeParse(Object.fromEntries(searchParams));
+    // Get all equipmentId parameters
+    const equipmentIdParams = searchParams.getAll('equipmentId');
+
+    const queryData = {
+        equipmentId: equipmentIdParams.length === 1 ? equipmentIdParams[0] : equipmentIdParams,
+        startDate: searchParams.get('startDate'),
+        endDate: searchParams.get('endDate'),
+    };
+
+    const queryParseResult = ContactHoursQuerySchema.safeParse(queryData);
 
     if (!queryParseResult.success) {
         return NextResponse.json({ error: 'Invalid query parameters', details: queryParseResult.error.flatten() }, { status: 400 });
     }
 
     const { equipmentId, startDate, endDate } = queryParseResult.data;
+    const equipmentIds = Array.isArray(equipmentId) ? equipmentId : [equipmentId];
 
     try {
         const borrows = await prisma.borrow.findMany({
             where: {
-                equipmentId: equipmentId,
+                equipmentId: {
+                    in: equipmentIds,
+                },
                 checkoutTime: {
                     gte: parseISO(startDate),
                 },
@@ -55,7 +67,7 @@ export async function GET(req: NextRequest) {
             }
         }
 
-        return NextResponse.json({ equipmentId, startDate, endDate, totalContactHours });
+        return NextResponse.json({ equipmentIds, startDate, endDate, totalContactHours });
 
     } catch (error) {
         console.error('[API_CALCULATE_CONTACT_HOURS_GET]', error);
