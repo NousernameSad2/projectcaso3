@@ -4,7 +4,6 @@ import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image'; // Import Image
 import { signIn } from "next-auth/react";
@@ -31,7 +30,6 @@ import { Input } from "@/components/ui/input";
 import { LoginSchema } from "@/lib/schemas";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,15 +45,13 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         email: values.email,
         password: values.password,
-        redirect: false, 
+        callbackUrl: '/',
       });
 
       if (result?.error) {
         setError(result.error || "An unexpected error occurred during login.");
-      } else if (result?.ok) {
-        router.push('/'); 
-      } else {
-        setError("Login failed. Please try again.");
+      } else if (!result?.ok) {
+        setError("Login attempt was not successful. Please check credentials or try again.");
       }
     } catch {
       setError("An unexpected error occurred. Please try again later.");

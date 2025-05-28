@@ -223,7 +223,7 @@ export default function EquipmentPage() {
 
   // Check user permissions and authentication status
   const isAuthenticated = sessionStatus === 'authenticated';
-  const canManageEquipment = isAuthenticated && !!session?.user && session.user.role === UserRole.STAFF;
+  const canManageEquipment = isAuthenticated && !!session?.user && (session.user.role === UserRole.STAFF || session.user.role === UserRole.FACULTY);
   const hasSelection = selectedEquipmentIds.length > 0;
 
   useEffect(() => {

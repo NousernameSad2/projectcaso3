@@ -7,15 +7,18 @@ import { authOptions } from '@/lib/authOptions'; // Updated import
 // Helper to verify if the logged-in user is STAFF
 async function verifyStaffRole() {
     const session = await getServerSession(authOptions);
-    if (!session?.user) {
+
+    if (!session || !session.user) {
         return { authorized: false, response: NextResponse.json({ message: 'Authentication required' }, { status: 401 }) };
     }
-    
-    const userRole = session.user.role as UserRole;
-    if (userRole !== UserRole.STAFF) { // Only STAFF can access this
-        console.warn(`User ${session.user.id} with role ${userRole} attempted to access restricted faculty-borrows endpoint.`);
-        return { authorized: false, response: NextResponse.json({ message: 'Forbidden: Access restricted to Staff.' }, { status: 403 }) };
+
+    const { user: loggedInUser } = session;
+    // Allow both STAFF and FACULTY to access this route
+    if (loggedInUser.role !== UserRole.STAFF && loggedInUser.role !== UserRole.FACULTY) {
+        // If a non-staff/faculty tries to access, it's forbidden, regardless of whether it's their own ID or not.
+        return { authorized: false, response: NextResponse.json({ message: 'Forbidden: Insufficient permissions' }, { status: 403 }) };
     }
+
     return { authorized: true, response: null };
 }
 

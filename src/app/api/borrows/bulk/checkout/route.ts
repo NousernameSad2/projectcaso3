@@ -30,7 +30,7 @@ export async function POST(request: Request) {
   }
 
   // --- Permission Check (Only Staff can checkout) ---
-  const allowedRoles: UserRole[] = [UserRole.STAFF]; // Assuming only STAFF can confirm checkout
+  const allowedRoles: UserRole[] = [UserRole.STAFF, UserRole.FACULTY]; // Assuming only STAFF can confirm checkout
   if (!user.role || !allowedRoles.includes(user.role)) {
     console.warn(`User ${user.id} with role ${user.role || 'unknown'} attempted a bulk checkout action.`);
     return NextResponse.json({ error: 'Forbidden: Insufficient permissions.' }, { status: 403 });

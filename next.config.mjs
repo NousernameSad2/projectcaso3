@@ -9,6 +9,10 @@ const nextConfig = {
       },
       {
         protocol: 'https',
+        hostname: 'eee.upd.edu.ph', // Added specific subdomain
+      },
+      {
+        protocol: 'https',
         hostname: 'drive.google.com', // For links to files on Google Drive itself
       },
       {

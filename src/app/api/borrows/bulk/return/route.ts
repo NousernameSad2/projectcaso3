@@ -6,12 +6,6 @@ import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
-// Define a type for the session user (can be shared)
-interface SessionUser {
-  id: string;
-  role: UserRole;
-}
-
 // Define the expected shape of the request body
 const bulkActionSchema = z.object({
   borrowGroupId: z.string().min(1).optional(),
@@ -28,17 +22,17 @@ export async function POST(request: Request) {
 
   // 1. Get User Session and Check Permissions
   const session = await getServerSession(authOptions);
-  const user = session?.user as SessionUser | undefined;
 
-  if (!user?.id) {
-    console.error('[API /borrows/bulk/return] Error: User session not found.');
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized: User session not found.' }, { status: 401 });
   }
+  const { user } = session;
+
   console.log(`[API /borrows/bulk/return] User ID: ${user.id}, Role: ${user.role}`);
 
-  // --- Permission Check (Only Staff can process returns) ---
-  const allowedRoles: UserRole[] = [UserRole.STAFF]; // Assuming only STAFF can confirm return
-  if (!user.role || !allowedRoles.includes(user.role)) {
+  // Permission Check: Only Staff and Faculty can confirm bulk returns
+  const allowedRoles: UserRole[] = [UserRole.STAFF, UserRole.FACULTY]; // Assuming only STAFF can confirm return
+  if (!user.role || !allowedRoles.includes(user.role as UserRole)) {
     console.warn(`[API /borrows/bulk/return] Forbidden: User ${user.id} with role ${user.role || 'unknown'} attempted action.`);
     return NextResponse.json({ error: 'Forbidden: Insufficient permissions.' }, { status: 403 });
   }

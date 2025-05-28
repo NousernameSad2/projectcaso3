@@ -6,12 +6,6 @@ import { z } from 'zod';
 
 const prisma = new PrismaClient();
 
-// Define a type for the session user
-interface SessionUser {
-  id: string;
-  role: UserRole;
-}
-
 // Define the expected shape of the request body
 const bulkActionSchema = z.object({
   borrowGroupId: z.string().min(1, 'borrowGroupId is required'),
@@ -20,18 +14,19 @@ const bulkActionSchema = z.object({
 export async function POST(request: Request) {
   // 1. Get User Session and Check Permissions
   const session = await getServerSession(authOptions);
-  const user = session?.user as SessionUser | undefined;
-
-  if (!user?.id) {
+  
+  if (!session?.user?.id) {
     return NextResponse.json({ error: 'Unauthorized: User session not found.' }, { status: 401 });
   }
+  const { user } = session;
 
-  // --- Permission Check (Only Staff can confirm checkout) ---
-  if (user.role !== UserRole.STAFF) { 
-    console.warn(`User ${user.id} with role ${user.role || 'unknown'} attempted bulk checkout confirmation.`);
-    return NextResponse.json({ error: 'Forbidden: Only Staff can confirm checkouts.' }, { status: 403 });
+  // Permission Check: Only Staff and Faculty can confirm bulk checkouts
+  if (user.role !== UserRole.STAFF && user.role !== UserRole.FACULTY) {
+    return NextResponse.json(
+      { error: "Forbidden: Insufficient permissions for bulk checkout confirmation." },
+      { status: 403 }
+    );
   }
-  // --- End Permission Check --- 
 
   // 2. Parse and Validate Request Body
   let validatedData;

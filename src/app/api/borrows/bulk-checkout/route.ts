@@ -31,10 +31,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized: User session not found.' }, { status: 401 });
   }
   
-  // --- Permission Check (Only Staff can perform direct checkout) ---
-  if (user.role !== UserRole.STAFF) { 
+  // --- Permission Check (Only STAFF and FACULTY can perform direct checkout) ---
+  if (user.role !== UserRole.STAFF && user.role !== UserRole.FACULTY) {
     console.warn(`User ${user.id} with role ${user.role || 'unknown'} attempted direct bulk checkout.`);
-    return NextResponse.json({ error: 'Forbidden: Only Staff can perform direct checkouts.' }, { status: 403 });
+    return NextResponse.json({ error: 'Forbidden: Only STAFF and FACULTY can perform direct checkouts.' }, { status: 403 });
   }
   // --- End Permission Check --- 
   

@@ -14,10 +14,10 @@ export async function PATCH(request: Request, context: { params: Promise<{ borro
     if (!session?.user?.id) {
         return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
     }
-    const userRole = session.user.role as UserRole;
-    const allowedRoles: UserRole[] = [UserRole.STAFF]; 
+    const user = session.user;
+    const allowedRoles: UserRole[] = [UserRole.STAFF, UserRole.FACULTY];
 
-    if (!userRole || !allowedRoles.includes(userRole)) {
+    if (!allowedRoles.includes(user.role as UserRole)) {
         return NextResponse.json({ message: 'Forbidden: Insufficient privileges' }, { status: 403 });
     }
 
