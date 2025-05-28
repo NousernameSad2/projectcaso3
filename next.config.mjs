@@ -5,12 +5,17 @@ const nextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**', // Allow any HTTPS hostname
-        // port: '', // Optional port
-        // pathname: '/account123/**', // Optional path pattern
+        hostname: 'up.edu.ph',
       },
-      // Add other trusted hostnames here later if needed
-      // e.g., for image hosting services like Cloudinary, S3, etc.
+      {
+        protocol: 'https',
+        hostname: 'drive.google.com', // For links to files on Google Drive itself
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com', // For direct image content from Google Drive/Photos etc.
+      },
+      // Add other specific, trusted hostnames here if needed
     ],
   },
 };
