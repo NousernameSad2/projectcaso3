@@ -515,7 +515,32 @@ export default function ProfilePage() {
           <div className="max-h-[800px] overflow-y-auto pr-1"> {/* Changed 400px to 800px */}
               {/* Existing space-y container */}
               <div className="space-y-3">
-                {facultyBorrows.map((borrow) => (
+                {facultyBorrows.map((borrow) => {
+                  // --- ADDED NULL CHECK FOR borrow.equipment ---
+                  if (!borrow.equipment) {
+                    console.warn("Skipping render for borrow ID:", borrow.id, "due to missing equipment data.");
+                    return (
+                      <Card key={borrow.id} className="overflow-hidden bg-card/70 border">
+                        <CardContent className="p-4">
+                          <p className="text-destructive text-sm">
+                            Equipment data is missing for this borrow record (ID: {borrow.id}).
+                          </p>
+                          {/* You can display other borrow details here if needed, e.g., borrower, class */}
+                           <p className="text-xs text-muted-foreground mt-1">
+                             Borrowed by: {borrow.borrower?.name ?? borrow.borrower?.email ?? 'Unknown'}
+                           </p>
+                           {borrow.class && (
+                             <p className="text-xs text-muted-foreground">
+                               Class: {borrow.class.courseCode} {borrow.class.section}
+                             </p>
+                           )}
+                        </CardContent>
+                      </Card>
+                    );
+                  }
+                  // --- END ADDED NULL CHECK ---
+                  
+                  return (
                   <Card key={borrow.id} className="overflow-hidden bg-card/70 border">
                     <CardContent className="p-4 flex flex-col sm:flex-row gap-4">
                       <Link
@@ -594,7 +619,8 @@ export default function ProfilePage() {
                       </div>
                     </CardContent>
                   </Card>
-                ))}
+                );
+              })}
               </div>
           </div>
       );
