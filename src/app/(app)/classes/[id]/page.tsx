@@ -543,12 +543,12 @@ export default function ClassDetailPage() {
           )}
           {/* --- Remove Student Confirmation Dialog --- */}
           <AlertDialog open={isRemoveConfirmOpen} onOpenChange={setIsRemoveConfirmOpen}>
-              <AlertDialogContent>
+              <AlertDialogContent style={{ backgroundColor: 'white' }}>
                   <AlertDialogHeader>
                       <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                       <AlertDialogDescription>
-                          This action will remove the student 
-                          <strong>{removingStudent?.name || removingStudent?.id}</strong> 
+                          This action will remove the student  
+                          <strong> {removingStudent?.name || removingStudent?.id} </strong>
                           from this class. They will need to be added again manually if this was a mistake.
                       </AlertDialogDescription>
                   </AlertDialogHeader>

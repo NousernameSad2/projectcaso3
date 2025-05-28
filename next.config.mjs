@@ -19,6 +19,10 @@ const nextConfig = {
         protocol: 'https',
         hostname: '*.googleusercontent.com', // For direct image content from Google Drive/Photos etc.
       },
+      {
+        protocol: 'https',
+        hostname: 'tolsen.com.ph',
+      },
       // Add other specific, trusted hostnames here if needed
     ],
   },

@@ -250,7 +250,7 @@ function CreateDeficiencyForm() {
 
     return (
         <> {/* Wrap in fragment to allow modal sibling */}
-            <Card className="max-w-2xl bg-card/60 border-border/40">
+            <Card className="max-w-2xl bg-card border-border/40">
                 <CardHeader>
                     <CardTitle>Log New Deficiency</CardTitle>
                     <CardDescription>Enter details for the deficiency record. Fields marked with * are required.</CardDescription>
@@ -551,7 +551,7 @@ function DeficiencyList({ userRole }: { userRole: UserRole }) {
     // --- END NEW HANDLER ---
 
     return (
-         <Card className="bg-card/60 border-border/40">
+         <Card className="bg-card border-border/40">
             <CardHeader className="flex-row justify-between items-center">
                 <div>
                     <CardTitle>Deficiency Records</CardTitle>
