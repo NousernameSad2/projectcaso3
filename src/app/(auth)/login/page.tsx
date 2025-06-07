@@ -7,6 +7,7 @@ import { z } from "zod";
 import Link from 'next/link';
 import Image from 'next/image'; // Import Image
 import { signIn } from "next-auth/react";
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"; // Import Card components
@@ -31,7 +32,9 @@ import { LoginSchema } from "@/lib/schemas";
 
 export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false); // New state for redirection
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter(); // Initialize router
 
   const form = useForm<z.infer<typeof LoginSchema>>({
     resolver: zodResolver(LoginSchema),
@@ -45,18 +48,29 @@ export default function LoginPage() {
       const result = await signIn('credentials', {
         email: values.email,
         password: values.password,
-        callbackUrl: '/',
+        redirect: false, // <-- IMPORTANT: Don't redirect automatically
+        // callbackUrl is not needed here since we handle it manually
       });
 
       if (result?.error) {
         setError(result.error || "An unexpected error occurred during login.");
-      } else if (!result?.ok) {
+      } else if (result?.ok) {
+        // --- Successful Login ---
+        setIsRedirecting(true); // Set redirecting state
+        // Manually redirect to the intended page
+        router.push('/'); // Or use the callbackUrl from query params if needed
+      } else {
+        // This case might be hit if the signIn promise resolves without ok/error,
+        // which can happen in some edge cases.
         setError("Login attempt was not successful. Please check credentials or try again.");
       }
     } catch {
       setError("An unexpected error occurred. Please try again later.");
     } finally {
-      setIsLoading(false);
+      // Don't set isLoading to false if we are redirecting
+      if (!isRedirecting) {
+        setIsLoading(false);
+      }
     }
   }
 
@@ -100,7 +114,7 @@ export default function LoginPage() {
                         type="email" 
                         placeholder="name@example.com" 
                         {...field} 
-                        disabled={isLoading} 
+                        disabled={isLoading || isRedirecting} 
                       />
                     </FormControl>
                     <FormMessage />
@@ -118,7 +132,7 @@ export default function LoginPage() {
                         type="password" 
                         placeholder="********" 
                         {...field} 
-                        disabled={isLoading} 
+                        disabled={isLoading || isRedirecting} 
                       />
                     </FormControl>
                     <FormMessage />
@@ -155,8 +169,8 @@ export default function LoginPage() {
                 <p className="text-sm font-medium text-destructive text-center pt-1">{error}</p>
               )}
 
-              <Button type="submit" className="w-full h-10 mt-6" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
+              <Button type="submit" className="w-full h-10 mt-6" disabled={isLoading || isRedirecting}>
+                {isLoading ? "Logging in..." : isRedirecting ? "Redirecting..." : "Login"}
               </Button>
             </form>
           </Form>
@@ -164,7 +178,7 @@ export default function LoginPage() {
          {/* Moved Register link outside CardContent but logically grouped */}
          <p className="mt-6 mb-8 text-center text-sm text-muted-foreground">
            Don&apos;t have an account?{" "}
-           <Link href="/register" className={`font-medium text-primary hover:underline ${isLoading ? 'pointer-events-none opacity-50' : ''}`}>
+           <Link href="/register" className={`font-medium text-primary hover:underline ${isLoading || isRedirecting ? 'pointer-events-none opacity-50' : ''}`}>
              Register
            </Link>
          </p>
