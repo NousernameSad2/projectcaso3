@@ -33,7 +33,7 @@ export default function AboutPage() {
           About E-Bridge
         </h1>
         <p className="mt-4 max-w-2xl mx-auto text-lg text-muted-foreground">
-          Connecting the UP Department of Geodetic Engineering with tomorrow's technology.
+          Connecting the UP Department of Geodetic Engineering with tomorrow&apos;s technology.
         </p>
       </header>
 
