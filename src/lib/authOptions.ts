@@ -3,10 +3,6 @@ import CredentialsProvider from "next-auth/providers/credentials"
 import { prisma } from '@/lib/prisma'; 
 import { UserRole } from '@prisma/client'; 
 
-console.log("--- Shared AuthOptions Loading ---"); // Log when this module is loaded
-console.log("NEXTAUTH_URL (from authOptions.ts):", process.env.NEXTAUTH_URL);
-console.log("NEXTAUTH_SECRET Loaded (from authOptions.ts):", !!process.env.NEXTAUTH_SECRET);
-
 export const authOptions: AuthOptions = {
   providers: [
     CredentialsProvider({
@@ -83,11 +79,7 @@ export const authOptions: AuthOptions = {
   },
   callbacks: {
     async jwt({ token, user, account, trigger, session }) {
-      console.log("--- JWT Callback Start (Shared) ---");
-      console.log(`[JWT Shared] Trigger: ${trigger}`);
-      
       if (account && user) {
-        console.log("[JWT Shared] Initial sign-in detected.");
         return {
           ...token,
           id: user.id,
@@ -154,7 +146,6 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      console.log("--- Session Callback Start (Shared) ---");
       session.user = session.user || {};
       session.accessToken = token.accessToken as string | undefined;
       session.user.id = token.id as string | undefined;

@@ -6,8 +6,6 @@ import { UserRole } from '@prisma/client'; // Import UserRole if you have it def
 export default withAuth(
   // `withAuth` augments your `Request` with the user's token.
   function middleware(req) {
-    console.log(`[Middleware Executing] Path: ${req.nextUrl.pathname}`);
-
     // Check if the user is trying to access the reports page
     if (req.nextUrl.pathname.startsWith('/reports')) {
       // Check if the user is authenticated and their role
@@ -15,7 +13,6 @@ export default withAuth(
 
       if (userRole === UserRole.REGULAR) {
         // Redirect REGULAR users away from /reports to the home page (or an access denied page)
-        // console.log(`[Middleware] REGULAR user ${req.nextauth.token?.email} attempted to access /reports. Redirecting.`);
         return NextResponse.redirect(new URL('/', req.url));
       }
       // If user is STAFF or FACULTY, or not authenticated (letting NextAuth handle default auth redirect), allow access
@@ -39,20 +36,15 @@ export default withAuth(
 // See "Matching Paths" below to learn more
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - api (API routes)
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - login (the login page itself)
-     * - register (the register page)
-     * - images (static image assets)
-     * - uploads (static file uploads)
-     * - Any other public pages (e.g., /public/*, /)
-     * - root path '/' (if it should be public, otherwise remove if you want to protect it too)
-     */
-    '/((?!api|_next/static|_next/image|favicon.ico|login|register|images|uploads|$).*)', // Adjusted to ensure root '/' is not matched by default if it's public. 
-                                                                              // If you want to protect the homepage, remove the '|$' part and ensure it's not in the negative lookahead.
+    '/',
+    '/reports/:path*',
+    '/users/:path*',
+    '/my-borrows/:path*',
+    '/profile/:path*',
+    '/equipment/:path*',
+    '/classes/:path*',
+    '/deficiencies/:path*',
+    '/borrows/:path*',
+    '/borrow-requests/:path*',
   ],
 }; 
