@@ -5,24 +5,20 @@ import { Building2, Target, Users, Handshake } from 'lucide-react';
 export default function AboutPage() {
   const teamMembers = [
     {
+      name: 'Joaquin Miguel Escueta',
+      imageUrl: '/images/placeholder-default.png',
+    },
+    {
+      name: 'Ervin Angelo B. Escaño',
+      imageUrl: '/images/placeholder-default.png',
+    },
+    {
+      name: 'Francisco Luis Berba',
+      imageUrl: '/images/placeholder-default.png',
+    },
+    {
       name: 'Gabriel Edward Besmonte',
-      role: 'Full Stack Developer',
-      imageUrl: '/images/team/gab.png', 
-    },
-    {
-      name: 'Ervin Angelo Escaño',
-      role: 'Project Manager & UI/UX Designer',
-      imageUrl: '/images/team/ervin.png',
-    },
-    {
-      name: 'Joaquin Miguel G. Escueta',
-      role: 'Lead Backend Developer',
-      imageUrl: '/images/team/joaquin.png',
-    },
-    {
-      name: 'Paco Flb',
-      role: 'Frontend & Database Specialist',
-      imageUrl: '/images/team/paco.png', 
+      imageUrl: '/images/placeholder-default.png',
     },
   ];
 
@@ -78,7 +74,6 @@ export default function AboutPage() {
                     </div>
                   </div>
                   <h3 className="text-xl font-semibold text-primary-foreground group-hover:text-primary transition-colors">{member.name}</h3>
-                  <p className="text-sm text-muted-foreground">{member.role}</p>
                 </CardContent>
               </Card>
             ))}
